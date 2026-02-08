@@ -20,9 +20,12 @@ export default function AssetsScreen() {
   const addAsset = useStore((state) => state.addAsset);
   const removeAsset = useStore((state) => state.removeAsset);
   const updateAsset = useStore((state) => state.updateAsset);
+  const updateBankAccount = useStore((state) => state.updateBankAccount);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [editingBankAccount, setEditingBankAccount] = useState<BankAccount | null>(null);
+  const [showBankEditModal, setShowBankEditModal] = useState(false);
 
   // ── SKR auto-detected holding ───────────────────────────────────────────
   const wallets = useStore((state) => state.wallets);
@@ -147,6 +150,25 @@ export default function AssetsScreen() {
 
   const handleRemoveAsset = (asset: Asset) => {
     removeAsset(asset.id);
+  };
+
+  const handleBankAccountPress = (accountId: string) => {
+    const account = bankAccounts.find(a => a.id === accountId);
+    if (account) {
+      setEditingBankAccount(account);
+      setShowBankEditModal(true);
+    }
+  };
+
+  const handleUpdateBankBalance = () => {
+    if (!editingBankAccount) return;
+    
+    const newBalance = parseFloat(value.replace(/,/g, '')) || 0;
+    updateBankAccount(editingBankAccount.id, { currentBalance: newBalance });
+    
+    setEditingBankAccount(null);
+    setValue('');
+    setShowBankEditModal(false);
   };
 
   const handleEditAsset = (asset: Asset) => {
@@ -345,6 +367,7 @@ export default function AssetsScreen() {
           totalIncome={calculateCategoryIncome(categorized.cash)}
           onAssetPress={handleEditAsset}
           onAssetDelete={handleRemoveAsset}
+          onBankAccountPress={handleBankAccountPress}
         />
 
         <AssetSection
@@ -577,6 +600,72 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Edit Bank Account Balance Modal ── */}
+      <Modal
+        visible={showBankEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowBankEditModal(false);
+          setEditingBankAccount(null);
+          setValue('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Update Bank Balance</Text>
+
+            {editingBankAccount && (
+              <>
+                <View style={styles.bankAccountInfo}>
+                  <Text style={styles.bankAccountName}>{editingBankAccount.name}</Text>
+                  <Text style={styles.bankAccountInstitution}>
+                    {editingBankAccount.institution} · {editingBankAccount.type}
+                  </Text>
+                  <Text style={styles.currentBalanceLabel}>
+                    Current: ${(editingBankAccount.currentBalance ?? 0).toLocaleString()}
+                  </Text>
+                </View>
+
+                <Text style={styles.label}>New Balance</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={(editingBankAccount.currentBalance ?? 0).toString()}
+                    placeholderTextColor="#666"
+                    keyboardType="numeric"
+                    value={value}
+                    onChangeText={setValue}
+                    autoFocus
+                  />
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity 
+                    style={styles.modalCancelButton} 
+                    onPress={() => {
+                      setShowBankEditModal(false);
+                      setEditingBankAccount(null);
+                      setValue('');
+                    }}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalAddButton, !value && styles.modalAddButtonDisabled]}
+                    onPress={handleUpdateBankBalance}
+                    disabled={!value}
+                  >
+                    <Text style={styles.modalAddText}>Update</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -673,4 +762,30 @@ const styles = StyleSheet.create({
   modalAddButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
+
+  // Bank edit modal
+  bankAccountInfo: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#60a5fa',
+  },
+  bankAccountName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  bankAccountInstitution: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  currentBalanceLabel: {
+    fontSize: 16,
+    color: '#4ade80',
+    fontWeight: '600',
+  },
 });

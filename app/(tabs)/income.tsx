@@ -8,6 +8,7 @@ import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import PaycheckBreakdownModal from '../paycheck';
 import type { IncomeSource } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
+import CollapsibleSection from '../../src/components/CollapsibleSection';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function toMonthly(amount: number, freq: string): number {
@@ -117,6 +118,17 @@ export default function IncomeScreen() {
 
   const totalNetToBank = paycheckMonthly + otherMonthly;
 
+  const paycheckTotal = paycheckSources.reduce((sum, src) => 
+    sum + toMonthly(src.amount, src.frequency), 0
+  );
+
+  const assetTotal = (skrIncome?.monthlyYieldUsd || 0) + 
+  assets.reduce((sum, a) => sum + (a.annualIncome / 12), 0);
+
+  const tradingTotal = otherSources.reduce((sum, src) => 
+    sum + toMonthly(src.amount, src.frequency), 0
+  );
+
   const getAccountName = (id: string) => bankAccounts.find((a) => a.id === id)?.name || 'Unknown';
 
   // ── render ──────────────────────────────────────────────────────────────────
@@ -147,7 +159,7 @@ export default function IncomeScreen() {
         </View>
 
         {/* Manage Paycheck Breakdown Link */}
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={styles.manageBreakdownCard}
           onPress={() => router.push('/paycheck-breakdown')}
         >
@@ -158,7 +170,7 @@ export default function IncomeScreen() {
             </View>
             <Text style={styles.manageBreakdownArrow}>→</Text>
           </View>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* ══════════════════════════════════════════════════════════════════════
             PAYCHECK INCOME SOURCES (salary / freelance / business)
@@ -169,6 +181,11 @@ export default function IncomeScreen() {
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
         </View>
+
+        <CollapsibleSection
+          title="Paycheck Income"
+          total={`$${paycheckTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo`}
+          totalColor="#4ade80">
 
         {paycheckSources.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -206,7 +223,22 @@ export default function IncomeScreen() {
               </View>
             </TouchableOpacity>
           ))
-        )}
+          )}
+
+              {/* Manage Paycheck Breakdown Link */}
+            <TouchableOpacity 
+              style={styles.manageBreakdownCard}
+              onPress={() => router.push('/paycheck-breakdown')}
+            >
+              <View style={styles.manageBreakdownContent}>
+                <View>
+                  <Text style={styles.manageBreakdownTitle}>⚙️ Manage Paycheck Deductions</Text>
+                  <Text style={styles.manageBreakdownSub}>Add pre-tax, taxes, and post-tax items</Text>
+                </View>
+                <Text style={styles.manageBreakdownArrow}>→</Text>
+              </View>
+            </TouchableOpacity>
+          </CollapsibleSection>
 
         {/* ══════════════════════════════════════════════════════════════════════
             TRADING / OTHER INCOME (Drift wins, crypto, etc.)
@@ -218,33 +250,40 @@ export default function IncomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {otherSources.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No trading income yet</Text>
-            <Text style={styles.emptySubtext}>Log Drift perpetuals wins, crypto income, or any non-paycheck deposits here.</Text>
-          </View>
-        ) : (
-          otherSources.map((src) => (
-            <View key={src.id} style={[styles.incomeCard, { borderLeftColor: '#60a5fa' }]}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardName}>{src.name}</Text>
-                  <Text style={[styles.cardMeta, { color: '#60a5fa' }]}>
-                    {SOURCE_LABELS[src.source] || src.source}  ·  → {getAccountName(src.bankAccountId)}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => removeIncomeSource(src.id)}>
-                  <Text style={styles.deleteBtn}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.cardNumbers}>
-                <Text style={styles.cardAmount}>${src.amount.toLocaleString()}</Text>
-                <Text style={styles.cardFreq}>{FREQ_LABELS[src.frequency]}</Text>
-                <Text style={[styles.cardMonthly, { color: '#60a5fa' }]}>${toMonthly(src.amount, src.frequency).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo</Text>
-              </View>
+        <CollapsibleSection
+          title="Trading & Other"
+          total={`$${tradingTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo`}
+          totalColor="#60a5fa"
+        >
+          {otherSources.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No trading income yet</Text>
+              <Text style={styles.emptySubtext}>Log Drift perpetuals wins, crypto income, or any non-paycheck deposits here.</Text>
             </View>
-          ))
-        )}
+          ) : (
+            otherSources.map((src) => (
+              <View key={src.id} style={[styles.incomeCard, { borderLeftColor: '#60a5fa' }]}>
+                <View style={styles.cardHeader}>
+                  <View>
+                    <Text style={styles.cardName}>{src.name}</Text>
+                    <Text style={[styles.cardMeta, { color: '#60a5fa' }]}>
+                      {SOURCE_LABELS[src.source] || src.source}  ·  → {getAccountName(src.bankAccountId)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeIncomeSource(src.id)}>
+                    <Text style={styles.deleteBtn}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.cardNumbers}>
+                  <Text style={styles.cardAmount}>${src.amount.toLocaleString()}</Text>
+                  <Text style={styles.cardFreq}>{FREQ_LABELS[src.frequency]}</Text>
+                  <Text style={[styles.cardMonthly, { color: '#60a5fa' }]}>${toMonthly(src.amount, src.frequency).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </CollapsibleSection>
+
 
         {/* ══════════════════════════════════════════════════════════════════════
             SKR STAKING YIELD — auto-detected passive income
@@ -300,63 +339,69 @@ export default function IncomeScreen() {
                 <Text style={styles.addButtonGoldText}>Manage →</Text>
               </TouchableOpacity>
             </View>
+            
+            <CollapsibleSection
+              title="Asset-Earned Income"
+              total={`$${assetTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo`}
+              totalColor="#f4c430"
+            >
+                <View style={styles.assetIncomeInfoBox}>
+                  <Text style={styles.assetIncomeInfoText}>
+                    💰 Your assets are working for you! These generate passive income automatically.
+                  </Text>
+                </View>
 
-            <View style={styles.assetIncomeInfoBox}>
-              <Text style={styles.assetIncomeInfoText}>
-                💰 Your assets are working for you! These generate passive income automatically.
-              </Text>
-            </View>
-
-            {assets
-              .filter(a => a.annualIncome > 0)
-              .map((asset) => {
-                const monthlyIncome = asset.annualIncome / 12;
-                const apy = asset.metadata.type === 'crypto' && 'apy' in asset.metadata ? asset.metadata.apy : null;
-                
-                return (
-                  <View key={asset.id} style={styles.assetIncomeCard}>
-                    <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.cardName}>{asset.name}</Text>
-                        <Text style={styles.assetIncomeMeta}>
-                          {asset.type === 'crypto' ? '🪙 Crypto' : 
-                           asset.type === 'defi' ? '⚡ DeFi' : 
-                           asset.type === 'stocks' ? '📈 Stocks' : 
-                           asset.type === 'real_estate' ? '🏠 Real Estate' : 
-                           asset.type === 'business' ? '🏢 Business' : '💰 Other'}
-                          {apy && ` · ${(apy * 100).toFixed(2)}% APY`}
-                        </Text>
-                        <Text style={styles.assetIncomeBalance}>
-                          Balance: ${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                        </Text>
+                {assets
+                  .filter(a => a.annualIncome > 0)
+                  .map((asset) => {
+                    const monthlyIncome = asset.annualIncome / 12;
+                    const apy = asset.metadata.type === 'crypto' && 'apy' in asset.metadata ? asset.metadata.apy : null;
+                    
+                    return (
+                      <View key={asset.id} style={styles.assetIncomeCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.cardName}>{asset.name}</Text>
+                            <Text style={styles.assetIncomeMeta}>
+                              {asset.type === 'crypto' ? '🪙 Crypto' : 
+                              asset.type === 'defi' ? '⚡ DeFi' : 
+                              asset.type === 'stocks' ? '📈 Stocks' : 
+                              asset.type === 'real_estate' ? '🏠 Real Estate' : 
+                              asset.type === 'business' ? '🏢 Business' : '💰 Other'}
+                              {apy && ` · ${(apy * 100).toFixed(2)}% APY`}
+                            </Text>
+                            <Text style={styles.assetIncomeBalance}>
+                              Balance: ${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.cardNumbers}>
+                          <View>
+                            <Text style={styles.assetIncomeAmountLabel}>Monthly Income</Text>
+                            <Text style={styles.assetIncomeAmount}>${monthlyIncome.toLocaleString(undefined, { maximumFractionDigits: 2 })}/mo</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.assetIncomeAmountLabel}>Annual Income</Text>
+                            <Text style={styles.assetIncomeAnnual}>${asset.annualIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</Text>
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                    <View style={styles.cardNumbers}>
-                      <View>
-                        <Text style={styles.assetIncomeAmountLabel}>Monthly Income</Text>
-                        <Text style={styles.assetIncomeAmount}>${monthlyIncome.toLocaleString(undefined, { maximumFractionDigits: 2 })}/mo</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.assetIncomeAmountLabel}>Annual Income</Text>
-                        <Text style={styles.assetIncomeAnnual}>${asset.annualIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-
-            {/* Total asset income */}
-            <View style={styles.assetIncomeTotalCard}>
-              <Text style={styles.assetIncomeTotalLabel}>Total Asset Income</Text>
-              <Text style={styles.assetIncomeTotalAmount}>
-                ${(assets.filter(a => a.annualIncome > 0).reduce((sum, a) => sum + a.annualIncome, 0) / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
-              </Text>
-              <Text style={styles.assetIncomeTotalAnnual}>
-                ${assets.filter(a => a.annualIncome > 0).reduce((sum, a) => sum + a.annualIncome, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
-              </Text>
-            </View>
-          </>
-        )}
+                    );
+                  })}
+                </CollapsibleSection>
+                {/* Total asset income */}
+                <View style={styles.assetIncomeTotalCard}>
+                  <Text style={styles.assetIncomeTotalLabel}>Total Asset Income</Text>
+                  <Text style={styles.assetIncomeTotalAmount}>
+                    ${(assets.filter(a => a.annualIncome > 0).reduce((sum, a) => sum + a.annualIncome, 0) / 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
+                  </Text>
+                  <Text style={styles.assetIncomeTotalAnnual}>
+                    ${assets.filter(a => a.annualIncome > 0).reduce((sum, a) => sum + a.annualIncome, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
+                  </Text>
+                </View>
+              </>
+            )}
+            
 
       </ScrollView>
 

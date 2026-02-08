@@ -12,6 +12,7 @@ interface AssetSectionProps {
   totalIncome: number;
   onAssetPress: (asset: Asset) => void;
   onAssetDelete: (asset: Asset) => void;
+  onBankAccountPress?: (accountId: string) => void; // NEW
 }
 
 export default function AssetSection({
@@ -22,6 +23,7 @@ export default function AssetSection({
   totalIncome,
   onAssetPress,
   onAssetDelete,
+  onBankAccountPress,
 }: AssetSectionProps) {
   const defaultExpanded = useStore((s) => s.settings?.defaultExpandAssetSections ?? false);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -83,9 +85,17 @@ export default function AssetSection({
               <TouchableOpacity
                 key={asset.id}
                 style={styles.assetCard}
-                onPress={() => !isBankAsset && onAssetPress(asset)}
-                disabled={isBankAsset}
-                activeOpacity={isBankAsset ? 1 : 0.7}
+                onPress={() => {
+                  if (isBankAsset && onBankAccountPress) {
+                    // Extract actual bank account ID (remove 'bank_' prefix)
+                    const bankAccountId = asset.id.replace('bank_', '');
+                    onBankAccountPress(bankAccountId);
+                  } else if (!isBankAsset) {
+                    onAssetPress(asset);
+                  }
+                }}
+                disabled={isBankAsset && !onBankAccountPress}
+                activeOpacity={0.7}
               >
                 <View style={styles.assetHeader}>
                   <View style={{ flex: 1 }}>
@@ -96,6 +106,10 @@ export default function AssetSection({
                       <Text style={styles.bankBadge}>
                         {asset.metadata.apy}% APY
                       </Text>
+                    )}
+                    
+                    {isBankAsset && (
+                      <Text style={styles.tapHint}>Tap to update balance</Text>
                     )}
                     
                     {asset.type === 'retirement' && asset.metadata.type === 'retirement' && (
@@ -248,6 +262,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#60a5fa',
     fontWeight: '600',
+    marginTop: 2,
+  },
+  tapHint: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
     marginTop: 2,
   },
   retirementBadge: {
