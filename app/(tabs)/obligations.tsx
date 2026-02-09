@@ -1,15 +1,22 @@
 // app/(tabs)/obligations.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Obligation } from '../../src/types';
+import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
+import PaymentCalendar from '../../src/components/PaymentCalendar';
+import DayPaymentsList from '../../src/components/DayPaymentsList';
+import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
 
 export default function ObligationsScreen() {
   const obligations = useStore((state) => state.obligations);
   const bankAccounts = useStore((state) => state.bankAccounts);
+  const debts = useStore((state) => state.debts);
   const addObligation = useStore((state) => state.addObligation);
   const removeObligation = useStore((state) => state.removeObligation);
   const updateObligation = useStore((state) => state.updateObligation);
+  const toggleObligationPaid = useStore((state) => state.toggleObligationPaid);
+  const toggleDebtPaid = useStore((state) => state.toggleDebtPaid);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
@@ -19,6 +26,32 @@ export default function ObligationsScreen() {
   const [payee, setPayee] = useState('');
   const [amount, setAmount] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+
+  // Get payment data
+  const paymentStatus = useMemo(() => 
+    getMonthlyPaymentStatus(obligations, debts, bankAccounts, currentYear, currentMonth),
+    [obligations, debts, bankAccounts, currentYear, currentMonth]
+  );
+
+  const paymentEvents = useMemo(() => 
+    getPaymentEventsForMonth(obligations, debts, bankAccounts, currentYear, currentMonth),
+    [obligations, debts, bankAccounts, currentYear, currentMonth]
+  );
+
+  const handleTogglePaid = (eventId: string, isPaid: boolean) => {
+    if (eventId.startsWith('obl_')) {
+      const id = eventId.replace('obl_', '');
+      toggleObligationPaid(id);
+    } else if (eventId.startsWith('debt_')) {
+      const id = eventId.replace('debt_', '');
+      toggleDebtPaid(id);
+    }
+  };
 
   const handleAddObligation = () => {
     if (!name || !amount) return;
@@ -30,6 +63,7 @@ export default function ObligationsScreen() {
       amount: parseFloat(amount),
       category: 'other',
       isRecurring: true,
+      dueDate: dueDate ? parseInt(dueDate): 1,
       bankAccountId: accountId || undefined,
     };
     
@@ -40,6 +74,7 @@ export default function ObligationsScreen() {
     setPayee('');
     setAmount('');
     setAccountId('');
+    setDueDate('');
     setShowAddModal(false);
   };
 
@@ -50,6 +85,7 @@ export default function ObligationsScreen() {
     setAmount(obligation.amount.toString());
     setAccountId(obligation.bankAccountId || '');
     setShowAddModal(true);
+    setDueDate(obligation.dueDate?.toString() || '');
   };
 
   const handleSaveEdit = () => {
@@ -60,6 +96,7 @@ export default function ObligationsScreen() {
       payee: payee || 'Various',
       amount: parseFloat(amount),
       bankAccountId: accountId || undefined,
+      dueDate: dueDate ? parseInt(dueDate) : undefined,
     });
 
     // Reset
@@ -68,6 +105,7 @@ export default function ObligationsScreen() {
     setPayee('');
     setAmount('');
     setAccountId('');
+    setDueDate('');
     setShowAddModal(false);
   };
 
@@ -77,6 +115,7 @@ export default function ObligationsScreen() {
     setPayee('');
     setAmount('');
     setAccountId('');
+    setDueDate('');
     setShowAddModal(false);
   };
 
@@ -87,6 +126,12 @@ export default function ObligationsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
+        {/* Payment Status Banner */}
+        <PaymentStatusBanner 
+          status={paymentStatus} 
+          onShowCalendar={() => setShowCalendar(true)}
+        />
+
         {/* Summary */}
         <View style={styles.summaryBox}>
           <Text style={styles.summaryLabel}>Total Monthly Obligations</Text>
@@ -130,6 +175,11 @@ export default function ObligationsScreen() {
                     {!obligation.bankAccountId && (
                       <Text style={styles.obligationWarning}>⚠️ No account assigned</Text>
                     )}
+                    {obligation.dueDate && (
+                      <Text style={styles.obligationDueDate}>
+                        📅 Due on the {obligation.dueDate}{getDaySuffix(obligation.dueDate)} of each month
+                      </Text>
+                    )}
                   </View>
                   <TouchableOpacity 
                     onPress={(e) => {
@@ -145,6 +195,40 @@ export default function ObligationsScreen() {
               </TouchableOpacity>
             ))
           )}
+          {/* Calendar Modal */}
+          <Modal visible={showCalendar} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <PaymentCalendar
+                  year={currentYear}
+                  month={currentMonth}
+                  events={paymentEvents}
+                  onDayPress={(day) => {
+                    setSelectedDay(day);
+                    setShowCalendar(false);
+                  }}
+                />
+                <TouchableOpacity onPress={() => setShowCalendar(false)}>
+                  <Text>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+          {/* Day Detail Modal */}
+          <Modal visible={selectedDay !== null} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              {selectedDay !== null && (
+                <DayPaymentsList
+                  day={selectedDay}
+                  month={currentMonth}
+                  year={currentYear}
+                  events={paymentEvents.filter(e => e.dueDate.getDate() === selectedDay)}
+                  onTogglePaid={handleTogglePaid}
+                  onClose={() => setSelectedDay(null)}
+                />
+              )}
+            </View>
+          </Modal>
         </View>
       </ScrollView>
 
@@ -226,7 +310,25 @@ export default function ObligationsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            )}
+              )}
+              <Text style={styles.label}>Due Date (Day of Month)</Text>
+              <Text style={styles.helperText}>
+                Enter 1-31. Bill will be tracked as due on this day each month.
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="15"
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+                value={dueDate}
+                onChangeText={(text) => {
+                  const num = parseInt(text);
+                  if (text === '' || (num >= 1 && num <= 31)) {
+                    setDueDate(text);
+                  }
+                }}
+                maxLength={2}
+              />              
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -250,6 +352,16 @@ export default function ObligationsScreen() {
       </Modal>
     </View>
   );
+}
+
+ function getDaySuffix(day: number): string {
+  if (day >= 11 && day <= 13) return 'th';
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
 }
 
 const styles = StyleSheet.create({
@@ -511,5 +623,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#f4c430',
     fontWeight: 'bold',
+  },
+  obligationDueDate: {
+    fontSize: 12,
+    color: '#60a5fa',
+    marginTop: 4,
   },
 });

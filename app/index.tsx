@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { useStore } from '../src/store/useStore';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Index() {
   const router = useRouter();
@@ -15,6 +16,17 @@ export default function Index() {
     // Load profile on app start
     const initApp = async () => {
       await loadProfile('temp'); // Doesn't need wallet for now
+      
+      // Check if we need to reset monthly payments
+      const lastReset = await AsyncStorage.getItem('lastPaymentReset');
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${now.getMonth()}`;
+      
+      if (lastReset !== currentMonth) {
+        useStore.getState().resetMonthlyPayments();
+        await AsyncStorage.setItem('lastPaymentReset', currentMonth);
+      }
+      
       setIsLoading(false);
     };
     

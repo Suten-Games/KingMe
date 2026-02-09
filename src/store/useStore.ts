@@ -103,6 +103,35 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
+  // Toggle payment status
+  toggleObligationPaid: (id: string) => {
+    set((state) => ({
+      obligations: state.obligations.map(o =>
+        o.id === id
+          ? { ...o, isPaidThisMonth: !o.isPaidThisMonth, lastPaidDate: new Date().toISOString() }
+          : o
+      ),
+    }));
+  },
+
+  toggleDebtPaid: (id: string) => {
+    set((state) => ({
+      debts: state.debts.map(d =>
+        d.id === id
+          ? { ...d, isPaidThisMonth: !d.isPaidThisMonth, lastPaidDate: new Date().toISOString() }
+          : d
+      ),
+    }));
+  },
+
+  // Reset monthly (call on app startup)
+  resetMonthlyPayments: () => {
+    set((state) => ({
+      obligations: state.obligations.map(o => ({ ...o, isPaidThisMonth: false })),
+      debts: state.debts.map(d => ({ ...d, isPaidThisMonth: false })),
+    }));
+  },
+
   setIncome: (income) =>
     set((state) => ({
       income: { ...state.income, ...income },

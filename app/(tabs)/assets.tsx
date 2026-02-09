@@ -273,7 +273,7 @@ export default function AssetsScreen() {
       <ScrollView style={styles.scrollView}>
 
         {/* ── Cash Flow Summary ── */}
-        <CashFlowSummary cashFlow={cashFlow} />
+        {/* <CashFlowSummary cashFlow={cashFlow} /> */}
 
         {/* ── Portfolio Summary ── */}
         <View style={styles.summaryBox}>

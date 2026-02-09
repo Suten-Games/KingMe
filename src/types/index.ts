@@ -122,6 +122,8 @@ export interface Obligation {
   bankAccountId?: string; // Which account pays this
   autoPay?: boolean;
   dueDate?: number; // Day of month (1-31)
+  isPaidThisMonth?: boolean;
+  lastPaidDate?: string;
 }
 
 export type DesirePriority = 'high' | 'medium' | 'low';
@@ -162,6 +164,10 @@ export interface Debt {
   monthlyPayment: number;
   minimumPayment: number;
   bankAccountId?: string; // Which account the payment comes out of
+  dueDate: number;
+  isPaidThisMonth?: boolean;
+  lastPaidDate?: string;
+
 }
 
 // ─── Paycheck Breakdown ──────────────────────────────────────────────────────

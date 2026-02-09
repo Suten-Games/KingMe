@@ -2,17 +2,16 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
-import type { CashFlowAnalysis } from '../../src/services/cashflow';
+import type { OverallCashFlow } from '../../src/services/cashflow';
 
 interface CashFlowSummaryProps {
-  cashFlow: CashFlowAnalysis;
+  cashFlow: OverallCashFlow;
 }
 
 export default function CashFlowSummary({ cashFlow }: CashFlowSummaryProps) {
   const defaultExpanded = useStore((s) => s.settings?.defaultExpandAssetSections ?? false);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  // Update when preference changes
   useEffect(() => {
     setExpanded(defaultExpanded);
   }, [defaultExpanded]);

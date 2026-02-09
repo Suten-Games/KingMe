@@ -3,10 +3,13 @@ import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platfo
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { FreedomScore } from '../../src/components/FreedomScore';
+import CashFlowSummary from '../../src/components/CashFlowSummary';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import type { SKRIncomeSnapshot } from '../../src/services/skr';
+
+
 
 // ─── Health badge colour map ────────────────────────────────────────────────
 const HEALTH_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -31,6 +34,7 @@ export default function HomeScreen() {
   const debts               = useStore((state) => state.debts);
   const assets              = useStore((state) => state.assets);
   const paycheckDeductions  = useStore((state) => state.paycheckDeductions || []);
+  
 
   const freedom = useFreedomScore();
 
@@ -93,6 +97,9 @@ export default function HomeScreen() {
   // or inside FreedomScore's sidebar children slot (web).
   const dashboardBody = (
     <View style={styles.content}>
+
+      {/* ── Cash Flow Summary ─────────────────────────────────────────── */}
+      <CashFlowSummary cashFlow={cashFlow} />
 
       {/* ── Health badge ──────────────────────────────────────────────── */}
       <TouchableOpacity
