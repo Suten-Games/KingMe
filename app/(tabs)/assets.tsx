@@ -1,18 +1,25 @@
 // app/(tabs)/assets.tsx - CORRECTED VERSION
 import { useRouter } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Modal, TextInput, Alert
+} from 'react-native';
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
+import { useRetirementCalculations } from '@/hooks/useRetirementCalculations';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
-import CashFlowSummary from '../../src/components/CashFlowSummary';
-import AssetSection from '../../src/components/AssetSection';
-import { categorizeAssets, calculateCategoryTotal, calculateCategoryIncome, calculateTotalValue, calculateTotalIncome, getCategoryIcon, getCategoryLabel } from '../../src/utils/assetCalculations';
-import type { Asset, RealEstateAsset, RetirementAsset, BankAccount } from '../../src/types';
+import { categorizeAssets, calculateTotalValue, calculateTotalIncome  } from '../../src/utils/assetCalculations';
+import type { Asset, RealEstateAsset, BankAccount } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
-import { ActivityIndicator, Alert } from 'react-native';
+
 import ThesisModal from '../../src/components/ThesisModal';
 import PortfolioSummary from '@/components/assets/PortfolioSummary';
+import AddAssetButton from '@/components/assets/AddAssetButton';
+import WalletSyncSection from '@/components/assets/WalletSyncSection';
+import SKRCard from '@/components/assets/SKRCard';
+import AssetCategoriesList from '@/components/assets/AssetCategoriesList';
+import { getAssetTypeLabel, getFrequencyLabel } from '@/utils/assetTypeHelpers';
 
 export default function AssetsScreen() {
   const router = useRouter();
@@ -103,6 +110,13 @@ export default function AssetsScreen() {
   const totalValue = useMemo(() => calculateTotalValue(categorized), [categorized]);
   const totalIncome = useMemo(() => calculateTotalIncome(categorized), [categorized]);
 
+  const retirementCalcs = useRetirementCalculations(
+    retContribution,
+    retFrequency,
+    retMatchPercent,
+    incomeSources
+  );
+
   const resetForm = () => {
     setName('');
     setType('crypto');
@@ -148,35 +162,14 @@ export default function AssetsScreen() {
     }
   };
 
-  const formatLastSync = (timestamp?: string): string => {
-    if (!timestamp) return 'Never';
-    
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString();
-  };
-
   const handleAddAsset = () => {
     
     // ── Retirement path ──────────────────────────────────────────────────
     if (type === 'retirement') {
       if (!retInstitution || !retBalance) return;
 
-      const totalMonthlySalary = incomeSources.reduce((sum, s) => {
-        if (s.frequency === 'biweekly') return sum + s.amount * 2.17;
-        if (s.frequency === 'weekly') return sum + s.amount * 4.33;
-        if (s.frequency === 'twice_monthly') return sum + s.amount * 2;
-        return sum + s.amount;
-      }, 0);
-      const matchPct = parseFloat(retMatchPercent) || 0;
-      const employerMatchDollars = matchPct > 0 ? totalMonthlySalary * (matchPct / 100) : 0;
-
+      const { matchPercent: matchPct, employerMatchDollars } = retirementCalcs;
+      
       const newAsset: Asset = {
         id: 'ret_' + Date.now().toString(),
         type: 'retirement',
@@ -358,15 +351,7 @@ export default function AssetsScreen() {
       const balance = parseFloat(retBalance.replace(/,/g, '')) || 0;
       const contribution = parseFloat(retContribution.replace(/,/g, '')) || 0;
       const matchPercent = parseFloat(retMatchPercent.replace(/,/g, '')) || 0;
-
-      const totalMonthlySalary = incomeSources.reduce((sum, s) => {
-        if (s.frequency === 'biweekly') return sum + s.amount * 2.17;
-        if (s.frequency === 'weekly') return sum + s.amount * 4.33;
-        if (s.frequency === 'twice_monthly') return sum + s.amount * 2;
-        return sum + s.amount;
-      }, 0);
-
-      const employerMatchDollars = (matchPercent / 100) * totalMonthlySalary;
+      const employerMatchDollars = retirementCalcs.employerMatchDollars;
 
       updatedAsset = {
         value: balance,
@@ -416,57 +401,18 @@ export default function AssetsScreen() {
     resetForm();
   };
 
-  const getTypeLabel = (t: Asset['type']) => {
-    const labels: Record<string, string> = {
-      crypto: '₿ Crypto',
-      stocks: '📈 Stocks',
-      real_estate: '🏠 Real Estate',
-      business: '💼 Business',
-      retirement: '🏛️ Retirement',
-      other: '💰 Other',
-    };
-    return labels[t] || '💰 Other';
-  };
-
-  const retMonthly = (() => {
-    const amt = parseFloat(retContribution) || 0;
-    if (retFrequency === 'weekly') return amt * 4.33;
-    if (retFrequency === 'biweekly') return amt * 2.17;
-    if (retFrequency === 'twice_monthly') return amt * 2;
-    return amt;
-  })();
-
+  
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
 
         {/* Wallet Sync Button */}
         {wallets.length > 0 && (
-          <View style={styles.syncSection}>
-            <TouchableOpacity 
-              style={[styles.syncButton, isLoadingAssets && styles.syncButtonLoading]}
-              onPress={handleSyncWallet}
-              disabled={isLoadingAssets}
-            >
-              {isLoadingAssets ? (
-                <>
-                  <ActivityIndicator color="#0a0e1a" size="small" />
-                  <Text style={styles.syncButtonText}>Syncing...</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.syncIcon}>🔄</Text>
-                  <Text style={styles.syncButtonText}>Sync Wallet Assets</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            
-            {lastAssetSync && (
-              <Text style={styles.lastSyncText}>
-                Last synced: {formatLastSync(lastAssetSync)}
-              </Text>
-            )}
-          </View>
+          <WalletSyncSection
+            onSync={handleSyncWallet}
+            isLoading={isLoadingAssets}
+            lastSyncTime={lastAssetSync}
+          />
         )}
 
         {/* ── Cash Flow Summary ── */}
@@ -479,131 +425,20 @@ export default function AssetsScreen() {
         />
 
         {/* Add Asset Button */}
-        <TouchableOpacity style={styles.addButtonLarge} onPress={() => setShowAddModal(true)}>
-          <Text style={styles.addButtonLargeText}>+ Add Asset</Text>
-        </TouchableOpacity>
+        <AddAssetButton onPress={() => setShowAddModal(true)} />
 
         {/* ── SKR Auto-Detected Card ── */}
         {skrHolding && skrIncome && (
-          <View style={styles.skrCard}>
-            <View style={styles.skrHeader}>
-              <View style={styles.skrLogoRow}>
-                <Text style={styles.skrLogo}>◎</Text>
-                <View>
-                  <Text style={styles.skrTitle}>$SKR — Solana Mobile</Text>
-                  <Text style={styles.skrSub}>Auto-detected from wallet</Text>
-                </View>
-              </View>
-              <View style={styles.skrApyBadge}>
-                <Text style={styles.skrApyText}>{((skrHolding.apy ?? 0) * 100).toFixed(0)}% APY</Text>
-              </View>
-            </View>
-
-            <View style={styles.skrBarBg}>
-              <View style={[
-                styles.skrBarStaked,
-                { width: `${skrHolding.totalBalance > 0 ? (skrHolding.stakedBalance / skrHolding.totalBalance) * 100 : 0}%` }
-              ]} />
-            </View>
-            <View style={styles.skrBarLabels}>
-              <Text style={styles.skrBarLabelStaked}>
-                Staked: {skrHolding.stakedBalance.toLocaleString()} SKR
-              </Text>
-              <Text style={styles.skrBarLabelLiquid}>
-                Liquid: {skrHolding.liquidBalance.toLocaleString()} SKR
-              </Text>
-            </View>
-
-            <View style={styles.skrNumbers}>
-              <View style={styles.skrNumCol}>
-                <Text style={styles.skrNumLabel}>Total Value</Text>
-                <Text style={styles.skrNumValue}>
-                  ${skrIncome.totalValueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </Text>
-              </View>
-              <View style={styles.skrNumCol}>
-                <Text style={styles.skrNumLabel}>Monthly Yield</Text>
-                <Text style={[styles.skrNumValue, { color: '#4ade80' }]}>
-                  ${skrIncome.monthlyYieldUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </Text>
-              </View>
-              <View style={styles.skrNumCol}>
-                <Text style={styles.skrNumLabel}>Annual Yield</Text>
-                <Text style={[styles.skrNumValue, { color: '#4ade80' }]}>
-                  ${skrIncome.annualYieldUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
+          <SKRCard holding={skrHolding} income={skrIncome} />
+        )} 
 
         {/* ── Asset Categories ── */}
-        <AssetSection
-          title={getCategoryLabel('brokerage')}
-          icon={getCategoryIcon('brokerage')}
-          assets={categorized.brokerage}
-          totalValue={calculateCategoryTotal(categorized.brokerage)}
-          totalIncome={calculateCategoryIncome(categorized.brokerage)}
-          //onAssetPress={handleEditAsset}
-          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
-          onAssetDelete={handleRemoveAsset}
-        />
-
-        <AssetSection
-          title={getCategoryLabel('cash')}
-          icon={getCategoryIcon('cash')}
-          assets={categorized.cash}
-          totalValue={calculateCategoryTotal(categorized.cash)}
-          totalIncome={calculateCategoryIncome(categorized.cash)}
-          //onAssetPress={handleEditAsset}
+        <AssetCategoriesList
+          categorized={categorized}
           onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
           onBankAccountPress={handleBankAccountPress}
-        />
-
-        <AssetSection
-          title={getCategoryLabel('realEstate')}
-          icon={getCategoryIcon('realEstate')}
-          assets={categorized.realEstate}
-          totalValue={calculateCategoryTotal(categorized.realEstate)}
-          totalIncome={calculateCategoryIncome(categorized.realEstate)}
-          //onAssetPress={handleEditAsset}
-          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
-          onAssetDelete={handleRemoveAsset}
-        />
-
-        <AssetSection
-          title={getCategoryLabel('commodities')}
-          icon={getCategoryIcon('commodities')}
-          assets={categorized.commodities}
-          totalValue={calculateCategoryTotal(categorized.commodities)}
-          totalIncome={calculateCategoryIncome(categorized.commodities)}
-          //onAssetPress={handleEditAsset}
-          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
-          onAssetDelete={handleRemoveAsset}
-        />
-
-        <AssetSection
-          title={getCategoryLabel('crypto')}
-          icon={getCategoryIcon('crypto')}
-          assets={categorized.crypto}
-          totalValue={calculateCategoryTotal(categorized.crypto)}
-          totalIncome={calculateCategoryIncome(categorized.crypto)}
-          //onAssetPress={handleEditAsset}
-          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
-          onAssetDelete={handleRemoveAsset}
-        />
-
-        <AssetSection
-          title={getCategoryLabel('retirement')}
-          icon={getCategoryIcon('retirement')}
-          assets={categorized.retirement}
-          totalValue={calculateCategoryTotal(categorized.retirement)}
-          totalIncome={calculateCategoryIncome(categorized.retirement)}
-          //onAssetPress={handleEditAsset}
-          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
-          onAssetDelete={handleRemoveAsset}
-        />
+        /> 
 
       </ScrollView>
 
@@ -634,7 +469,7 @@ export default function AssetsScreen() {
                     onPress={() => setType(t)}
                   >
                     <Text style={[styles.typeButtonText, type === t && styles.typeButtonTextActive]}>
-                      {getTypeLabel(t)}
+                      {getAssetTypeLabel(t)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -702,14 +537,16 @@ export default function AssetsScreen() {
                         onPress={() => setRetFrequency(f)}
                       >
                         <Text style={[styles.typeButtonText, retFrequency === f && styles.typeButtonTextActive]}>
-                          {f === 'biweekly' ? 'Bi-weekly' : f === 'twice_monthly' ? '2x/mo' : f.charAt(0).toUpperCase() + f.slice(1)}
+                          {getFrequencyLabel(f)}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
 
                   {parseFloat(retContribution) > 0 && (
-                    <Text style={styles.retMonthlyPreview}>= ${retMonthly.toFixed(0)}/mo pre-tax</Text>
+                    <Text style={styles.retMonthlyPreview}>
+                      = ${retirementCalcs.monthlyContribution.toFixed(0)}/mo pre-tax
+                    </Text>
                   )}
 
                   <Text style={styles.label}>Employer Match (%)</Text>
@@ -947,59 +784,7 @@ export default function AssetsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
-  scrollView: { flex: 1, padding: 20 },
-
-  addButtonLarge: {
-    backgroundColor: '#4ade80',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  addButtonLargeText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-
-  // SKR card
-  skrCard: {
-    backgroundColor: '#1a1f2e',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#f4c430',
-  },
-  skrHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  skrLogoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  skrLogo: { fontSize: 28, color: '#f4c430' },
-  skrTitle: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  skrSub: { fontSize: 12, color: '#666', marginTop: 1 },
-  skrApyBadge: {
-    backgroundColor: '#f4c43022',
-    borderWidth: 1,
-    borderColor: '#f4c430',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  skrApyText: { fontSize: 13, fontWeight: 'bold', color: '#f4c430' },
-  skrBarBg: { height: 8, backgroundColor: '#0a0e1a', borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
-  skrBarStaked: { height: '100%', backgroundColor: '#f4c430', borderRadius: 4 },
-  skrBarLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-  skrBarLabelStaked: { fontSize: 12, color: '#f4c430', fontWeight: '600' },
-  skrBarLabelLiquid: { fontSize: 12, color: '#666' },
-  skrNumbers: { flexDirection: 'row', marginBottom: 12 },
-  skrNumCol: { flex: 1, alignItems: 'center' },
-  skrNumLabel: { fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 },
-  skrNumValue: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-
+  scrollView: { flex: 1, padding: 20 }, 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#0a0e1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '75%' },
@@ -1023,36 +808,6 @@ const styles = StyleSheet.create({
   modalAddButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
-
-  syncSection: {
-    marginBottom: 20,
-  },
-  syncButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4ade80',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  syncButtonLoading: {
-    opacity: 0.6,
-  },
-  syncIcon: {
-    fontSize: 20,
-  },
-  syncButtonText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  lastSyncText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 8,
-  },
 
   autoSyncBadge: {
     backgroundColor: '#4ade80',
