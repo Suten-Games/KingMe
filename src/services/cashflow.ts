@@ -135,14 +135,14 @@ export function getMonthlyPreTaxDeductions(assets: Asset[]): { contributions: nu
   let employerMatch = 0;
 
   assets.forEach((asset) => {
-    if (asset.type === 'retirement' && asset.metadata.type === 'retirement') {
+    if (asset.type === 'retirement' && asset.metadata?.type === 'retirement') {
       const meta = asset.metadata;
       const amt = meta.contributionAmount || 0;
       switch (meta.contributionFrequency) {
-        case 'weekly':         contributions += (amt * 52) / 12; break;
-        case 'biweekly':       contributions += (amt * 26) / 12; break;
-        case 'twice_monthly':  contributions += amt * 2;         break;
-        case 'monthly':        contributions += amt;             break;
+        case 'weekly': contributions += (amt * 52) / 12; break;
+        case 'biweekly': contributions += (amt * 26) / 12; break;
+        case 'twice_monthly': contributions += amt * 2; break;
+        case 'monthly': contributions += amt; break;
       }
       employerMatch += meta.employerMatchDollars || 0;
     }
@@ -176,13 +176,13 @@ export function analyzeAllAccounts(
   const liquidNonRetirementAssets = assets
     .filter(a => {
       // Exclude retirement accounts (401k, IRA, etc.)
-      if (a.metadata.type === 'retirement') return false;
+      if (a.metadata?.type === 'retirement') return false;
       // For crypto/other assets, only count if they're marked as liquid or have a reasonable value
       // SKR staking, savings accounts, etc. count
       return true;
     })
     .reduce((sum, a) => sum + (a.value || 0), 0);
-  
+
   const liquidAssets = totalBalance + liquidNonRetirementAssets;
 
   // Daily living = sum of all obligations categorized as daily_living
@@ -197,11 +197,11 @@ export function analyzeAllAccounts(
   const paycheckDeductionMonthly = paycheckDeductions.reduce((sum, d) => {
     const amt = d.perPayPeriod || 0;
     switch (d.frequency) {
-      case 'weekly':         return sum + (amt * 52) / 12;
-      case 'biweekly':       return sum + (amt * 26) / 12;
-      case 'twice_monthly':  return sum + amt * 2;
-      case 'monthly':        return sum + amt;
-      default:               return sum;
+      case 'weekly': return sum + (amt * 52) / 12;
+      case 'biweekly': return sum + (amt * 26) / 12;
+      case 'twice_monthly': return sum + amt * 2;
+      case 'monthly': return sum + amt;
+      default: return sum;
     }
   }, 0);
 

@@ -1,4 +1,4 @@
-// app/(tabs)/assets.tsx - Simplified with collapsible categories
+// app/(tabs)/assets.tsx - CORRECTED VERSION
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -7,8 +7,9 @@ import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import CashFlowSummary from '../../src/components/CashFlowSummary';
 import AssetSection from '../../src/components/AssetSection';
 import { categorizeAssets, calculateCategoryTotal, calculateCategoryIncome, calculateTotalValue, calculateTotalIncome, getCategoryIcon, getCategoryLabel } from '../../src/utils/assetCalculations';
-import type { Asset } from '../../src/types';
+import type { Asset, BankAccount } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
+import { ActivityIndicator, Alert } from 'react-native';
 
 export default function AssetsScreen() {
   const assets = useStore((state) => state.assets);
@@ -26,6 +27,10 @@ export default function AssetsScreen() {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [editingBankAccount, setEditingBankAccount] = useState<BankAccount | null>(null);
   const [showBankEditModal, setShowBankEditModal] = useState(false);
+
+  const syncWalletAssets = useStore((state) => state.syncWalletAssets);
+  const isLoadingAssets = useStore((state) => state.isLoadingAssets);
+  const lastAssetSync = useStore((state) => state.lastAssetSync);
 
   // ── SKR auto-detected holding ───────────────────────────────────────────
   const wallets = useStore((state) => state.wallets);
@@ -51,11 +56,25 @@ export default function AssetsScreen() {
     return () => { cancelled = true; };
   }, [wallets]);
 
+  useEffect(() => {
+    // Auto-sync if last sync was >5 mins ago
+    if (wallets.length > 0 && lastAssetSync) {
+      const lastSync = new Date(lastAssetSync);
+      const now = new Date();
+      const diffMinutes = (now.getTime() - lastSync.getTime()) / 60000;
+      
+      if (diffMinutes > 5) {
+        syncWalletAssets(wallets[0]).catch(console.error);
+      }
+    }
+  }, []); // Run once on mount
+
   // Generic asset form state
   const [name, setName] = useState('');
   const [type, setType] = useState<Asset['type']>('crypto');
   const [value, setValue] = useState('');
   const [apy, setApy] = useState('');
+  const [quantity, setQuantity] = useState('');
 
   // Retirement-specific form state
   const [retAccountType, setRetAccountType] = useState<'401k' | 'roth_401k' | 'ira' | 'roth_ira'>('401k');
@@ -78,6 +97,7 @@ export default function AssetsScreen() {
     setType('crypto');
     setValue('');
     setApy('');
+    setQuantity('');
     setRetAccountType('401k');
     setRetInstitution('');
     setRetBalance('');
@@ -86,6 +106,48 @@ export default function AssetsScreen() {
     setRetMatchPercent('');
     setEditingAsset(null);
     setShowAddModal(false);
+  };
+
+  const handleSyncWallet = async () => {
+    if (wallets.length === 0) {
+      Alert.alert(
+        'No Wallet Connected',
+        'Please connect a Solana wallet in Profile & Settings first.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      await syncWalletAssets(wallets[0]);
+      
+      const syncedCount = assets.filter(a => a.isAutoSynced).length;
+      Alert.alert(
+        '✅ Sync Complete',
+        `Successfully synced ${syncedCount} assets from your wallet!`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert(
+        'Sync Failed',
+        'Could not sync wallet. Please try again later.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const formatLastSync = (timestamp?: string): string => {
+    if (!timestamp) return 'Never';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return date.toLocaleDateString();
   };
 
   const handleAddAsset = () => {
@@ -130,6 +192,7 @@ export default function AssetsScreen() {
     const assetValue = parseFloat(value);
     const assetApy = parseFloat(apy) || 0;
     const calculatedIncome = assetValue * (assetApy / 100);
+    const assetQuantity = type === 'stocks' ? parseFloat(quantity) || 0 : undefined;
 
     const newAsset: Asset = {
       id: Date.now().toString(),
@@ -141,6 +204,7 @@ export default function AssetsScreen() {
         type: 'other',
         description: name,
         apy: assetApy,
+        quantity: assetQuantity,
       },
     };
 
@@ -174,19 +238,20 @@ export default function AssetsScreen() {
   const handleEditAsset = (asset: Asset) => {
     setEditingAsset(asset);
     
-    if (asset.type === 'retirement' && asset.metadata.type === 'retirement') {
+    if (asset.type === 'retirement' && asset.metadata?.type === 'retirement') {
       setType('retirement');
-      setRetAccountType(asset.metadata.accountType);
-      setRetInstitution(asset.metadata.institution || '');
+      setRetAccountType(asset.metadata?.accountType);
+      setRetInstitution(asset.metadata?.institution || '');
       setRetBalance(asset.value.toString());
-      setRetContribution(asset.metadata.contributionAmount?.toString() || '0');
-      setRetFrequency(asset.metadata.contributionFrequency || 'biweekly');
-      setRetMatchPercent(asset.metadata.employerMatchPercent?.toString() || '0');
+      setRetContribution(asset.metadata?.contributionAmount?.toString() || '0');
+      setRetFrequency(asset.metadata?.contributionFrequency || 'biweekly');
+      setRetMatchPercent(asset.metadata?.employerMatchPercent?.toString() || '0');
     } else {
       setType(asset.type);
       setName(asset.name);
       setValue(asset.value.toString());
-      setApy(asset.metadata.apy?.toString() || '');
+      setApy(asset.metadata?.apy?.toString() || '');
+      setQuantity(asset.metadata?.quantity?.toString() || '');
     }
     
     setShowAddModal(true);
@@ -232,6 +297,7 @@ export default function AssetsScreen() {
       const assetValue = parseFloat(value.replace(/,/g, '')) || 0;
       const assetApy = parseFloat(apy) || 0;
       const income = assetValue * (assetApy / 100);
+      const assetQuantity = type === 'stocks' ? parseFloat(quantity) || 0 : undefined;
 
       updatedAsset = {
         name,
@@ -240,6 +306,7 @@ export default function AssetsScreen() {
         metadata: {
           ...editingAsset.metadata,
           apy: assetApy,
+          quantity: assetQuantity,
         },
       };
     }
@@ -271,6 +338,35 @@ export default function AssetsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
+
+        {/* Wallet Sync Button */}
+        {wallets.length > 0 && (
+          <View style={styles.syncSection}>
+            <TouchableOpacity 
+              style={[styles.syncButton, isLoadingAssets && styles.syncButtonLoading]}
+              onPress={handleSyncWallet}
+              disabled={isLoadingAssets}
+            >
+              {isLoadingAssets ? (
+                <>
+                  <ActivityIndicator color="#0a0e1a" size="small" />
+                  <Text style={styles.syncButtonText}>Syncing...</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.syncIcon}>🔄</Text>
+                  <Text style={styles.syncButtonText}>Sync Wallet Assets</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            
+            {lastAssetSync && (
+              <Text style={styles.lastSyncText}>
+                Last synced: {formatLastSync(lastAssetSync)}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* ── Cash Flow Summary ── */}
         {/* <CashFlowSummary cashFlow={cashFlow} /> */}
@@ -568,6 +664,23 @@ export default function AssetsScreen() {
                     />
                   </View>
 
+                  {type === 'stocks' && (
+                    <>
+                      <Text style={styles.label}>Number of Shares</Text>
+                      <Text style={styles.helperText}>
+                        How many shares do you own?
+                      </Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="100"
+                        placeholderTextColor="#666"
+                        keyboardType="numeric"
+                        value={quantity}
+                        onChangeText={setQuantity}
+                      />
+                    </>
+                  )}
+
                   <Text style={styles.label}>APY (optional)</Text>
                   <Text style={styles.helperText}>Leave blank if not earning yield.</Text>
                   <View style={styles.inputContainer}>
@@ -762,6 +875,49 @@ const styles = StyleSheet.create({
   modalAddButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
+
+  syncSection: {
+    marginBottom: 20,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4ade80',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  syncButtonLoading: {
+    opacity: 0.6,
+  },
+  syncIcon: {
+    fontSize: 20,
+  },
+  syncButtonText: {
+    color: '#0a0e1a',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  lastSyncText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  autoSyncBadge: {
+    backgroundColor: '#4ade80',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  autoSyncBadgeText: {
+    color: '#0a0e1a',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
 
   // Bank edit modal
   bankAccountInfo: {

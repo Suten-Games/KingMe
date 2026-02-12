@@ -5,10 +5,22 @@ import { saveUserProfile, loadUserProfile } from '../services/storage';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
+import { useDriftPositions } from '@/hooks/useDriftPositions';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
   _isLoaded: boolean;
+
+  // Wallet sync state
+  isLoadingAssets: boolean;
+  lastAssetSync?: string;
+
+  // Drift sync state (client-side)
+  driftPositions: any[];
+  driftTotalValue: number;
+  isDriftLoading: boolean;
+  driftError: string | null;
+
   // Actions
   setAvatarType: (avatarType: AvatarType) => void;
   setIncome: (income: Partial<Income>) => void;
@@ -56,6 +68,16 @@ interface AppState extends UserProfile {
   saveProfile: () => Promise<void>;
   exportBackup: () => string;
   importBackup: (jsonString: string) => void;
+  updateSettings: (settings: Partial<UserSettings>) => void;
+
+  // Payment tracking actions
+  toggleObligationPaid: (id: string) => void;
+  toggleDebtPaid: (id: string) => void;
+  resetMonthlyPayments: () => void;
+
+  // Wallet sync actions
+  syncWalletAssets: (walletAddress: string) => Promise<void>;
+
   resetStore: () => void;
 }
 
@@ -88,9 +110,32 @@ const initialState: UserProfile = {
   onboardingComplete: false,
 };
 
+// Helper: Map API category to app asset type
+function mapCategoryToAssetType(category: string): Asset['type'] {
+  switch (category) {
+    case 'stocks':
+    case 'commodities':
+      return 'brokerage';
+    case 'real_estate':
+      return 'real_estate';
+    case 'defi':
+    case 'crypto':
+    default:
+      return 'crypto';
+  }
+}
+
 export const useStore = create<AppState>((set, get) => ({
   ...initialState,
   _isLoaded: false, // NOT persisted, internal flag only
+  isLoadingAssets: false,
+  lastAssetSync: undefined,
+
+  // Drift state
+  driftPositions: [],
+  driftTotalValue: 0,
+  isDriftLoading: false,
+  driftError: null,
 
   setAvatarType: (avatarType) =>
     set((state) => ({
@@ -577,6 +622,102 @@ export const useStore = create<AppState>((set, get) => ({
       console.log('Backup imported successfully');
     } catch (error) {
       console.error('Failed to import backup:', error);
+      throw error;
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // WALLET SYNC
+  // ═══════════════════════════════════════════════════════════
+
+  syncWalletAssets: async (walletAddress: string) => {
+    set({ isLoadingAssets: true });
+
+    try {
+      console.log('[SYNC] Starting wallet sync for', walletAddress);
+
+      // Call your Vercel API
+      const response = await fetch('https://kingme-iota.vercel.app/api/wallet/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sync failed: ${response.status}`);
+      }
+
+      const { assets: syncedAssets, totalValue } = await response.json();
+
+      console.log(`[SYNC] Synced ${syncedAssets.length} assets worth $${totalValue.toFixed(2)}`);
+
+      // Get current assets
+      const currentAssets = get().assets;
+      const { driftPositions, driftTotalValue } = get();
+
+      // Keep manual assets (not auto-synced)
+      const manualAssets = currentAssets.filter(a => !a.isAutoSynced);
+
+      // Convert API assets to app format
+      const newAutoAssets = syncedAssets.map((sa: any) => ({
+        id: `auto_${sa.mint}`,
+        type: mapCategoryToAssetType(sa.category),
+        subtype: sa.category === 'crypto' ? undefined : sa.category,
+        name: sa.name,
+        value: sa.valueUSD,
+        annualIncome: sa.apy ? (sa.valueUSD * sa.apy) / 100 : 0,
+        isLiquid: true,
+        isAutoSynced: true,
+        lastSynced: new Date().toISOString(),
+        metadata: {
+          type: 'other' as const,
+          description: sa.name,
+          apy: sa.apy || 0,
+          balance: sa.balance,
+          priceUSD: sa.priceUSD,
+          mint: sa.mint,
+          symbol: sa.symbol,
+          logoURI: sa.logoURI,
+        },
+      }));
+
+      // Convert Drift positions to app format
+      const driftAssets = driftPositions.map((dp: any) => ({
+        id: `drift_${dp.mint}`,
+        type: 'crypto' as const,
+        subtype: 'defi',
+        name: dp.name,
+        value: dp.valueUSD,
+        annualIncome: dp.apy ? (dp.valueUSD * dp.apy) / 100 : 0,
+        isLiquid: true,
+        isAutoSynced: true,
+        lastSynced: new Date().toISOString(),
+        metadata: {
+          type: 'other' as const,
+          description: `${dp.name} - Drift Protocol`,
+          apy: dp.apy || 0,
+          protocol: 'Drift',
+        },
+      }));
+
+      // Merge: manual + tokens + drift
+      const allAssets = [...manualAssets, ...newAutoAssets, ...driftAssets];
+
+      // Merge: manual + auto
+      set({
+        assets: allAssets,
+        isLoadingAssets: false,
+        lastAssetSync: new Date().toISOString(),
+      });
+
+      console.log(`[SYNC] Complete: ${manualAssets.length} manual + ${newAutoAssets.length} synced + ${driftAssets.length} drift`);
+
+      // Save immediately
+      await get().saveProfile();
+
+    } catch (error: any) {
+      console.error('[SYNC] Error:', error);
+      set({ isLoadingAssets: false });
       throw error;
     }
   },

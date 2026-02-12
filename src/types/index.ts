@@ -50,44 +50,66 @@ export interface Asset {
 export interface CryptoAsset {
   type: 'crypto';
   tokenMint?: string; // for SPL tokens
-  quantity: number;
+  quantity?: number;  // ✅ CHANGE: made optional instead of required
+  balance?: number;   // ✅ ADD: token balance (same as quantity, for consistency)
+  priceUSD?: number;  // ✅ ADD: price per token in USD
+  symbol?: string;    // ✅ ADD: token symbol (SOL, USDC, etc)
+  logoURI?: string;   // ✅ ADD: token logo for display
+  mint?: string;      // ✅ ADD: token mint address
   protocol?: string; // 'Kamino', 'MarginFi', 'Marinade', etc.
   apy?: number;
-  isStaked: boolean;
-  walletAddress: string; // which connected wallet
+  isStaked?: boolean;  // ✅ CHANGE: made optional
+  walletAddress?: string; // ✅ CHANGE: made optional - which connected wallet
+  description?: string;  // ✅ ADD: for manual entries
 }
 
 // Real estate (manual entry, post-hackathon module)
 export interface RealEstateAsset {
   type: 'real_estate';
-  address: string;
-  purchasePrice: number;
-  currentValue: number;
+  address?: string;  // ✅ CHANGE: made optional
+  purchasePrice?: number;  // ✅ CHANGE: made optional
+  currentValue?: number;  // ✅ CHANGE: made optional
   monthlyRentalIncome?: number;
   monthlyExpenses?: number; // mortgage, taxes, insurance, maintenance
+  description?: string;  // ✅ ADD: for simple entries
+  apy?: number;  // ✅ ADD: for rental yield
 }
 
 // Stocks/bonds (manual entry)
 export interface StockAsset {
   type: 'stocks';
   ticker?: string;
-  shares: number;
-  currentPrice: number;
+  shares?: number;  // ✅ CHANGE: made optional
+  quantity?: number;  // ✅ ADD: same as shares, for consistency
+  currentPrice?: number;  // ✅ CHANGE: made optional
+  priceUSD?: number;  // ✅ ADD: same as currentPrice, for consistency
   dividendYield?: number;
+  apy?: number;  // ✅ ADD: for dividend yield
+  description?: string;  // ✅ ADD: for manual entries
 }
 
 // Business interests (manual entry)
 export interface BusinessAsset {
   type: 'business';
-  equityPercent: number;
-  valuation: number;
-  annualDistributions: number;
+  equityPercent?: number;  // ✅ CHANGE: made optional
+  valuation?: number;  // ✅ CHANGE: made optional
+  annualDistributions?: number;  // ✅ CHANGE: made optional
+  description?: string;  // ✅ ADD: for simple entries
+  apy?: number;  // ✅ ADD: for yield calculations
 }
 
 // Other assets
 export interface OtherAsset {
   type: 'other';
   description: string;
+  apy?: number;  // ✅ ADD: for any yield-bearing "other" assets
+  quantity?: number;  // ✅ ADD: for countable items
+  balance?: number;   // ✅ ADD: same as quantity
+  priceUSD?: number;  // ✅ ADD: unit price
+  symbol?: string;    // ✅ ADD: for display
+  logoURI?: string;   // ✅ ADD: for display
+  mint?: string;      // ✅ ADD: for crypto-like "other" assets
+  protocol?: string;  // ✅ ADD: for DeFi "other" assets
 }
 
 // Bank accounts as assets (checking/savings with interest)
@@ -97,17 +119,20 @@ export interface BankAsset {
   institution: string;
   apy?: number; // Savings account interest
   isEmergencyFund?: boolean;
+  description?: string;  // ✅ ADD: for notes
 }
 
 // Retirement accounts (401k, IRA, etc.)
 export interface RetirementAsset {
   type: 'retirement';
-  accountType: '401k' | 'roth_401k' | 'ira' | 'roth_ira';
-  institution: string;
-  contributionAmount: number;   // per pay period
-  contributionFrequency: 'weekly' | 'biweekly' | 'twice_monthly' | 'monthly'; // how often you contribute
-  employerMatchPercent?: number; // e.g. 4 means employer matches up to 4% of salary
-  employerMatchDollars?: number; // calculated monthly employer match in $
+  accountType?: '401k' | 'roth_401k' | 'ira' | 'roth_ira';  // ✅ CHANGE: made optional
+  institution?: string;  // ✅ CHANGE: made optional
+  contributionAmount?: number;   // per pay period
+  contributionFrequency?: 'weekly' | 'biweekly' | 'twice_monthly' | 'monthly';
+  employerMatchPercent?: number;
+  employerMatchDollars?: number;
+  description?: string;  // ✅ ADD: for notes
+  apy?: number;  // ✅ ADD: for growth rate
 }
 
 export type ObligationCategory = 'housing' | 'utilities' | 'insurance' | 'debt_service' | 'daily_living' | 'retirement' | 'other';

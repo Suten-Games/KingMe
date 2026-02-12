@@ -1,5 +1,5 @@
-// app/components/AssetSection.tsx - Reusable collapsible asset category
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+// app/components/AssetSection.tsx - WITH TOKEN LOGOS
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Asset } from '../../src/types';
@@ -12,7 +12,23 @@ interface AssetSectionProps {
   totalIncome: number;
   onAssetPress: (asset: Asset) => void;
   onAssetDelete: (asset: Asset) => void;
-  onBankAccountPress?: (accountId: string) => void; // NEW
+  onBankAccountPress?: (accountId: string) => void;
+}
+
+// Helper: Format large numbers (1.5K, 2.3M, etc.)
+function formatQuantity(num: number): string {
+  if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+  if (num >= 1) return num.toFixed(2);
+  return num.toFixed(6); // For small crypto amounts
+}
+
+// Helper: Format prices with appropriate decimals
+function formatPrice(price: number): string {
+  if (price >= 1000) return '$' + price.toLocaleString();
+  if (price >= 1) return '$' + price.toFixed(2);
+  if (price >= 0.01) return '$' + price.toFixed(4);
+  return '$' + price.toFixed(6);
 }
 
 export default function AssetSection({
@@ -28,7 +44,6 @@ export default function AssetSection({
   const defaultExpanded = useStore((s) => s.settings?.defaultExpandAssetSections ?? false);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  // Update when preference changes
   useEffect(() => {
     setExpanded(defaultExpanded);
   }, [defaultExpanded]);
@@ -81,13 +96,20 @@ export default function AssetSection({
           {/* Asset cards */}
           {assets.map((asset) => {
             const isBankAsset = asset.id.startsWith('bank_');
+            
+            // Extract quantity/balance and price info
+            const metadata = asset.metadata as any;
+            const quantity = metadata?.balance || metadata?.quantity || metadata?.shares;
+            const pricePerUnit = metadata?.priceUSD || metadata?.currentPrice;
+            const symbol = metadata?.symbol || metadata?.ticker;
+            const logoURI = metadata?.logoURI;
+            
             return (
               <TouchableOpacity
                 key={asset.id}
                 style={styles.assetCard}
                 onPress={() => {
                   if (isBankAsset && onBankAccountPress) {
-                    // Extract actual bank account ID (remove 'bank_' prefix)
                     const bankAccountId = asset.id.replace('bank_', '');
                     onBankAccountPress(bankAccountId);
                   } else if (!isBankAsset) {
@@ -98,32 +120,67 @@ export default function AssetSection({
                 activeOpacity={0.7}
               >
                 <View style={styles.assetHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.assetName}>{asset.name}</Text>
-                    <Text style={styles.assetType}>{getTypeLabel(asset.type)}</Text>
+                  <View style={styles.assetLeftSection}>
                     
-                    {isBankAsset && asset.metadata.type === 'bank_account' && (
-                      <Text style={styles.bankBadge}>
-                        {asset.metadata.apy}% APY
-                      </Text>
-                    )}
+                    {/* Token Logo or Emoji */}
+                    {logoURI ? (
+                      <Image
+                        source={{ uri: logoURI }}
+                        style={styles.assetLogo}
+                      />
+                    ) : !isBankAsset ? (
+                      <View style={styles.assetLogoPlaceholder}>
+                        <Text style={styles.assetLogoEmoji}>
+                          {asset.type === 'crypto' ? '₿' : 
+                           asset.type === 'stocks' ? '📈' : 
+                           asset.type === 'real_estate' ? '🏠' : 
+                           asset.type === 'business' ? '💼' : 
+                           asset.type === 'retirement' ? '🏛️' : '💰'}
+                        </Text>
+                      </View>
+                    ) : null}
                     
-                    {isBankAsset && (
-                      <Text style={styles.tapHint}>Tap to update balance</Text>
-                    )}
-                    
-                    {asset.type === 'retirement' && asset.metadata.type === 'retirement' && (
-                      <Text style={styles.retirementBadge}>
-                        {asset.metadata.contributionAmount > 0
-                          ? `+$${asset.metadata.contributionAmount.toLocaleString()}/${asset.metadata.contributionFrequency === 'monthly' ? 'mo' : asset.metadata.contributionFrequency === 'biweekly' ? 'biweekly' : asset.metadata.contributionFrequency === 'weekly' ? 'wk' : '2x/mo'}`
-                          : 'No contribution set'}
-                        {asset.metadata.employerMatchDollars ? ` · match +$${asset.metadata.employerMatchDollars.toFixed(0)}/mo` : ''}
-                      </Text>
-                    )}
-                    
-                    {asset.annualIncome === 0 && !isBankAsset && asset.type !== 'retirement' && (
-                      <Text style={styles.warningBadge}>⚠️ Not generating income</Text>
-                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.assetName}>{asset.name}</Text>
+                      
+                      {/* Token/Share Count */}
+                      {quantity && (
+                        <Text style={styles.assetQuantity}>
+                          {formatQuantity(quantity)}
+                          {symbol ? ` ${symbol}` : asset.type === 'stocks' ? ' shares' : ''}
+                        </Text>
+                      )}
+                      
+                      <Text style={styles.assetType}>{getTypeLabel(asset.type)}</Text>
+                      
+                      {/* Auto-sync badge */}
+                      {asset.isAutoSynced && (
+                        <Text style={styles.autoSyncBadge}>🔄 Auto-synced</Text>
+                      )}
+                      
+                      {isBankAsset && metadata?.type === 'bank_account' && (
+                        <Text style={styles.bankBadge}>
+                          {metadata?.apy}% APY
+                        </Text>
+                      )}
+                      
+                      {isBankAsset && (
+                        <Text style={styles.tapHint}>Tap to update balance</Text>
+                      )}
+                      
+                      {asset.type === 'retirement' && metadata?.type === 'retirement' && (
+                        <Text style={styles.retirementBadge}>
+                          {metadata?.contributionAmount > 0
+                            ? `+$${metadata?.contributionAmount.toLocaleString()}/${metadata?.contributionFrequency === 'monthly' ? 'mo' : metadata?.contributionFrequency === 'biweekly' ? 'biweekly' : metadata?.contributionFrequency === 'weekly' ? 'wk' : '2x/mo'}`
+                            : 'No contribution set'}
+                          {metadata?.employerMatchDollars ? ` · match +$${metadata?.employerMatchDollars.toFixed(0)}/mo` : ''}
+                        </Text>
+                      )}
+                      
+                      {asset.annualIncome === 0 && !isBankAsset && asset.type !== 'retirement' && (
+                        <Text style={styles.warningBadge}>⚠️ Not generating income</Text>
+                      )}
+                    </View>
                   </View>
                   
                   {!isBankAsset && (
@@ -143,12 +200,22 @@ export default function AssetSection({
                   <View style={styles.assetDetail}>
                     <Text style={styles.assetDetailLabel}>Value</Text>
                     <Text style={styles.assetDetailValue}>${asset.value.toLocaleString()}</Text>
+                    {pricePerUnit && (
+                      <Text style={styles.assetPrice}>
+                        @ {formatPrice(pricePerUnit)}
+                      </Text>
+                    )}
                   </View>
                   <View style={styles.assetDetail}>
                     <Text style={styles.assetDetailLabel}>Annual Income</Text>
                     <Text style={[styles.assetIncome, asset.annualIncome === 0 && styles.assetIncomeZero]}>
                       ${asset.annualIncome.toLocaleString()}/yr
                     </Text>
+                    {metadata?.apy > 0 && !isBankAsset && (
+                      <Text style={styles.apyBadge}>
+                        {metadata.apy.toFixed(2)}% APY
+                      </Text>
+                    )}
                   </View>
                 </View>
               </TouchableOpacity>
@@ -206,7 +273,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-
   content: {
     backgroundColor: '#141825',
     borderBottomLeftRadius: 12,
@@ -214,7 +280,6 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 12,
   },
-
   incomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -235,7 +300,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4ade80',
   },
-
   assetCard: {
     backgroundColor: '#1a1f2e',
     padding: 14,
@@ -248,15 +312,50 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 10,
   },
+  // ✅ NEW: Logo section
+  assetLeftSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+    gap: 12,
+  },
+  assetLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2a2f3e',
+  },
+  assetLogoPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2a2f3e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assetLogoEmoji: {
+    fontSize: 20,
+  },
   assetName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 4,
   },
+  assetQuantity: {
+    fontSize: 13,
+    color: '#a0a0a0',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
   assetType: {
     fontSize: 13,
     color: '#a0a0a0',
+  },
+  autoSyncBadge: {
+    fontSize: 11,
+    color: '#60a5fa',
+    marginTop: 4,
   },
   bankBadge: {
     fontSize: 12,
@@ -306,6 +405,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+  assetPrice: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
+  },
   assetIncome: {
     fontSize: 14,
     color: '#4ade80',
@@ -313,5 +417,10 @@ const styles = StyleSheet.create({
   },
   assetIncomeZero: {
     color: '#666',
+  },
+  apyBadge: {
+    fontSize: 11,
+    color: '#4ade80',
+    marginTop: 2,
   },
 });

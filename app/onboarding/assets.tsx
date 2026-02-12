@@ -135,10 +135,10 @@ export default function AssetsScreen() {
                       <Text style={styles.assetDetailLabel}>Value</Text>
                       <Text style={styles.assetDetailValue}>${asset.value.toLocaleString()}</Text>
                     </View>
-                    {asset.metadata && 'apy' in asset.metadata && asset.metadata.apy && (
+                    {asset.metadata && 'apy' in asset.metadata && asset.metadata?.apy && (
                       <View style={styles.assetDetail}>
                         <Text style={styles.assetDetailLabel}>APY</Text>
-                        <Text style={styles.assetDetailValue}>{asset.metadata.apy.toFixed(2)}%</Text>
+                        <Text style={styles.assetDetailValue}>{asset.metadata?.apy.toFixed(2)}%</Text>
                       </View>
                     )}
                     <View style={styles.assetDetail}>

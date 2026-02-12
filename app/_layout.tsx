@@ -1,7 +1,9 @@
+// app/_layout.tsx - FIXED VERSION
 import { Stack } from 'expo-router';
-import "../src/polyfills";
 import { WalletProvider } from '@/providers/wallet-provider';
 
+// ✅ CRITICAL: Import polyfills FIRST, before any other imports
+import '../src/polyfills';
 
 export default function RootLayout() {
   return (

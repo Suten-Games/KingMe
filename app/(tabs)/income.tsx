@@ -355,7 +355,7 @@ export default function IncomeScreen() {
                   .filter(a => a.annualIncome > 0)
                   .map((asset) => {
                     const monthlyIncome = asset.annualIncome / 12;
-                    const apy = asset.metadata.type === 'crypto' && 'apy' in asset.metadata ? asset.metadata.apy : null;
+                    const apy = asset.metadata?.type === 'crypto' && 'apy' in asset.metadata ? asset.metadata?.apy : null;
                     
                     return (
                       <View key={asset.id} style={styles.assetIncomeCard}>

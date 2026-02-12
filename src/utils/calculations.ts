@@ -22,7 +22,8 @@ export function calculateAssetIncome(assets: Asset[]): number {
       case 'defi': {
         // For crypto, use APY if staked/in DeFi, otherwise 0
         const cryptoMetadata = asset.metadata as CryptoAsset;
-        return total + (cryptoMetadata.apy ? asset.value * (cryptoMetadata.apy / 100) : 0);
+        const apy = cryptoMetadata?.apy || 0; // ✅ FIXED: Safe access with fallback
+        return total + (apy > 0 ? asset.value * (apy / 100) : 0);
       }
 
       case 'real_estate': {
@@ -45,7 +46,7 @@ export function calculateAssetIncome(assets: Asset[]): number {
       }
 
       default:
-        return total + asset.annualIncome; // fallback to manual entry
+        return total + (asset.annualIncome || 0); // ✅ FIXED: Safe fallback
     }
   }, 0);
 }
@@ -200,7 +201,8 @@ export function calculateOpportunityCost(assets: Asset[]): {
   assets.forEach((asset) => {
     if (asset.type === 'crypto') {
       const cryptoMetadata = asset.metadata as CryptoAsset;
-      if (!cryptoMetadata.apy || cryptoMetadata.apy === 0) {
+      const apy = cryptoMetadata?.apy || 0; // ✅ FIXED: Safe access
+      if (apy === 0) {
         idleValue += asset.value;
       }
     }

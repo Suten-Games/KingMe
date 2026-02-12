@@ -157,7 +157,12 @@ export default function ObligationsScreen() {
               <Text style={styles.emptySubtext}>Tap "+ Add" to add your first obligation</Text>
             </View>
           ) : (
-            obligations.map((obligation) => (
+            obligations.slice()
+            .sort((a, b) => {
+              const dateA = a.dueDate ?? 999;
+              const dateB = b.dueDate ?? 999;
+              return dateA - dateB;
+            }).map((obligation) => (
               <TouchableOpacity 
                 key={obligation.id} 
                 style={styles.obligationCard}
