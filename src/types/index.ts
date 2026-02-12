@@ -4,6 +4,15 @@ export type AvatarType = 'male-medium' | 'female-medium';
 
 export type FreedomState = 'drowning' | 'struggling' | 'breaking' | 'rising' | 'enthroned';
 
+export type ThesisTimeHorizon = '3mo' | '6mo' | '1yr' | '2yr' | '5yr' | '10yr+';
+
+export type ThesisInvalidatorType =
+  | 'price_drop'      // Stop-loss at X% down
+  | 'price_stagnant'  // No movement for X days
+  | 'time_based'      // Deadline: "If not at $X by date Y"
+  | 'fundamental'     // Team abandons, hack, etc.
+  | 'news';           // External event
+
 // Bank Accounts - Core financial tracking
 export interface BankAccount {
   id: string;
@@ -190,6 +199,72 @@ export interface WhatIfScenario {
   reasoning: string;
   risks: string[];
   steps: string[];
+}
+
+export interface ThesisInvalidator {
+  id: string;
+  type: ThesisInvalidatorType;
+
+  // Price-based triggers
+  triggerPrice?: number;      // Absolute price (e.g., $0.0076)
+  triggerPercent?: number;    // Percent from entry (e.g., -80)
+  stagnantDays?: number;      // Days without 10% move
+
+  // Time-based triggers
+  deadline?: string;          // ISO date
+  milestonePrice?: number;    // "Must reach $X by deadline"
+
+  // Fundamental triggers
+  condition?: string;         // Free text: "Team goes 3mo without updates"
+
+  // Status
+  isTriggered: boolean;
+  triggeredAt?: string;       // ISO date when triggered
+
+  description: string;        // Human-readable
+}
+
+export interface InvestmentThesis {
+  id: string;
+  assetId: string;            // Which asset this thesis is for
+
+  // The Bull Case
+  bullCase: string;           // Why you believe in this
+  targetPrice?: number;       // Price target (e.g., $1.00 for WhiteWhale)
+  targetDate?: string;        // ISO date - when you expect target
+  timeHorizon: ThesisTimeHorizon;
+
+  // Entry tracking
+  entryPrice?: number;        // What you paid
+  entryDate: string;          // ISO date - when you bought
+
+  // Invalidation triggers
+  invalidators: ThesisInvalidator[];
+
+  // Tracking
+  lastReviewed?: string;      // ISO date - last time you reviewed
+  reviewFrequency: number;    // Days between reviews (30, 60, 90, 180)
+  notes?: string;             // Additional notes
+
+  createdAt: string;          // ISO date
+  updatedAt: string;          // ISO date
+}
+
+export interface ThesisAlert {
+  id: string;
+  thesisId: string;
+  assetId: string;
+  assetName: string;
+  severity: 'critical' | 'warning' | 'info' | 'success';
+  type: 'invalidator_triggered' | 'review_due' | 'milestone_reached' | 'target_reached';
+
+  message: string;
+  action: 'sell' | 'review' | 'update' | 'celebrate';
+
+  invalidatorId?: string;     // Which trigger caused this
+
+  createdAt: string;
+  dismissedAt?: string;
 }
 
 export type DesirePriority = 'high' | 'medium' | 'low';
@@ -392,6 +467,8 @@ export interface UserProfile {
   cryptoCardBalance: CryptoCardBalance; // crypto.com card balance tracker
   expenseTrackingMode: 'estimate' | 'manual'; // estimate uses daily_living obligation, manual logs every expense
   freedomHistory: FreedomScoreHistory[];
+  investmentTheses: InvestmentThesis[];
+  thesisAlerts: ThesisAlert[];
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp
   onboardingComplete: boolean;

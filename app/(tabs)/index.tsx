@@ -12,6 +12,7 @@ import WhatIfCard from '@/components/WhatIfCard';
 import WhatIfModal from '@/components/WhatIfModal';
 import { Asset, WhatIfScenario } from '@/types';
 import { generateSmartScenarios } from '@/utils/scenarioGenerator';
+import ThesisAlerts from '@/components/ThesisAlerts';
 
 
 
@@ -45,6 +46,10 @@ export default function HomeScreen() {
   const generateScenarios = useStore(s => s.generateScenarios);
   const applyScenario = useStore(s => s.applyScenario);
   
+  const thesisAlerts = useStore(s => s.thesisAlerts);
+  const dismissThesisAlert = useStore(s => s.dismissThesisAlert);
+  const checkThesisAlerts = useStore(s => s.checkThesisAlerts);
+  
 
   const freedom = useFreedomScore();
 
@@ -73,6 +78,18 @@ export default function HomeScreen() {
     load();
     return () => { cancelled = true; };
   }, [wallets]);
+
+  useEffect(() => {
+    checkThesisAlerts();
+    
+    // Check daily
+    const interval = setInterval(() => {
+      checkThesisAlerts();
+    }, 24 * 60 * 60 * 1000); // 24 hours
+    
+    return () => clearInterval(interval);
+  }, []);
+
 
   useEffect(() => {
     if (!onboardingComplete) {
@@ -135,6 +152,16 @@ export default function HomeScreen() {
 
       {/* ── Cash Flow Summary ─────────────────────────────────────────── */}
       <CashFlowSummary cashFlow={cashFlow} />
+    
+      {/* Thesis Alerts - Show at top */}
+        <ThesisAlerts
+          alerts={thesisAlerts}
+          onDismiss={dismissThesisAlert}
+          onReview={(assetId) => {
+            // Navigate to asset detail
+            router.push(`/asset/${assetId}`);
+          }}
+        />
 
       {/* ── Health badge ──────────────────────────────────────────────── */}
       <TouchableOpacity

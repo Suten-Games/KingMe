@@ -4,7 +4,7 @@ import type {
   UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource,
   AvatarType, PaycheckDeduction, DriftTrade, DailyExpense,
   CryptoCardBalance, PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
-  WhatIfScenario, ThesisAlert
+  WhatIfScenario, ThesisAlert, ThesisInvalidator, InvestmentThesis
 } from '../types';
 import { saveUserProfile, loadUserProfile } from '../services/storage';
 import { calculateFreedom } from '../utils/calculations';
@@ -79,13 +79,23 @@ interface AppState extends UserProfile {
 
   // What-If Scenarios
   whatIfScenarios: WhatIfScenario[];
-  thesisAlerts: ThesisAlert[];
 
   // What-If Actions
   generateScenarios: () => void;
   applyScenario: (scenario: WhatIfScenario) => Promise<void>;
   checkThesisAlerts: () => void;
   dismissAlert: (alertId: string) => void;
+
+  // Investment Thesis
+  investmentTheses: InvestmentThesis[];
+  thesisAlerts: ThesisAlert[];
+
+  // Thesis Actions
+  addThesis: (thesis: Omit<InvestmentThesis, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateThesis: (thesisId: string, updates: Partial<InvestmentThesis>) => void;
+  removeThesis: (thesisId: string) => void;
+  markThesisReviewed: (thesisId: string) => void;
+  dismissThesisAlert: (alertId: string) => void;
 
   resetStore: () => void;
 }
@@ -118,6 +128,7 @@ const initialState: UserProfile = {
   },
   onboardingComplete: false,
   whatIfScenarios: [],
+  investmentTheses: [],
   thesisAlerts: [],
 };
 
@@ -144,6 +155,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   // What-If Scenarios
   whatIfScenarios: [],
+
+  // ──────────────────────────────────────────────────────────────
+  // INVESTMENT THESIS ACTIONS
+  // ───────────────
+
+  investmentTheses: [],
   thesisAlerts: [],
 
   // Drift state
@@ -151,6 +168,258 @@ export const useStore = create<AppState>((set, get) => ({
   // driftTotalValue: 0,
   // isDriftLoading: false,
   // driftError: null,
+
+  addThesis: (thesisData) => {
+    const thesis: InvestmentThesis = {
+      ...thesisData,
+      id: `thesis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    set((state) => ({
+      investmentTheses: [...state.investmentTheses, thesis],
+    }));
+
+    console.log('[THESIS] Created:', thesis.bullCase.substring(0, 50) + '...');
+
+    // Auto-save
+    get().saveProfile();
+
+    // Check for immediate alerts
+    get().checkThesisAlerts();
+  },
+
+  updateThesis: (thesisId, updates) => {
+    set((state) => ({
+      investmentTheses: state.investmentTheses.map((t) =>
+        t.id === thesisId
+          ? { ...t, ...updates, updatedAt: new Date().toISOString() }
+          : t
+      ),
+    }));
+
+    console.log('[THESIS] Updated:', thesisId);
+
+    get().saveProfile();
+    get().checkThesisAlerts();
+  },
+
+  removeThesis: (thesisId) => {
+    set((state) => ({
+      investmentTheses: state.investmentTheses.filter((t) => t.id !== thesisId),
+      thesisAlerts: state.thesisAlerts.filter((a) => a.thesisId !== thesisId),
+    }));
+
+    console.log('[THESIS] Removed:', thesisId);
+    get().saveProfile();
+  },
+
+  markThesisReviewed: (thesisId) => {
+    set((state) => ({
+      investmentTheses: state.investmentTheses.map((t) =>
+        t.id === thesisId
+          ? {
+            ...t,
+            lastReviewed: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+          : t
+      ),
+    }));
+
+    console.log('[THESIS] Marked reviewed:', thesisId);
+    get().saveProfile();
+  },
+
+  checkThesisAlerts: () => {
+    const state = get();
+    const alerts: ThesisAlert[] = [];
+    const now = new Date();
+
+    console.log('[THESIS] Checking alerts for', state.investmentTheses.length, 'theses');
+
+    for (const thesis of state.investmentTheses) {
+      // Find the asset
+      const asset = state.assets.find((a) => a.id === thesis.assetId);
+      if (!asset) {
+        console.log('[THESIS] Asset not found for thesis:', thesis.id);
+        continue;
+      }
+
+      const currentPrice = (asset.metadata as any)?.priceUSD || 0;
+
+      // Check each invalidator
+      for (const invalidator of thesis.invalidators) {
+        if (invalidator.isTriggered) continue; // Already triggered
+
+        // ── PRICE DROP ────────────────────────────────────────
+        if (invalidator.type === 'price_drop') {
+          if (invalidator.triggerPrice && currentPrice > 0) {
+            if (currentPrice <= invalidator.triggerPrice) {
+              // CRITICAL: Stop-loss hit
+              alerts.push({
+                id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                thesisId: thesis.id,
+                assetId: asset.id,
+                assetName: asset.name,
+                severity: 'critical',
+                type: 'invalidator_triggered',
+                message: `${asset.name} hit stop-loss at $${currentPrice.toFixed(4)}. Your trigger: $${invalidator.triggerPrice}`,
+                action: 'sell',
+                invalidatorId: invalidator.id,
+                createdAt: new Date().toISOString(),
+              });
+
+              // Mark invalidator as triggered
+              get().updateThesis(thesis.id, {
+                invalidators: thesis.invalidators.map((inv) =>
+                  inv.id === invalidator.id
+                    ? { ...inv, isTriggered: true, triggeredAt: new Date().toISOString() }
+                    : inv
+                ),
+              });
+            }
+            // WARNING: Approaching stop-loss (within 10%)
+            else if (currentPrice <= invalidator.triggerPrice * 1.1) {
+              alerts.push({
+                id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                thesisId: thesis.id,
+                assetId: asset.id,
+                assetName: asset.name,
+                severity: 'warning',
+                type: 'invalidator_triggered',
+                message: `${asset.name} at $${currentPrice.toFixed(4)} is approaching stop-loss at $${invalidator.triggerPrice}`,
+                action: 'review',
+                invalidatorId: invalidator.id,
+                createdAt: new Date().toISOString(),
+              });
+            }
+          }
+        }
+
+        // ── TIME-BASED ────────────────────────────────────────
+        if (invalidator.type === 'time_based' && invalidator.deadline) {
+          const deadline = new Date(invalidator.deadline);
+          const daysLeft = Math.floor(
+            (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+          );
+
+          if (daysLeft <= 0) {
+            // CRITICAL: Deadline passed
+            const targetMet = invalidator.milestonePrice
+              ? currentPrice >= invalidator.milestonePrice
+              : false;
+
+            alerts.push({
+              id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              thesisId: thesis.id,
+              assetId: asset.id,
+              assetName: asset.name,
+              severity: targetMet ? 'success' : 'critical',
+              type: targetMet ? 'milestone_reached' : 'invalidator_triggered',
+              message: targetMet
+                ? `${asset.name} reached $${currentPrice.toFixed(4)} by deadline! 🎉`
+                : `${asset.name} deadline passed. At $${currentPrice.toFixed(4)}, target was $${invalidator.milestonePrice}`,
+              action: targetMet ? 'celebrate' : 'review',
+              invalidatorId: invalidator.id,
+              createdAt: new Date().toISOString(),
+            });
+
+            get().updateThesis(thesis.id, {
+              invalidators: thesis.invalidators.map((inv) =>
+                inv.id === invalidator.id
+                  ? { ...inv, isTriggered: true, triggeredAt: new Date().toISOString() }
+                  : inv
+              ),
+            });
+          }
+          // WARNING: Deadline approaching (30 days)
+          else if (daysLeft <= 30) {
+            alerts.push({
+              id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              thesisId: thesis.id,
+              assetId: asset.id,
+              assetName: asset.name,
+              severity: 'warning',
+              type: 'review_due',
+              message: `${asset.name}: ${daysLeft} days until thesis deadline. Current: $${currentPrice.toFixed(4)}, Target: $${invalidator.milestonePrice || thesis.targetPrice}`,
+              action: 'review',
+              invalidatorId: invalidator.id,
+              createdAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
+      // ── CHECK IF REVIEW IS DUE ────────────────────────────
+      if (thesis.lastReviewed) {
+        const lastReview = new Date(thesis.lastReviewed);
+        const daysSinceReview = Math.floor(
+          (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        if (daysSinceReview >= thesis.reviewFrequency) {
+          alerts.push({
+            id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            thesisId: thesis.id,
+            assetId: asset.id,
+            assetName: asset.name,
+            severity: 'info',
+            type: 'review_due',
+            message: `${asset.name}: ${daysSinceReview} days since last review. Time to check your thesis.`,
+            action: 'review',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // ── CHECK IF TARGET PRICE REACHED ─────────────────────
+      if (thesis.targetPrice && currentPrice >= thesis.targetPrice) {
+        alerts.push({
+          id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          thesisId: thesis.id,
+          assetId: asset.id,
+          assetName: asset.name,
+          severity: 'success',
+          type: 'target_reached',
+          message: `${asset.name} hit your target of $${thesis.targetPrice}! Current: $${currentPrice.toFixed(4)} 🎉`,
+          action: 'celebrate',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Only keep non-dismissed alerts
+    const existingAlerts = state.thesisAlerts.filter((a) => !a.dismissedAt);
+
+    // Merge new alerts (avoid duplicates by checking message)
+    const newAlerts = alerts.filter(
+      (newAlert) =>
+        !existingAlerts.some((existing) => existing.message === newAlert.message)
+    );
+
+    console.log('[THESIS] Generated', newAlerts.length, 'new alerts');
+
+    set({ thesisAlerts: [...existingAlerts, ...newAlerts] });
+
+    if (newAlerts.length > 0) {
+      get().saveProfile();
+    }
+  },
+
+  dismissThesisAlert: (alertId) => {
+    set((state) => ({
+      thesisAlerts: state.thesisAlerts.map((a) =>
+        a.id === alertId
+          ? { ...a, dismissedAt: new Date().toISOString() }
+          : a
+      ),
+    }));
+
+    console.log('[THESIS] Dismissed alert:', alertId);
+    get().saveProfile();
+  },
 
   setAvatarType: (avatarType) =>
     set((state) => ({
@@ -583,6 +852,8 @@ export const useStore = create<AppState>((set, get) => ({
         taxes: state.taxes || [],
         postTaxDeductions: state.postTaxDeductions || [],
         driftTrades: state.driftTrades || [],
+        investmentTheses: state.investmentTheses || [],
+        thesisAlerts: state.thesisAlerts || [],
         dailyExpenses: state.dailyExpenses || [],
         cryptoCardBalance: state.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
         expenseTrackingMode: state.expenseTrackingMode || 'estimate',

@@ -1,4 +1,5 @@
 // app/(tabs)/assets.tsx - CORRECTED VERSION
+import { useRouter } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -10,8 +11,10 @@ import { categorizeAssets, calculateCategoryTotal, calculateCategoryIncome, calc
 import type { Asset, BankAccount } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
 import { ActivityIndicator, Alert } from 'react-native';
+import ThesisModal from '../../src/components/ThesisModal';
 
 export default function AssetsScreen() {
+  const router = useRouter();
   const assets = useStore((state) => state.assets);
   const bankAccounts = useStore((state) => state.bankAccounts);
   const incomeSources = useStore((state) => state.income.sources || []);
@@ -22,6 +25,11 @@ export default function AssetsScreen() {
   const removeAsset = useStore((state) => state.removeAsset);
   const updateAsset = useStore((state) => state.updateAsset);
   const updateBankAccount = useStore((state) => state.updateBankAccount);
+  const addThesis = useStore((state) => state.addThesis);
+  const investmentTheses = useStore((state) => state.investmentTheses);
+
+  const [showThesisModal, setShowThesisModal] = useState(false);
+  const [thesisAsset, setThesisAsset] = useState<Asset | null>(null);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -183,6 +191,34 @@ export default function AssetsScreen() {
 
       addAsset(newAsset);
       resetForm();
+      const isAppreciationAsset = (asset: Asset) => {
+        // Low or no income - bought for price appreciation
+        const hasLowIncome = asset.annualIncome < (asset.value * 0.02); // Less than 2% yield
+        
+        // Asset types that are typically appreciation plays
+        const appreciationTypes = ['crypto', 'stocks', 'brokerage', 'real_estate', 'business'];
+        
+        return hasLowIncome && appreciationTypes.includes(asset.type);
+      };
+
+      const showThesisPrompt = isAppreciationAsset(asset);
+
+      if (showThesisPrompt) {
+        Alert.alert(
+          'Add Investment Thesis?',
+          'This looks like an appreciation play. Document why you\'re buying it and when you\'d sell?',
+          [
+            { text: 'Skip', style: 'cancel' },
+            { 
+              text: 'Add Thesis', 
+              onPress: () => {
+                setShowThesisModal(true);
+                setThesisAsset(asset);
+              }
+            },
+          ]
+        );
+      }
       return;
     }
 
@@ -451,7 +487,8 @@ export default function AssetsScreen() {
           assets={categorized.brokerage}
           totalValue={calculateCategoryTotal(categorized.brokerage)}
           totalIncome={calculateCategoryIncome(categorized.brokerage)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
         />
 
@@ -461,7 +498,8 @@ export default function AssetsScreen() {
           assets={categorized.cash}
           totalValue={calculateCategoryTotal(categorized.cash)}
           totalIncome={calculateCategoryIncome(categorized.cash)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
           onBankAccountPress={handleBankAccountPress}
         />
@@ -472,7 +510,8 @@ export default function AssetsScreen() {
           assets={categorized.realEstate}
           totalValue={calculateCategoryTotal(categorized.realEstate)}
           totalIncome={calculateCategoryIncome(categorized.realEstate)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
         />
 
@@ -482,7 +521,8 @@ export default function AssetsScreen() {
           assets={categorized.commodities}
           totalValue={calculateCategoryTotal(categorized.commodities)}
           totalIncome={calculateCategoryIncome(categorized.commodities)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
         />
 
@@ -492,7 +532,8 @@ export default function AssetsScreen() {
           assets={categorized.crypto}
           totalValue={calculateCategoryTotal(categorized.crypto)}
           totalIncome={calculateCategoryIncome(categorized.crypto)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
         />
 
@@ -502,7 +543,8 @@ export default function AssetsScreen() {
           assets={categorized.retirement}
           totalValue={calculateCategoryTotal(categorized.retirement)}
           totalIncome={calculateCategoryIncome(categorized.retirement)}
-          onAssetPress={handleEditAsset}
+          //onAssetPress={handleEditAsset}
+          onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
         />
 
@@ -725,6 +767,22 @@ export default function AssetsScreen() {
           setValue('');
         }}
       >
+        {thesisAsset && (
+          <ThesisModal
+            visible={showThesisModal}
+            asset={thesisAsset}
+            existingThesis={investmentTheses.find(t => t.assetId === thesisAsset.id)}
+            onClose={() => {
+              setShowThesisModal(false);
+              setThesisAsset(null);
+            }}
+            onSave={(thesisData) => {
+              addThesis(thesisData);
+              setShowThesisModal(false);
+              setThesisAsset(null);
+            }}
+          />
+        )}
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Update Bank Balance</Text>
