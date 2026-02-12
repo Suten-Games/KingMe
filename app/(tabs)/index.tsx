@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { FreedomScore } from '../../src/components/FreedomScore';
@@ -8,6 +8,10 @@ import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import type { SKRIncomeSnapshot } from '../../src/services/skr';
+import WhatIfCard from '@/components/WhatIfCard';
+import WhatIfModal from '@/components/WhatIfModal';
+import { Asset, WhatIfScenario } from '@/types';
+import { generateSmartScenarios } from '@/utils/scenarioGenerator';
 
 
 
@@ -34,6 +38,12 @@ export default function HomeScreen() {
   const debts               = useStore((state) => state.debts);
   const assets              = useStore((state) => state.assets);
   const paycheckDeductions  = useStore((state) => state.paycheckDeductions || []);
+  const [selectedScenario, setSelectedScenario] = useState<WhatIfScenario | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  
+  const scenarios = useStore(s => s.whatIfScenarios);
+  const generateScenarios = useStore(s => s.generateScenarios);
+  const applyScenario = useStore(s => s.applyScenario);
   
 
   const freedom = useFreedomScore();
@@ -78,6 +88,31 @@ export default function HomeScreen() {
       </View>
     );
   }
+
+  // Generate scenarios on mount and when assets change
+  useEffect(() => {
+    generateScenarios();
+  }, []);
+  
+  const handleViewScenario = (scenario: WhatIfScenario) => {
+    setSelectedScenario(scenario);
+    setShowModal(true);
+  };
+
+  const handleApplyScenario = async (scenario: WhatIfScenario) => {
+    try {
+      await applyScenario(scenario);
+      setShowModal(false);
+      Alert.alert(
+        'Scenario Applied! 🎉',
+        'Your assets have been updated. Check your new freedom score!',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to apply scenario');
+    }
+  };
+
 
   // ── derived numbers ───────────────────────────────────────────────────────
   const monthlySurplus  = cashFlow.totalMonthlyNet;
@@ -164,6 +199,47 @@ export default function HomeScreen() {
           ))}
         </View>
       )}
+
+      {/* What-If Scenarios Section */}
+        {scenarios.length > 0 && (
+          <View style={styles.scenariosSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                🎯 Ways to Increase Your Freedom
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                Personalized moves based on your portfolio
+              </Text>
+            </View>
+            
+            {scenarios.slice(0, 3).map(scenario => (
+              <WhatIfCard
+                key={scenario.id}
+                scenario={scenario}
+                onPress={() => handleViewScenario(scenario)}
+              />
+            ))}
+            
+            {scenarios.length > 3 && (
+              <TouchableOpacity 
+                style={styles.viewAllButton}
+                onPress={() => {/* Navigate to all scenarios */}}
+              >
+                <Text style={styles.viewAllText}>
+                  View All {scenarios.length} Scenarios →
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+      {/* Modal */}
+        <WhatIfModal
+          visible={showModal}
+          scenario={selectedScenario}
+          onClose={() => setShowModal(false)}
+          onApply={handleApplyScenario}
+        />
 
       {/* ── Quick actions ───────────────────────────────────────────── */}
       {/* <View style={styles.quickActions}>
@@ -285,7 +361,6 @@ export default function HomeScreen() {
 
         {/* Dashboard body scrolls below the hero */}
         {dashboardBody}
-
       </ScrollView>
     </View>
   );
@@ -491,4 +566,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButtonText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+
+  scenariosSection: {
+    padding: 20,
+  },
+  sectionHeader: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  viewAllButton: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#60a5fa',
+  },
 });

@@ -35,7 +35,7 @@ export interface Income {
   sources?: IncomeSource[]; // NEW - detailed income tracking
 }
 
-export type AssetType = 'crypto' | 'defi' | 'real_estate' | 'stocks' | 'business' | 'bank_account' | 'retirement' | 'other';
+export type AssetType = 'crypto' | 'defi' | 'real_estate' | 'stocks' | 'business' | 'brokerage' | 'bank_account' | 'retirement' | 'other';
 
 export interface Asset {
   id: string;
@@ -149,6 +149,47 @@ export interface Obligation {
   dueDate?: number; // Day of month (1-31)
   isPaidThisMonth?: boolean;
   lastPaidDate?: string;
+}
+
+export type ScenarioType =
+  | 'invest_cash'
+  | 'buy_real_estate'
+  | 'start_dividend'
+  | 'increase_yield'
+  | 'stake_crypto'
+  | 'reduce_expenses'
+  | 'side_hustle'
+  | 'custom';
+
+export interface WhatIfScenario {
+  id: string;
+  type: ScenarioType;
+  title: string;
+  description: string;
+  emoji: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeframe: string;
+  changes: {
+    addAssets?: Partial<Asset>[];
+    removeAssets?: string[];
+    updateAssets?: Array<{ id: string; updates: Partial<Asset> }>;
+    addIncomeSources?: Partial<IncomeSource>[];
+    reduceObligations?: Array<{ id: string; newAmount: number }>;
+  };
+  impact: {
+    freedomBefore: number;
+    freedomAfter: number;
+    freedomDelta: number;
+    monthlyIncomeBefore: number;
+    monthlyIncomeAfter: number;
+    monthlyIncomeDelta: number;
+    annualIncomeDelta: number;
+    investmentRequired: number;
+    roi?: number;
+  };
+  reasoning: string;
+  risks: string[];
+  steps: string[];
 }
 
 export type DesirePriority = 'high' | 'medium' | 'low';

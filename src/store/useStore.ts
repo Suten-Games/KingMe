@@ -1,11 +1,16 @@
 // src/store/useStore.ts
 import { create } from 'zustand';
-import type { UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource, AvatarType, PaycheckDeduction, DriftTrade, DailyExpense, CryptoCardBalance, PreTaxDeduction, Tax, PostTaxDeduction, UserSettings } from '../types';
+import type {
+  UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource,
+  AvatarType, PaycheckDeduction, DriftTrade, DailyExpense,
+  CryptoCardBalance, PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
+  WhatIfScenario, ThesisAlert
+} from '../types';
 import { saveUserProfile, loadUserProfile } from '../services/storage';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
-import { useDriftPositions } from '@/hooks/useDriftPositions';
+import { generateSmartScenarios } from '../utils/scenarioGenerator';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -14,12 +19,6 @@ interface AppState extends UserProfile {
   // Wallet sync state
   isLoadingAssets: boolean;
   lastAssetSync?: string;
-
-  // Drift sync state (client-side)
-  driftPositions: any[];
-  driftTotalValue: number;
-  isDriftLoading: boolean;
-  driftError: string | null;
 
   // Actions
   setAvatarType: (avatarType: AvatarType) => void;
@@ -78,6 +77,16 @@ interface AppState extends UserProfile {
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
 
+  // What-If Scenarios
+  whatIfScenarios: WhatIfScenario[];
+  thesisAlerts: ThesisAlert[];
+
+  // What-If Actions
+  generateScenarios: () => void;
+  applyScenario: (scenario: WhatIfScenario) => Promise<void>;
+  checkThesisAlerts: () => void;
+  dismissAlert: (alertId: string) => void;
+
   resetStore: () => void;
 }
 
@@ -108,6 +117,8 @@ const initialState: UserProfile = {
     defaultExpandAssetSections: false,
   },
   onboardingComplete: false,
+  whatIfScenarios: [],
+  thesisAlerts: [],
 };
 
 // Helper: Map API category to app asset type
@@ -131,11 +142,15 @@ export const useStore = create<AppState>((set, get) => ({
   isLoadingAssets: false,
   lastAssetSync: undefined,
 
+  // What-If Scenarios
+  whatIfScenarios: [],
+  thesisAlerts: [],
+
   // Drift state
-  driftPositions: [],
-  driftTotalValue: 0,
-  isDriftLoading: false,
-  driftError: null,
+  // driftPositions: [],
+  // driftTotalValue: 0,
+  // isDriftLoading: false,
+  // driftError: null,
 
   setAvatarType: (avatarType) =>
     set((state) => ({
@@ -626,6 +641,127 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  generateScenarios: () => {
+    const state = get();
+    const profile = {
+      assets: state.assets,
+      incomeSources: state.income.sources || [],
+      obligations: state.obligations,
+      debts: state.debts,
+    };
+
+    const scenarios = generateSmartScenarios(profile);
+    set({ whatIfScenarios: scenarios });
+
+    console.log(`[SCENARIOS] Generated ${scenarios.length} scenarios`);
+  },
+
+  applyScenario: async (scenario: WhatIfScenario) => {
+    const state = get();
+    let newAssets = [...state.assets];
+    let newObligations = [...state.obligations];
+    let newIncomeSources = [...(state.income.sources || [])];
+
+    // Apply asset additions
+    if (scenario.changes.addAssets) {
+      scenario.changes.addAssets.forEach(partialAsset => {
+        const newAsset: Asset = {
+          id: `scenario_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: partialAsset.type || 'other',
+          name: partialAsset.name || 'New Asset',
+          value: partialAsset.value || 0,
+          annualIncome: partialAsset.annualIncome || 0,
+          isLiquid: partialAsset.isLiquid ?? true,
+          metadata: partialAsset.metadata || { type: 'other', description: '' },
+        };
+        newAssets.push(newAsset);
+        console.log(`[SCENARIO] Added asset: ${newAsset.name}`);
+      });
+    }
+
+    // Apply asset updates
+    if (scenario.changes.updateAssets) {
+      scenario.changes.updateAssets.forEach(({ id, updates }) => {
+        const index = newAssets.findIndex(a => a.id === id);
+        if (index !== -1) {
+          newAssets[index] = { ...newAssets[index], ...updates };
+          console.log(`[SCENARIO] Updated asset: ${newAssets[index].name}`);
+        }
+      });
+    }
+
+    // Apply asset removals
+    if (scenario.changes.removeAssets) {
+      const beforeCount = newAssets.length;
+      newAssets = newAssets.filter(a =>
+        !scenario.changes.removeAssets!.includes(a.id)
+      );
+      console.log(`[SCENARIO] Removed ${beforeCount - newAssets.length} assets`);
+    }
+
+    // Apply obligation reductions
+    if (scenario.changes.reduceObligations) {
+      scenario.changes.reduceObligations.forEach(({ id, newAmount }) => {
+        const index = newObligations.findIndex(o => o.id === id);
+        if (index !== -1) {
+          const oldAmount = newObligations[index].amount;
+          newObligations[index] = {
+            ...newObligations[index],
+            amount: newAmount
+          };
+          console.log(`[SCENARIO] Reduced ${newObligations[index].name} from $${oldAmount} to $${newAmount}`);
+        }
+      });
+    }
+
+    // Apply income source additions
+    if (scenario.changes.addIncomeSources) {
+      scenario.changes.addIncomeSources.forEach(partialSource => {
+        const newSource: IncomeSource = {
+          id: `scenario_income_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          source: partialSource.source || 'other',
+          name: partialSource.name || 'New Income Source',
+          amount: partialSource.amount || 0,
+          frequency: partialSource.frequency || 'monthly',
+          bankAccountId: partialSource.bankAccountId || state.bankAccounts[0]?.id || '',
+        };
+        newIncomeSources.push(newSource);
+        console.log(`[SCENARIO] Added income source: ${newSource.name}`);
+      });
+    }
+
+    // Update state
+    set({
+      assets: newAssets,
+      obligations: newObligations,
+      income: {
+        ...state.income,
+        sources: newIncomeSources,
+      },
+    });
+
+    console.log(`[SCENARIO] Applied scenario: ${scenario.title}`);
+
+    // Save immediately
+    await get().saveProfile();
+
+    // Regenerate scenarios with new state
+    get().generateScenarios();
+  },
+
+  checkThesisAlerts: () => {
+    // Placeholder - will implement with thesis system
+    console.log('[THESIS] Checking for alerts...');
+    set({ thesisAlerts: [] });
+  },
+
+  dismissAlert: (alertId: string) => {
+    set((state) => ({
+      thesisAlerts: state.thesisAlerts.filter(a => a.assetName !== alertId),
+    }));
+  },
+
+
   // ═══════════════════════════════════════════════════════════
   // WALLET SYNC
   // ═══════════════════════════════════════════════════════════
@@ -653,7 +789,6 @@ export const useStore = create<AppState>((set, get) => ({
 
       // Get current assets
       const currentAssets = get().assets;
-      const { driftPositions, driftTotalValue } = get();
 
       // Keep manual assets (not auto-synced)
       const manualAssets = currentAssets.filter(a => !a.isAutoSynced);
@@ -678,25 +813,6 @@ export const useStore = create<AppState>((set, get) => ({
           mint: sa.mint,
           symbol: sa.symbol,
           logoURI: sa.logoURI,
-        },
-      }));
-
-      // Convert Drift positions to app format
-      const driftAssets = driftPositions.map((dp: any) => ({
-        id: `drift_${dp.mint}`,
-        type: 'crypto' as const,
-        subtype: 'defi',
-        name: dp.name,
-        value: dp.valueUSD,
-        annualIncome: dp.apy ? (dp.valueUSD * dp.apy) / 100 : 0,
-        isLiquid: true,
-        isAutoSynced: true,
-        lastSynced: new Date().toISOString(),
-        metadata: {
-          type: 'other' as const,
-          description: `${dp.name} - Drift Protocol`,
-          apy: dp.apy || 0,
-          protocol: 'Drift',
         },
       }));
 
