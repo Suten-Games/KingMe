@@ -78,7 +78,10 @@ export interface RealEstateAsset {
   address?: string;  // ✅ CHANGE: made optional
   purchasePrice?: number;  // ✅ CHANGE: made optional
   currentValue?: number;  // ✅ CHANGE: made optional
+  isPrimaryResidence?: boolean;
   monthlyRentalIncome?: number;
+  mortgageBalance?: number;
+  propertyTax?: number;
   monthlyExpenses?: number; // mortgage, taxes, insurance, maintenance
   description?: string;  // ✅ ADD: for simple entries
   apy?: number;  // ✅ ADD: for rental yield

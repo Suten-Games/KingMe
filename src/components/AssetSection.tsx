@@ -2,7 +2,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
-import type { Asset } from '../../src/types';
+import type { Asset, RealEstateAsset } from '../../src/types';
 
 interface AssetSectionProps {
   title: string;
@@ -177,9 +177,16 @@ export default function AssetSection({
                         </Text>
                       )}
                       
-                      {asset.annualIncome === 0 && !isBankAsset && asset.type !== 'retirement' && (
+                      {/* {asset.annualIncome === 0 && !isBankAsset && asset.type !== 'retirement' && (
                         <Text style={styles.warningBadge}>⚠️ Not generating income</Text>
-                      )}
+                      )} */}
+                      {asset.type === 'real_estate' && (asset.metadata as RealEstateAsset)?.isPrimaryResidence ? (
+                        <Text style={styles.primaryResidenceBadge}>
+                          🏠 Primary Residence
+                        </Text>
+                      ) : asset.annualIncome === 0 && !isBankAsset && asset.type !== 'retirement' ? (
+                        <Text style={styles.warningBadge}>⚠️ Not generating income</Text>
+                      ) : null}
                     </View>
                   </View>
                   
@@ -422,5 +429,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#4ade80',
     marginTop: 2,
+  },
+  primaryResidenceBadge: {
+    fontSize: 11,
+    color: '#60a5fa',
+    marginTop: 4,
+    fontWeight: '600',
   },
 });

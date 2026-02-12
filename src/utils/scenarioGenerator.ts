@@ -1,5 +1,5 @@
 // src/utils/scenarioGenerator.ts
-import type { Asset, IncomeSource, Obligation, DebtPayment, WhatIfScenario } from '../types';
+import type { Asset, IncomeSource, Obligation, DebtPayment, RealEstateAsset, WhatIfScenario } from '../types';
 
 interface UserProfile {
   assets: Asset[];
@@ -262,12 +262,18 @@ function generateRealEstateScenario(
   currentFreedom: number,
   monthlyNeeds: number
 ): WhatIfScenario | null {
-  // Find real estate with no income
-  const realEstateAssets = assets.filter(a =>
-    a.type === 'real_estate' &&
-    a.annualIncome === 0 &&
-    a.value > 50000
-  );
+
+
+  const realEstateAssets = assets.filter((a) => {
+    if (a.type !== 'real_estate') return false;
+    if (a.annualIncome > 0) return false; // Already generating income
+
+    // Skip primary residence
+    const metadata = a.metadata as RealEstateAsset;
+    if (metadata?.isPrimaryResidence) return false;
+
+    return true;
+  });
 
   if (realEstateAssets.length === 0) return null;
 

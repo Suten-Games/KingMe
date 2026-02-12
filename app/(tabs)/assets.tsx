@@ -8,10 +8,11 @@ import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import CashFlowSummary from '../../src/components/CashFlowSummary';
 import AssetSection from '../../src/components/AssetSection';
 import { categorizeAssets, calculateCategoryTotal, calculateCategoryIncome, calculateTotalValue, calculateTotalIncome, getCategoryIcon, getCategoryLabel } from '../../src/utils/assetCalculations';
-import type { Asset, BankAccount } from '../../src/types';
+import type { Asset, RealEstateAsset, RetirementAsset, BankAccount } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
 import { ActivityIndicator, Alert } from 'react-native';
 import ThesisModal from '../../src/components/ThesisModal';
+import PortfolioSummary from '@/components/assets/PortfolioSummary';
 
 export default function AssetsScreen() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function AssetsScreen() {
   const updateBankAccount = useStore((state) => state.updateBankAccount);
   const addThesis = useStore((state) => state.addThesis);
   const investmentTheses = useStore((state) => state.investmentTheses);
+
+  const [isPrimaryResidence, setIsPrimaryResidence] = useState(false);
 
   const [showThesisModal, setShowThesisModal] = useState(false);
   const [thesisAsset, setThesisAsset] = useState<Asset | null>(null);
@@ -114,6 +117,7 @@ export default function AssetsScreen() {
     setRetMatchPercent('');
     setEditingAsset(null);
     setShowAddModal(false);
+    setIsPrimaryResidence(false);
   };
 
   const handleSyncWallet = async () => {
@@ -159,6 +163,7 @@ export default function AssetsScreen() {
   };
 
   const handleAddAsset = () => {
+    
     // ── Retirement path ──────────────────────────────────────────────────
     if (type === 'retirement') {
       if (!retInstitution || !retBalance) return;
@@ -197,6 +202,11 @@ export default function AssetsScreen() {
         
         // Asset types that are typically appreciation plays
         const appreciationTypes = ['crypto', 'stocks', 'brokerage', 'real_estate', 'business'];
+
+        if (asset.type === 'real_estate' && 
+            (asset.metadata as RealEstateAsset)?.isPrimaryResidence) {
+          return false;
+        }
         
         return hasLowIncome && appreciationTypes.includes(asset.type);
       };
@@ -229,6 +239,39 @@ export default function AssetsScreen() {
     const assetApy = parseFloat(apy) || 0;
     const calculatedIncome = assetValue * (assetApy / 100);
     const assetQuantity = type === 'stocks' ? parseFloat(quantity) || 0 : undefined;
+
+    if (type === 'real_estate') {
+      const newAsset: Asset = {
+        id: Date.now().toString(),
+        name,
+        type: 'real_estate',
+        value: assetValue,
+        annualIncome: calculatedIncome,
+        metadata: {
+          type: 'real_estate',
+          apy: assetApy,
+          isPrimaryResidence: isPrimaryResidence, // ← ADD THIS
+        },
+      };
+      
+      addAsset(newAsset);
+      resetForm();
+      
+      // ── Thesis prompt (updated to skip primary residence) ───
+      const isAppreciationAsset = (asset: Asset) => {
+        const hasLowIncome = asset.annualIncome < (asset.value * 0.02);
+        const appreciationTypes = ['crypto', 'stocks', 'brokerage', 'real_estate', 'business'];
+        
+        // Skip primary residence!
+        if (asset.type === 'real_estate' && (asset.metadata as RealEstateAsset)?.isPrimaryResidence) {
+          return false;
+        }
+        
+        return hasLowIncome && appreciationTypes.includes(asset.type);
+      };
+      
+      return;
+    }
 
     const newAsset: Asset = {
       id: Date.now().toString(),
@@ -273,6 +316,17 @@ export default function AssetsScreen() {
 
   const handleEditAsset = (asset: Asset) => {
     setEditingAsset(asset);
+
+    if (asset.type === 'real_estate') {
+      const metadata = asset.metadata as RealEstateAsset;
+      setType('real_estate');
+      setName(asset.name);
+      setValue(asset.value.toString());
+      //setAnnualIncome(asset.annualIncome.toString());
+      setApy(asset.metadata?.apy?.toString() || '');
+      setIsPrimaryResidence(metadata?.isPrimaryResidence || false); // ← ADD THIS
+      setShowAddModal(true);
+    }
     
     if (asset.type === 'retirement' && asset.metadata?.type === 'retirement') {
       setType('retirement');
@@ -335,16 +389,27 @@ export default function AssetsScreen() {
       const income = assetValue * (assetApy / 100);
       const assetQuantity = type === 'stocks' ? parseFloat(quantity) || 0 : undefined;
 
-      updatedAsset = {
-        name,
-        value: assetValue,
-        annualIncome: income,
-        metadata: {
-          ...editingAsset.metadata,
-          apy: assetApy,
-          quantity: assetQuantity,
-        },
-      };
+      let metadata: any = {
+    ...editingAsset.metadata,
+    apy: assetApy,
+    quantity: assetQuantity,
+  };
+
+  // Only add isPrimaryResidence for real estate
+  if (type === 'real_estate') {
+    metadata = {
+      ...metadata,
+      type: 'real_estate',
+      isPrimaryResidence: isPrimaryResidence,
+    } as RealEstateAsset;
+  }
+
+  updatedAsset = {
+    name,
+    value: assetValue,
+    annualIncome: income,
+    metadata: metadata,
+  };
     }
 
     updateAsset(editingAsset.id, updatedAsset);
@@ -408,18 +473,10 @@ export default function AssetsScreen() {
         {/* <CashFlowSummary cashFlow={cashFlow} /> */}
 
         {/* ── Portfolio Summary ── */}
-        <View style={styles.summaryBox}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Value</Text>
-              <Text style={styles.summaryValue}>${totalValue.toLocaleString()}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Annual Income</Text>
-              <Text style={styles.summaryIncome}>${totalIncome.toLocaleString()}</Text>
-            </View>
-          </View>
-        </View>
+        <PortfolioSummary 
+          totalValue={totalValue}
+          totalIncome={totalIncome}
+        />
 
         {/* Add Asset Button */}
         <TouchableOpacity style={styles.addButtonLarge} onPress={() => setShowAddModal(true)}>
@@ -736,6 +793,53 @@ export default function AssetsScreen() {
                     />
                     <Text style={styles.percent}>%</Text>
                   </View>
+                    
+                  {/* Primary Residence Toggle - Only for real estate */}
+                  {type === 'real_estate' && (
+                    <>
+                      <Text style={styles.label}>Property Type</Text>
+                      <View style={styles.toggleRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.toggleButton,
+                            !isPrimaryResidence && styles.toggleButtonActive
+                          ]}
+                          onPress={() => setIsPrimaryResidence(false)}
+                        >
+                          <Text style={[
+                            styles.toggleButtonText,
+                            !isPrimaryResidence && styles.toggleButtonTextActive
+                          ]}>
+                            Investment Property
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity
+                          style={[
+                            styles.toggleButton,
+                            isPrimaryResidence && styles.toggleButtonActive
+                          ]}
+                          onPress={() => setIsPrimaryResidence(true)}
+                        >
+                          <Text style={[
+                            styles.toggleButtonText,
+                            isPrimaryResidence && styles.toggleButtonTextActive
+                          ]}>
+                            Primary Residence
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      
+                      {isPrimaryResidence && (
+                        <View style={styles.helperBox}>
+                          <Text style={styles.helperText}>
+                            💡 Your primary residence won't prompt for investment thesis and won't appear in "rent out property" scenarios.
+                          </Text>
+                        </View>
+                      )}
+                    </>  
+                  )}
+                  
 
                   <View style={styles.modalButtons}>
                     <TouchableOpacity style={styles.modalCancelButton} onPress={resetForm}>
@@ -844,20 +948,6 @@ export default function AssetsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
   scrollView: { flex: 1, padding: 20 },
-
-  summaryBox: { 
-    backgroundColor: '#1a1f2e', 
-    padding: 20, 
-    borderRadius: 12, 
-    marginBottom: 16, 
-    borderWidth: 2, 
-    borderColor: '#4ade80' 
-  },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryItem: { flex: 1 },
-  summaryLabel: { fontSize: 14, color: '#a0a0a0', marginBottom: 4 },
-  summaryValue: { fontSize: 24, fontWeight: 'bold', color: '#ffffff' },
-  summaryIncome: { fontSize: 24, fontWeight: 'bold', color: '#4ade80' },
 
   addButtonLarge: {
     backgroundColor: '#4ade80',
@@ -1001,5 +1091,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#4ade80',
     fontWeight: '600',
+  },
+
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  toggleButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#2a2f3e',
+    alignItems: 'center',
+    backgroundColor: '#1a1f2e',
+  },
+  toggleButtonActive: {
+    borderColor: '#4ade80',
+    backgroundColor: '#1a2f1e',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  toggleButtonTextActive: {
+    color: '#4ade80',
+    fontWeight: 'bold',
+  },
+  helperBox: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#60a5fa',
   },
 });
