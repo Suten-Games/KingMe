@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import ThesisModal from '../../src/components/ThesisModal';
+import type { RealEstateAsset, StockAsset } from '../../src/types';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,7 +29,10 @@ export default function AssetDetailScreen() {
   }
   
   const currentPrice = (asset.metadata as any)?.priceUSD || 0;
-  const isAppreciationAsset = asset.annualIncome < (asset.value * 0.02);
+  const isPrimaryResidence = asset.type === 'real_estate' && 
+    (asset.metadata as RealEstateAsset)?.isPrimaryResidence;
+  const isAppreciationAsset = !isPrimaryResidence && 
+    asset.annualIncome < (asset.value * 0.02);
   
   return (
     <View style={styles.container}>
@@ -69,10 +73,111 @@ export default function AssetDetailScreen() {
         </View>
         
         {/* ═══════════════════════════════════════════════════════ */}
-        {/* Investment Thesis Section - THIS IS THE IMPORTANT PART */}
+        {/* PRIMARY RESIDENCE / VESTING / THESIS SECTIONS           */}
         {/* ═══════════════════════════════════════════════════════ */}
         
-        {isAppreciationAsset && (
+        {isPrimaryResidence ? (
+          <View style={styles.primaryResidenceSection}>
+            <Text style={styles.sectionTitle}>🏠 Primary Residence</Text>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoText}>
+                This is your primary residence. It won't appear in investment scenarios or prompt for an investment thesis.
+              </Text>
+            </View>
+          </View>
+        ) : asset.type === 'stocks' && (asset.metadata as StockAsset)?.unvestedShares ? (
+          /* ═══════════════════════════════════════════════════════ */
+          /* Stock Vesting Section (for stocks with unvested shares) */
+          /* ═══════════════════════════════════════════════════════ */
+          <View style={styles.vestingSection}>
+            <Text style={styles.sectionTitle}>🔒 Vesting Schedule</Text>
+            
+            {(() => {
+              const stockMeta = asset.metadata as StockAsset;
+              const totalShares = stockMeta.quantity || stockMeta.shares || 0;
+              const vestedShares = stockMeta.vestedShares || 0;
+              const unvestedShares = stockMeta.unvestedShares || 0;
+              const vestedPercent = totalShares > 0 ? (vestedShares / totalShares) * 100 : 0;
+              
+              return (
+                <>
+                  {/* Progress Bar */}
+                  <View style={styles.vestingBarContainer}>
+                    <View style={styles.vestingBarBackground}>
+                      <View style={[styles.vestingBarFilled, { width: `${vestedPercent}%` }]} />
+                    </View>
+                    <View style={styles.vestingBarLabels}>
+                      <Text style={styles.vestingBarLabelVested}>
+                        ✅ Vested: {vestedShares.toLocaleString()} shares
+                      </Text>
+                      <Text style={styles.vestingBarLabelUnvested}>
+                        🔒 Locked: {unvestedShares.toLocaleString()} shares
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Vesting Metrics */}
+                  <View style={styles.metricsRow}>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Total Shares</Text>
+                      <Text style={styles.metricValue}>
+                        {totalShares.toLocaleString()}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Vested %</Text>
+                      <Text style={[styles.metricValue, { color: '#4ade80' }]}>
+                        {vestedPercent.toFixed(0)}%
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Vesting Schedule */}
+                  {stockMeta.vestingSchedule && (
+                    <View style={styles.vestingScheduleCard}>
+                      <Text style={styles.vestingScheduleTitle}>Next Vesting Event</Text>
+                      
+                      <View style={styles.vestingScheduleRow}>
+                        <View style={styles.vestingScheduleItem}>
+                          <Text style={styles.vestingScheduleLabel}>Shares</Text>
+                          <Text style={styles.vestingScheduleValue}>
+                            +{stockMeta.vestingSchedule.sharesPerVest}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.vestingScheduleItem}>
+                          <Text style={styles.vestingScheduleLabel}>Frequency</Text>
+                          <Text style={styles.vestingScheduleValue}>
+                            {stockMeta.vestingSchedule.frequency}
+                          </Text>
+                        </View>
+                        
+                        {stockMeta.vestingSchedule.nextVestDate && (
+                          <View style={styles.vestingScheduleItem}>
+                            <Text style={styles.vestingScheduleLabel}>Next Date</Text>
+                            <Text style={styles.vestingScheduleValue}>
+                              {new Date(stockMeta.vestingSchedule.nextVestDate).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  <View style={styles.infoCard}>
+                    <Text style={styles.infoText}>
+                      💡 Only your vested shares ({vestedShares.toLocaleString()}) will count toward dividend income scenarios. Unvested shares are locked until they vest.
+                    </Text>
+                  </View>
+                </>
+              );
+            })()}
+          </View>
+        ) : isAppreciationAsset ? (
+          /* ═══════════════════════════════════════════════════════ */
+          /* Investment Thesis Section (for non-primary investments) */
+          /* ═══════════════════════════════════════════════════════ */
           <View style={styles.thesisSection}>
             <View style={styles.thesisSectionHeader}>
               <Text style={styles.sectionTitle}>💭 Investment Thesis</Text>
@@ -207,7 +312,7 @@ export default function AssetDetailScreen() {
               </TouchableOpacity>
             )}
           </View>
-        )}
+        ) : null}
         
         {/* Thesis Modal */}
         {isAppreciationAsset && (
@@ -306,6 +411,119 @@ const styles = StyleSheet.create({
   assetIncome: {
     fontSize: 14,
     color: '#4ade80',
+  },
+  
+  // Primary Residence Section
+  primaryResidenceSection: {
+    marginBottom: 24,
+  },
+  
+  // Info Card (used by primary residence and vesting)
+  infoCard: {
+    backgroundColor: '#1a2a3a',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#60a5fa',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#a0c4ff',
+    lineHeight: 20,
+  },
+  
+  // Vesting Section
+  vestingSection: {
+    marginBottom: 24,
+  },
+  vestingBarContainer: {
+    marginBottom: 16,
+  },
+  vestingBarBackground: {
+    height: 12,
+    backgroundColor: '#0a0e1a',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  vestingBarFilled: {
+    height: '100%',
+    backgroundColor: '#4ade80',
+    borderRadius: 6,
+  },
+  vestingBarLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  vestingBarLabelVested: {
+    fontSize: 13,
+    color: '#4ade80',
+    fontWeight: '600',
+  },
+  vestingBarLabelUnvested: {
+    fontSize: 13,
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  metricItem: {
+    flex: 1,
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+    alignItems: 'center',
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  vestingScheduleCard: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+  },
+  vestingScheduleTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  vestingScheduleRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  vestingScheduleItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  vestingScheduleLabel: {
+    fontSize: 11,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  vestingScheduleValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
   
   // Thesis Section
@@ -443,21 +661,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     marginBottom: 16,
-  },
-  metaItem: {
-    flex: 1,
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a2f3e',
-  },
-  metaLabel: {
-    fontSize: 11,
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
   },
   metaValue: {
     fontSize: 14,

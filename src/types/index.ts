@@ -91,13 +91,22 @@ export interface RealEstateAsset {
 export interface StockAsset {
   type: 'stocks';
   ticker?: string;
-  shares?: number;  // ✅ CHANGE: made optional
-  quantity?: number;  // ✅ ADD: same as shares, for consistency
-  currentPrice?: number;  // ✅ CHANGE: made optional
-  priceUSD?: number;  // ✅ ADD: same as currentPrice, for consistency
+  shares?: number;  // Total shares (keep for consistency)
+  quantity?: number;  // Same as shares (keep for consistency)
+  currentPrice?: number;
+  priceUSD?: number;  // Same as currentPrice (keep for consistency)
   dividendYield?: number;
-  apy?: number;  // ✅ ADD: for dividend yield
-  description?: string;  // ✅ ADD: for manual entries
+  apy?: number;
+  description?: string;
+
+  // ✅ NEW: Vesting tracking
+  vestedShares?: number;        // How many shares are vested (can sell)
+  unvestedShares?: number;      // How many shares are locked
+  vestingSchedule?: {
+    sharesPerVest: number;      // e.g., 10 shares
+    frequency: 'yearly' | 'quarterly' | 'monthly';
+    nextVestDate?: string;      // ISO date string
+  };
 }
 
 // Business interests (manual entry)
