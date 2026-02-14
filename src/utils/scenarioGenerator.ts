@@ -1,11 +1,11 @@
 // src/utils/scenarioGenerator.ts
-import type { Asset, IncomeSource, Obligation, DebtPayment, RealEstateAsset, WhatIfScenario } from '../types';
+import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario } from '../types';
 
 interface UserProfile {
   assets: Asset[];
   incomeSources: IncomeSource[];
   obligations: Obligation[];
-  debts: DebtPayment[];
+  debts: Debt[];
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -348,11 +348,22 @@ function generateBrokerageYieldScenario(
   monthlyNeeds: number
 ): WhatIfScenario | null {
   // Find brokerage assets with low yield
-  const brokerageAssets = assets.filter(a =>
-    a.type === 'stocks' &&
-    a.annualIncome < (a.value * 0.02) && // Less than 2% yield
-    a.value > 5000
-  );
+  const brokerageAssets = assets.filter(a => {
+    if (a.type !== 'stocks') return false;
+    if (a.value <= 5000) return false;
+    if (a.annualIncome >= (a.value * 0.02)) return false; // Already 2%+ yield
+
+    // Exclude stocks with all shares unvested
+    const stockMeta = a.metadata as any;
+    if (stockMeta?.unvestedShares) {
+      // If has unvested shares, must have at least some vested shares
+      if (!stockMeta?.vestedShares || stockMeta.vestedShares === 0) {
+        return false; // All shares are locked
+      }
+    }
+
+    return true;
+  });
 
   if (brokerageAssets.length === 0) return null;
 

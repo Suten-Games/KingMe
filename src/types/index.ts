@@ -50,9 +50,14 @@ export interface Asset {
   id: string;
   type: AssetType;
   name: string;
-  value: number; // current market value
-  annualIncome: number; // what it generates per year
+  value: number;
+  annualIncome: number;
   metadata: CryptoAsset | RealEstateAsset | StockAsset | BusinessAsset | BankAsset | RetirementAsset | OtherAsset;
+
+  // Wallet sync properties
+  isAutoSynced?: boolean;      // True if synced from wallet
+  lastSynced?: string;          // ISO timestamp of last sync
+  isLiquid?: boolean;           // True if can be sold quickly
 }
 
 // Crypto-specific (auto-tracked via Solana)

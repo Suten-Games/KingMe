@@ -1,12 +1,12 @@
 // src/store/useStore.ts
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource,
   AvatarType, PaycheckDeduction, DriftTrade, DailyExpense,
-  CryptoCardBalance, PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
-  WhatIfScenario, ThesisAlert, ThesisInvalidator, InvestmentThesis
+  PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
+  WhatIfScenario, ThesisAlert, InvestmentThesis
 } from '../types';
-import { saveUserProfile, loadUserProfile } from '../services/storage';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
@@ -162,12 +162,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   investmentTheses: [],
   thesisAlerts: [],
-
-  // Drift state
-  // driftPositions: [],
-  // driftTotalValue: 0,
-  // isDriftLoading: false,
-  // driftError: null,
 
   addThesis: (thesisData) => {
     const thesis: InvestmentThesis = {
@@ -679,15 +673,14 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
-  updateDriftTrade: (tradeId, tradeUpdate) =>
+  updateDriftTrade: (tradeId: string, tradeUpdate: Partial<DriftTrade>) =>
     set((state) => {
       const newTrades = (state.driftTrades || []).map((t) =>
         t.id === tradeId ? { ...t, ...tradeUpdate } : t
       );
-      // Auto-sync: recalculate monthly PnL after update
+      // Auto-sync income sources after update (keeping your existing logic)
       const defaultAccount = getDefaultDriftIncomeAccount(state.bankAccounts);
       const updatedIncomeSources = syncDriftIncomeSource(newTrades, state.income.sources || [], defaultAccount);
-
       return {
         driftTrades: newTrades,
         income: { ...state.income, sources: updatedIncomeSources },
@@ -795,8 +788,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadProfile: async (walletAddress: string) => {
     try {
-      const AsyncStorage = await import('@react-native-async-storage/async-storage');
-      const profileJson = await AsyncStorage.default.getItem('kingme_profile');
+      const profileJson = await AsyncStorage.getItem('kingme_profile');
 
       if (profileJson) {
         const saved = JSON.parse(profileJson);
@@ -865,8 +857,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       // For now, save unencrypted until we add wallet
       const profileJson = JSON.stringify(profile);
-      const AsyncStorage = await import('@react-native-async-storage/async-storage');
-      await AsyncStorage.default.setItem('kingme_profile', profileJson);
+      await AsyncStorage.setItem('kingme_profile', profileJson);
       console.log('Profile saved successfully', { onboardingComplete: state.onboardingComplete });
     } catch (error) {
       console.error('Failed to save profile:', error);
@@ -1020,12 +1011,6 @@ export const useStore = create<AppState>((set, get) => ({
     get().generateScenarios();
   },
 
-  checkThesisAlerts: () => {
-    // Placeholder - will implement with thesis system
-    console.log('[THESIS] Checking for alerts...');
-    set({ thesisAlerts: [] });
-  },
-
   dismissAlert: (alertId: string) => {
     set((state) => ({
       thesisAlerts: state.thesisAlerts.filter(a => a.assetName !== alertId),
@@ -1056,7 +1041,8 @@ export const useStore = create<AppState>((set, get) => ({
 
       const { assets: syncedAssets, totalValue } = await response.json();
 
-      console.log(`[SYNC] Synced ${syncedAssets.length} assets worth $${totalValue.toFixed(2)}`);
+      console.log(`[SYNC] Synced ${syncedAssets.length} assets worth $${(totalValue || 0).toFixed(2)}`);
+
 
       // Get current assets
       const currentAssets = get().assets;
@@ -1065,30 +1051,37 @@ export const useStore = create<AppState>((set, get) => ({
       const manualAssets = currentAssets.filter(a => !a.isAutoSynced);
 
       // Convert API assets to app format
-      const newAutoAssets = syncedAssets.map((sa: any) => ({
-        id: `auto_${sa.mint}`,
-        type: mapCategoryToAssetType(sa.category),
-        subtype: sa.category === 'crypto' ? undefined : sa.category,
-        name: sa.name,
-        value: sa.valueUSD,
-        annualIncome: sa.apy ? (sa.valueUSD * sa.apy) / 100 : 0,
-        isLiquid: true,
-        isAutoSynced: true,
-        lastSynced: new Date().toISOString(),
-        metadata: {
-          type: 'other' as const,
-          description: sa.name,
-          apy: sa.apy || 0,
-          balance: sa.balance,
-          priceUSD: sa.priceUSD,
-          mint: sa.mint,
-          symbol: sa.symbol,
-          logoURI: sa.logoURI,
-        },
-      }));
+      const newAutoAssets = syncedAssets.map((sa: any) => {
+        // Safe handling of null prices
+        const safePrice = sa.priceUSD || 0;
+        const safeValue = sa.valueUSD || 0;
+        const safeApy = sa.apy || 0;
+
+        return {
+          id: `auto_${sa.mint}`,
+          type: mapCategoryToAssetType(sa.category),
+          subtype: sa.category === 'crypto' ? undefined : sa.category,
+          name: sa.name,
+          value: safeValue,
+          annualIncome: safeApy ? (safeValue * safeApy) / 100 : 0,
+          isLiquid: true,
+          isAutoSynced: true,
+          lastSynced: new Date().toISOString(),
+          metadata: {
+            type: 'other' as const,
+            description: sa.name,
+            apy: safeApy,
+            balance: sa.balance || 0,
+            priceUSD: safePrice, // ✅ NOW SAFE
+            mint: sa.mint,
+            symbol: sa.symbol,
+            logoURI: sa.logoURI,
+          },
+        };
+      });
 
       // Merge: manual + tokens + drift
-      const allAssets = [...manualAssets, ...newAutoAssets, ...driftAssets];
+      const allAssets = [...manualAssets, ...newAutoAssets];
 
       // Merge: manual + auto
       set({
@@ -1097,7 +1090,7 @@ export const useStore = create<AppState>((set, get) => ({
         lastAssetSync: new Date().toISOString(),
       });
 
-      console.log(`[SYNC] Complete: ${manualAssets.length} manual + ${newAutoAssets.length} synced + ${driftAssets.length} drift`);
+      console.log(`[SYNC] Complete: ${manualAssets.length} manual + ${newAutoAssets.length} synced`);
 
       // Save immediately
       await get().saveProfile();

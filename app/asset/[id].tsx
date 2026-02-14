@@ -267,6 +267,177 @@ export default function AssetDetailScreen() {
                     ))}
                   </View>
                 )}
+
+                {/* ═══════════════════════════════════════════════════════ */}
+                {/* NEW: Profit/Loss Calculator Section                     */}
+                {/* ═══════════════════════════════════════════════════════ */}
+                {thesis.targetPrice && thesis.entryPrice && currentPrice > 0 && (
+                  <View style={styles.profitLossSection}>
+                    <Text style={styles.sectionTitle}>💰 Profit/Loss Potential</Text>
+                    
+                    {(() => {
+                      // Get quantity (tokens or shares)
+                      const quantity = (asset.metadata as any)?.balance || 
+                                      (asset.metadata as any)?.quantity || 
+                                      1;
+                      
+                      const entryPrice = thesis.entryPrice;
+                      const targetPrice = thesis.targetPrice;
+                      const currentValue = asset.value;
+                      const entryValue = entryPrice * quantity;
+                      
+                      // Target upside
+                      const targetValue = targetPrice * quantity;
+                      const potentialProfit = targetValue - currentValue;
+                      const profitPercent = ((targetPrice / currentPrice) - 1) * 100;
+                      
+                      // Find stop-loss
+                      const stopLossInvalidators = thesis.invalidators.filter(
+                        inv => inv.type === 'price_drop' && inv.triggerPrice
+                      );
+                      const stopLoss = stopLossInvalidators.length > 0
+                        ? Math.min(...stopLossInvalidators.map(inv => inv.triggerPrice!))
+                        : null;
+                      
+                      const stopLossValue = stopLoss ? stopLoss * quantity : null;
+                      const potentialLoss = stopLossValue ? currentValue - stopLossValue : null;
+                      const lossPercent = stopLoss 
+                        ? ((currentPrice / stopLoss) - 1) * 100
+                        : null;
+                      
+                      // Risk/Reward
+                      const riskReward = (potentialLoss && potentialLoss > 0)
+                        ? potentialProfit / potentialLoss
+                        : null;
+                      
+                      // Current P&L
+                      const currentPnL = currentValue - entryValue;
+                      const currentPnLPercent = ((currentPrice / entryPrice) - 1) * 100;
+                      
+                      return (
+                        <>
+                          {/* Current Position */}
+                          <View style={styles.plCard}>
+                            <Text style={styles.plCardTitle}>Current Position</Text>
+                            <View style={styles.plRow}>
+                              <View style={styles.plCol}>
+                                <Text style={styles.plLabel}>Entry Cost</Text>
+                                <Text style={styles.plValue}>${entryValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</Text>
+                                <Text style={styles.plSubtext}>
+                                  {quantity.toLocaleString()} @ ${entryPrice.toFixed(4)}
+                                </Text>
+                              </View>
+                              <View style={styles.plCol}>
+                                <Text style={styles.plLabel}>Current Value</Text>
+                                <Text style={styles.plValue}>${currentValue.toLocaleString(undefined, {maximumFractionDigits: 2})}</Text>
+                                <Text style={[
+                                  styles.plChange,
+                                  currentPnL >= 0 ? styles.green : styles.red
+                                ]}>
+                                  {currentPnL >= 0 ? '+' : ''}${Math.abs(currentPnL).toLocaleString(undefined, {maximumFractionDigits: 2})} 
+                                  ({currentPnLPercent >= 0 ? '+' : ''}{currentPnLPercent.toFixed(1)}%)
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Upside */}
+                          <View style={[styles.plCard, styles.profitCard]}>
+                            <View style={styles.plCardHeader}>
+                              <Text style={styles.plCardTitle}>🎯 If Target Hit</Text>
+                              <Text style={styles.plTargetPrice}>${targetPrice.toFixed(4)}</Text>
+                            </View>
+                            <View style={styles.plRow}>
+                              <View style={styles.plCol}>
+                                <Text style={styles.plLabel}>Profit</Text>
+                                <Text style={[styles.plBigValue, styles.green]}>
+                                  +${potentialProfit.toLocaleString(undefined, {maximumFractionDigits: 2})}
+                                </Text>
+                              </View>
+                              <View style={styles.plCol}>
+                                <Text style={styles.plLabel}>Gain</Text>
+                                <Text style={[styles.plBigValue, styles.green]}>
+                                  +{profitPercent.toFixed(0)}%
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Downside */}
+                          {stopLoss && potentialLoss && (
+                            <View style={[styles.plCard, styles.lossCard]}>
+                              <View style={styles.plCardHeader}>
+                                <Text style={styles.plCardTitle}>⚠️ If Stop-Loss Hit</Text>
+                                <Text style={styles.plStopPrice}>${stopLoss.toFixed(4)}</Text>
+                              </View>
+                              <View style={styles.plRow}>
+                                <View style={styles.plCol}>
+                                  <Text style={styles.plLabel}>Loss</Text>
+                                  <Text style={[styles.plBigValue, styles.red]}>
+                                    -${potentialLoss.toLocaleString(undefined, {maximumFractionDigits: 2})}
+                                  </Text>
+                                </View>
+                                <View style={styles.plCol}>
+                                  <Text style={styles.plLabel}>Drop</Text>
+                                  <Text style={[styles.plBigValue, styles.red]}>
+                                    -{lossPercent!.toFixed(0)}%
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Risk/Reward */}
+                          {riskReward && (
+                            <View style={styles.rrCard}>
+                              <Text style={styles.rrLabel}>Risk/Reward Ratio</Text>
+                              <Text style={[
+                                styles.rrValue,
+                                riskReward >= 2 ? styles.green : 
+                                riskReward >= 1 ? styles.yellow : 
+                                styles.red
+                              ]}>
+                                {riskReward.toFixed(2)}:1
+                              </Text>
+                              <Text style={styles.rrExplain}>
+                                {riskReward >= 3 
+                                  ? '🟢 Excellent trade setup' 
+                                  : riskReward >= 2 
+                                  ? '🟡 Good risk/reward' 
+                                  : riskReward >= 1 
+                                  ? '🟠 Acceptable ratio'
+                                  : '🔴 Poor risk/reward'}
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* Decision Guide */}
+                          <View style={styles.decisionCard}>
+                            <Text style={styles.decisionTitle}>📊 What To Do</Text>
+                            <Text style={styles.decisionText}>
+                              {currentPrice >= targetPrice 
+                                ? '🎉 TARGET HIT! Consider selling to lock in profits'
+                                : stopLoss && currentPrice <= stopLoss
+                                ? '⚠️ STOP-LOSS HIT! Exit to prevent further losses'
+                                : `💎 HOLD - ${((currentPrice / targetPrice) * 100).toFixed(0)}% to target`
+                              }
+                            </Text>
+                            {currentPrice < targetPrice && stopLoss && currentPrice > stopLoss && (
+                              <View style={styles.decisionDetails}>
+                                <Text style={styles.decisionDetailText}>
+                                  • Target: +${potentialProfit.toLocaleString()} (+{profitPercent.toFixed(0)}%)
+                                </Text>
+                                <Text style={styles.decisionDetailText}>
+                                  • Risk: -${potentialLoss!.toLocaleString()} (-{lossPercent!.toFixed(0)}%)
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </>
+                      );
+                    })()}
+                  </View>
+                )}
                 
                 {/* Timeline & Review */}
                 <View style={styles.metaRow}>
@@ -656,16 +827,151 @@ const styles = StyleSheet.create({
     color: '#f87171',
     marginTop: 4,
   },
+
+  // NEW: Profit/Loss Section Styles
+  profitLossSection: {
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  plCard: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+  },
+  profitCard: {
+    borderColor: '#4ade80',
+    borderWidth: 1.5,
+  },
+  lossCard: {
+    borderColor: '#ef4444',
+    borderWidth: 1.5,
+  },
+  plCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  plCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  plTargetPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4ade80',
+  },
+  plStopPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  plRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  plCol: {
+    flex: 1,
+  },
+  plLabel: {
+    fontSize: 11,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  plValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  plBigValue: {
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  plSubtext: {
+    fontSize: 12,
+    color: '#666',
+  },
+  plChange: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  green: {
+    color: '#4ade80',
+  },
+  red: {
+    color: '#ef4444',
+  },
+  yellow: {
+    color: '#fbbf24',
+  },
+  rrCard: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+  },
+  rrLabel: {
+    fontSize: 12,
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  rrValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  rrExplain: {
+    fontSize: 13,
+    color: '#999',
+  },
+  decisionCard: {
+    backgroundColor: '#0a0e1a',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#4ade80',
+  },
+  decisionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4ade80',
+    marginBottom: 8,
+  },
+  decisionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    lineHeight: 24,
+  },
+  decisionDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2f3e',
+  },
+  decisionDetailText: {
+    fontSize: 13,
+    color: '#999',
+    marginBottom: 4,
+  },
   
   metaRow: {
     flexDirection: 'row',
     gap: 16,
     marginBottom: 16,
-  },
-  metaValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
   },
   
   thesisActions: {

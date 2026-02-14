@@ -337,11 +337,8 @@ export default function AssetsScreen() {
       setName(asset.name);
       setValue(asset.value.toString());
       setApy(asset.metadata?.apy?.toString() || '');
-      setIsPrimaryResidence(metadata?.isPrimaryResidence || false); // ← ADD THIS
-      setShowAddModal(true);
-    }
-    
-    if (asset.type === 'retirement' && asset.metadata?.type === 'retirement') {
+      setIsPrimaryResidence(metadata?.isPrimaryResidence || false);
+    } else if (asset.type === 'retirement' && asset.metadata?.type === 'retirement') {
       setType('retirement');
       setRetAccountType(asset.metadata?.accountType);
       setRetInstitution(asset.metadata?.institution || '');
@@ -350,12 +347,13 @@ export default function AssetsScreen() {
       setRetFrequency(asset.metadata?.contributionFrequency || 'biweekly');
       setRetMatchPercent(asset.metadata?.employerMatchPercent?.toString() || '0');
     } else {
+      // Generic asset (crypto, stocks, etc.)
       setType(asset.type);
       setName(asset.name);
       setValue(asset.value.toString());
       setApy(asset.metadata?.apy?.toString() || '');
       setQuantity(asset.metadata?.quantity?.toString() || '');
-
+      
       // Load vesting data for stocks
       if (asset.type === 'stocks' && asset.metadata?.type === 'stocks') {
         const stockMeta = asset.metadata;
