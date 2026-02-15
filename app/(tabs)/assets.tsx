@@ -169,7 +169,22 @@ export default function AssetsScreen() {
     setShowAddModal(false);
   };
 
-  const handleBankAccountPress = (accountId: string) => {
+  // const handleBankAccountPress = (accountId: string) => {
+  //   const account = bankAccounts.find(a => a.id === accountId);
+  //   if (account) {
+  //     setEditingBankAccount(account);
+  //     setBankEditValue('');
+  //     setShowBankEditModal(true);
+  //   }
+  // };
+
+    const handleBankAccountPress = (accountId: string) => {
+    // Short press → detail screen
+    router.push(`/bank/${accountId}`);
+  };
+
+  const handleBankAccountLongPress = (accountId: string) => {
+    // Long press → quick balance edit
     const account = bankAccounts.find(a => a.id === accountId);
     if (account) {
       setEditingBankAccount(account);

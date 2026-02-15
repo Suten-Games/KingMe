@@ -1,10 +1,15 @@
 // KingMe - Type Definitions
 
+import { BankTransaction } from "./bankTransactionTypes";
+
 export type AvatarType = 'male-medium' | 'female-medium';
 
 export type FreedomState = 'drowning' | 'struggling' | 'breaking' | 'rising' | 'enthroned';
 
 export type ThesisTimeHorizon = '3mo' | '6mo' | '1yr' | '2yr' | '5yr' | '10yr+';
+
+//export type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from './bankTransactionTypes.ts';
+//export { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } './bankTransactionTypes.ts';
 
 export type ThesisInvalidatorType =
   | 'price_drop'      // Stop-loss at X% down
@@ -475,6 +480,7 @@ export interface UserProfile {
   obligations: Obligation[];
   desires: Desire[];
   debts: Debt[];
+  bankTransactions?: BankTransaction[];
   paycheckDeductions: PaycheckDeduction[]; // DEPRECATED - use preTaxDeductions, taxes, postTaxDeductions instead
   preTaxDeductions: PreTaxDeduction[];  // Medical, dental, 401k contributions, etc.
   taxes: Tax[];  // Federal W/H, Social Security, Medicare, State W/H
@@ -485,6 +491,7 @@ export interface UserProfile {
   expenseTrackingMode: 'estimate' | 'manual'; // estimate uses daily_living obligation, manual logs every expense
   freedomHistory: FreedomScoreHistory[];
   investmentTheses: InvestmentThesis[];
+  whatIfScenarios: WhatIfScenario[],
   thesisAlerts: ThesisAlert[];
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp

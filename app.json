@@ -1,5 +1,6 @@
 {
   "expo": {
+    "icon": "./assets/images/icon.png",
     "plugins": [
       [
         "expo-build-properties",
@@ -18,7 +19,14 @@
       }
     },
     "android": {
-      "package": "com.saxthefiver.kingme"
+      "package": "com.saxthefiver.kingme",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.saxthefiver.kingme"
     }
   }
 }

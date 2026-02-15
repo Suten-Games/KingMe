@@ -11,6 +11,7 @@ import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
 import { generateSmartScenarios } from '../utils/scenarioGenerator';
+import { BankTransaction } from '@/types/bankTransactionTypes';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -60,6 +61,11 @@ interface AppState extends UserProfile {
   removeDailyExpense: (expenseId: string) => void;
   updateDailyExpense: (expenseId: string, expense: Partial<DailyExpense>) => void;
   setExpenseTrackingMode: (mode: 'estimate' | 'manual') => void;
+  addBankTransaction: (transaction: BankTransaction) => void;
+  removeBankTransaction: (transactionId: string) => void;
+  updateBankTransaction: (transactionId: string, update: Partial<BankTransaction>) => void;
+  importBankTransactions: (transactions: BankTransaction[]) => void;
+  clearBankTransactions: (bankAccountId: string) => void;
   setCryptoCardBalance: (balance: number) => void;
   addCardDeposit: (amount: number, description?: string) => void;
   completeOnboarding: () => Promise<void>;
@@ -76,6 +82,8 @@ interface AppState extends UserProfile {
 
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
+
+  bankTransactions: BankTransaction[];
 
   // What-If Scenarios
   whatIfScenarios: WhatIfScenario[];
@@ -109,6 +117,7 @@ const initialState: UserProfile = {
     assetIncome: 0,
     sources: [],
   },
+  bankTransactions: [],
   assets: [],
   obligations: [],
   desires: [],
@@ -116,6 +125,9 @@ const initialState: UserProfile = {
   paycheckDeductions: [],
   driftTrades: [],
   dailyExpenses: [],
+  preTaxDeductions: [],
+  postTaxDeductions: [],
+  taxes: [],
   cryptoCardBalance: { currentBalance: 0, lastUpdated: new Date().toISOString() },
   expenseTrackingMode: 'estimate', // default to estimate mode
   freedomHistory: [],
@@ -741,6 +753,91 @@ export const useStore = create<AppState>((set, get) => ({
       },
     }),
 
+  bankTransactions: [],
+
+  addBankTransaction: (transaction) =>
+    set((state) => {
+      const newTransactions = [...(state.bankTransactions || []), transaction];
+
+      // Auto-update bank balance: expenses reduce, income increases
+      const account = state.bankAccounts.find(a => a.id === transaction.bankAccountId);
+      let updatedAccounts = state.bankAccounts;
+      if (account) {
+        const balanceChange = transaction.type === 'income'
+          ? Math.abs(transaction.amount)
+          : -Math.abs(transaction.amount);
+        updatedAccounts = state.bankAccounts.map(a =>
+          a.id === transaction.bankAccountId
+            ? { ...a, currentBalance: (a.currentBalance ?? 0) + balanceChange }
+            : a
+        );
+      }
+
+      return {
+        bankTransactions: newTransactions,
+        bankAccounts: updatedAccounts,
+      };
+    }),
+
+  removeBankTransaction: (transactionId) =>
+    set((state) => {
+      const transaction = (state.bankTransactions || []).find(t => t.id === transactionId);
+      if (!transaction) return state;
+
+      // Reverse the balance change
+      const account = state.bankAccounts.find(a => a.id === transaction.bankAccountId);
+      let updatedAccounts = state.bankAccounts;
+      if (account) {
+        const balanceReverse = transaction.type === 'income'
+          ? -Math.abs(transaction.amount)
+          : Math.abs(transaction.amount);
+        updatedAccounts = state.bankAccounts.map(a =>
+          a.id === transaction.bankAccountId
+            ? { ...a, currentBalance: (a.currentBalance ?? 0) + balanceReverse }
+            : a
+        );
+      }
+
+      return {
+        bankTransactions: (state.bankTransactions || []).filter(t => t.id !== transactionId),
+        bankAccounts: updatedAccounts,
+      };
+    }),
+
+  updateBankTransaction: (transactionId, update) =>
+    set((state) => ({
+      bankTransactions: (state.bankTransactions || []).map(t =>
+        t.id === transactionId ? { ...t, ...update } : t
+      ),
+    })),
+
+  importBankTransactions: (transactions) =>
+    set((state) => {
+      // Deduplicate: skip transactions with same date + amount + description
+      const existing = state.bankTransactions || [];
+      const existingKeys = new Set(
+        existing.map(t => `${t.date}|${t.amount}|${t.description}`)
+      );
+
+      const newOnly = transactions.filter(
+        t => !existingKeys.has(`${t.date}|${t.amount}|${t.description}`)
+      );
+
+      console.log(`[IMPORT] ${transactions.length} parsed, ${newOnly.length} new (${transactions.length - newOnly.length} duplicates skipped)`);
+
+      return {
+        bankTransactions: [...existing, ...newOnly],
+      };
+    }),
+
+  clearBankTransactions: (bankAccountId) =>
+    set((state) => ({
+      bankTransactions: (state.bankTransactions || []).filter(
+        t => t.bankAccountId !== bankAccountId
+      ),
+    })),
+
+
   addCardDeposit: (amount, description) =>
     set((state) => {
       // Create a "transfer" expense entry for the deposit (negative amount = money in)
@@ -801,6 +898,7 @@ export const useStore = create<AppState>((set, get) => ({
           income: { ...initialState.income, ...(saved.income || {}) },
           settings: { ...initialState.settings, ...(saved.settings || {}) },
           // Ensure arrays default to [] if missing from save
+          bankTransactions: saved.bankTransactions ?? initialState.bankTransactions,
           bankAccounts: saved.bankAccounts ?? initialState.bankAccounts,
           assets: saved.assets ?? initialState.assets,
           obligations: saved.obligations ?? initialState.obligations,
@@ -840,6 +938,7 @@ export const useStore = create<AppState>((set, get) => ({
         desires: state.desires,
         debts: state.debts,
         paycheckDeductions: state.paycheckDeductions || [],
+        bankTransactions: state.bankTransactions || [],
         preTaxDeductions: state.preTaxDeductions || [],
         taxes: state.taxes || [],
         postTaxDeductions: state.postTaxDeductions || [],
