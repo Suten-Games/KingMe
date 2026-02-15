@@ -182,6 +182,17 @@ export default function ProfileScreen() {
         preTaxDeductions: useStore.getState().preTaxDeductions,
         taxes: useStore.getState().taxes,
         postTaxDeductions: useStore.getState().postTaxDeductions,
+        // ── Previously missing fields ──
+        bankTransactions: useStore.getState().bankTransactions || [],
+        driftTrades: useStore.getState().driftTrades || [],
+        dailyExpenses: useStore.getState().dailyExpenses || [],
+        investmentTheses: useStore.getState().investmentTheses || [],
+        thesisAlerts: useStore.getState().thesisAlerts || [],
+        cryptoCardBalance: useStore.getState().cryptoCardBalance,
+        expenseTrackingMode: useStore.getState().expenseTrackingMode,
+        freedomHistory: useStore.getState().freedomHistory || [],
+        settings: useStore.getState().settings,
+        onboardingComplete: useStore.getState().onboardingComplete,
         timestamp: new Date().toISOString(),
       };
       
@@ -233,6 +244,17 @@ export default function ProfileScreen() {
                 preTaxDeductions: profileData.preTaxDeductions || [],
                 taxes: profileData.taxes || [],
                 postTaxDeductions: profileData.postTaxDeductions || [],
+                // ── Previously missing fields ──
+                bankTransactions: profileData.bankTransactions || [],
+                driftTrades: profileData.driftTrades || [],
+                dailyExpenses: profileData.dailyExpenses || [],
+                investmentTheses: profileData.investmentTheses || [],
+                thesisAlerts: profileData.thesisAlerts || [],
+                cryptoCardBalance: profileData.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
+                expenseTrackingMode: profileData.expenseTrackingMode || 'estimate',
+                freedomHistory: profileData.freedomHistory || [],
+                settings: profileData.settings || useStore.getState().settings,
+                onboardingComplete: profileData.onboardingComplete ?? true,
               });
               
               await useStore.getState().saveProfile();

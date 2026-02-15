@@ -988,6 +988,7 @@ export const useStore = create<AppState>((set, get) => ({
         postTaxDeductions: imported.postTaxDeductions ?? initialState.postTaxDeductions,
         driftTrades: imported.driftTrades ?? initialState.driftTrades,
         dailyExpenses: imported.dailyExpenses ?? initialState.dailyExpenses,
+        bankTransactions: imported.bankTransactions ?? initialState.bankTransactions,
         cryptoCardBalance: imported.cryptoCardBalance ?? initialState.cryptoCardBalance,
         freedomHistory: imported.freedomHistory ?? initialState.freedomHistory,
         expenseTrackingMode: imported.expenseTrackingMode ?? initialState.expenseTrackingMode,
