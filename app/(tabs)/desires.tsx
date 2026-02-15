@@ -1,332 +1,198 @@
 // app/(tabs)/desires.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { researchDesire, calculateDesireImpact } from '../../src/services/claude';
 import type { Desire } from '../../src/types';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
+import { T } from '../../src/theme';
+
+const PURPLE = '#a78bfa';
 
 export default function DesiresScreen() {
   const desires = useStore((state) => state.desires);
   const addDesire = useStore((state) => state.addDesire);
   const removeDesire = useStore((state) => state.removeDesire);
   const freedom = useFreedomScore();
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showResearchModal, setShowResearchModal] = useState(false);
-  
-  // Form state
   const [desireName, setDesireName] = useState('');
   const [isResearching, setIsResearching] = useState(false);
   const [researchResult, setResearchResult] = useState<any>(null);
 
   const handleStartResearch = async () => {
     if (!desireName.trim()) return;
-    
-    setIsResearching(true);
-    setShowAddModal(false);
-    setShowResearchModal(true);
-    
+    setIsResearching(true); setShowAddModal(false); setShowResearchModal(true);
     try {
-      // Call Claude API to research the desire
       const result = await researchDesire(desireName, freedom);
       setResearchResult(result);
     } catch (error: any) {
-      console.error('Research failed:', error);
-      setResearchResult({
-        error: true,
-        message: error.message || 'Failed to research desire. Please try again.',
-      });
-    } finally {
-      setIsResearching(false);
-    }
+      setResearchResult({ error: true, message: error.message || 'Failed to research desire.' });
+    } finally { setIsResearching(false); }
   };
 
   const handleAddDesireFromResearch = () => {
     if (!researchResult || researchResult.error) return;
-    
-    const newDesire: Desire = {
-      id: Date.now().toString(),
-      name: researchResult.productName || desireName,
-      estimatedCost: researchResult.recommendedPrice || 0,
-      priority: 'medium',
-      category: 'other',
+    addDesire({
+      id: Date.now().toString(), name: researchResult.productName || desireName,
+      estimatedCost: researchResult.recommendedPrice || 0, priority: 'medium', category: 'other',
       notes: researchResult.summary,
-      aiResearch: {
-        researchedAt: new Date().toISOString(),
-        recommendation: researchResult.recommendation,
-        alternatives: researchResult.alternatives || [],
-      },
-    };
-    
-    addDesire(newDesire);
-    
-    // Reset and close
-    setShowResearchModal(false);
-    setResearchResult(null);
-    setDesireName('');
+      aiResearch: { researchedAt: new Date().toISOString(), recommendation: researchResult.recommendation, alternatives: researchResult.alternatives || [] },
+    });
+    setShowResearchModal(false); setResearchResult(null); setDesireName('');
   };
 
   const handleManualAdd = () => {
-    setShowAddModal(false);
-    setShowResearchModal(true);
-    setResearchResult({
-      manual: true,
-      productName: desireName,
-      recommendedPrice: 0,
-    });
+    setShowAddModal(false); setShowResearchModal(true);
+    setResearchResult({ manual: true, productName: desireName, recommendedPrice: 0 });
   };
 
-  const calculateTotalDesires = () => {
-    return desires.reduce((sum, desire) => sum + desire.estimatedCost, 0);
-  };
+  const totalDesires = desires.reduce((sum, d) => sum + d.estimatedCost, 0);
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
       <ResponsiveContainer>
-      <ScrollView style={styles.scrollView}>
-        {/* Summary */}
-        <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Total Desired Purchases</Text>
-          <Text style={styles.summaryValue}>${calculateTotalDesires().toLocaleString()}</Text>
-          <Text style={styles.summarySubtext}>
-            {desires.length} {desires.length === 1 ? 'desire' : 'desires'} tracked
-          </Text>
-        </View>
+        <ScrollView style={s.scrollView}>
+          {/* Summary */}
+          <LinearGradient colors={T.gradients.purple} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={[s.summaryBox, { borderColor: PURPLE + '80' }]}>
+            <Text style={s.summaryLabel}>Total Desired Purchases</Text>
+            <Text style={s.summaryValue}>${totalDesires.toLocaleString()}</Text>
+            <Text style={s.summarySubtext}>{desires.length} {desires.length === 1 ? 'desire' : 'desires'} tracked</Text>
+          </LinearGradient>
 
-        {/* AI Info */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            ✨ Let AI help you research and plan your purchases. Get recommendations, see impact on your freedom score, and find the best time to buy.
-          </Text>
-        </View>
+          {/* AI Info */}
+          <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={s.infoBox}>
+            <Text style={s.infoText}>✨ Let AI help you research and plan your purchases. Get recommendations, see impact on your freedom score, and find the best time to buy.</Text>
+          </LinearGradient>
 
-        {/* Desires List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Desires</Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAddModal(true)}
-            >
-              <Text style={styles.addButtonText}>+ Add</Text>
-            </TouchableOpacity>
-          </View>
-
-          {desires.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No desires yet</Text>
-              <Text style={styles.emptySubtext}>
-                Tell us what you want and let AI help you plan it
-              </Text>
+          {/* List */}
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>Your Desires</Text>
+              <TouchableOpacity style={s.addButton} onPress={() => setShowAddModal(true)}>
+                <Text style={s.addButtonText}>+ Add</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            desires.map((desire) => (
-              <View key={desire.id} style={styles.desireCard}>
-                <View style={styles.desireHeader}>
-                  <View style={styles.desireHeaderLeft}>
-                    <Text style={styles.desireName}>{desire.name}</Text>
-                    {desire.aiResearch && (
-                      <Text style={styles.aiLabel}>✨ AI Researched</Text>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => removeDesire(desire.id)}>
-                    <Text style={styles.deleteButton}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-                
-                <Text style={styles.desireCost}>
-                  ${desire.estimatedCost.toLocaleString()}
-                </Text>
-                
-                {desire.notes && (
-                  <Text style={styles.desireNotes} numberOfLines={2}>
-                    {desire.notes}
-                  </Text>
-                )}
 
-                {desire.aiResearch && (
-                  <TouchableOpacity style={styles.viewDetailsButton}>
-                    <Text style={styles.viewDetailsText}>View AI Recommendation</Text>
-                  </TouchableOpacity>
-                )}
+            {desires.length === 0 ? (
+              <View style={s.emptyState}>
+                <Text style={s.emptyText}>No desires yet</Text>
+                <Text style={s.emptySubtext}>Tell us what you want and let AI help you plan it</Text>
               </View>
-            ))
-          )}
-        </View>
+            ) : (
+              desires.map((desire) => (
+                <LinearGradient key={desire.id} colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={[s.desireCard, { borderColor: PURPLE + '40' }]}>
+                  <View style={s.desireHeader}>
+                    <View style={s.desireHeaderLeft}>
+                      <Text style={s.desireName}>{desire.name}</Text>
+                      {desire.aiResearch && <Text style={s.aiLabel}>✨ AI Researched</Text>}
+                    </View>
+                    <TouchableOpacity onPress={() => removeDesire(desire.id)}>
+                      <Text style={s.deleteButton}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={s.desireCost}>${desire.estimatedCost.toLocaleString()}</Text>
+                  {desire.notes && <Text style={s.desireNotes} numberOfLines={2}>{desire.notes}</Text>}
+                  {desire.aiResearch && (
+                    <TouchableOpacity style={s.viewDetailsButton}>
+                      <Text style={s.viewDetailsText}>View AI Recommendation</Text>
+                    </TouchableOpacity>
+                  )}
+                </LinearGradient>
+              ))
+            )}
+          </View>
         </ScrollView>
-        </ResponsiveContainer>
+      </ResponsiveContainer>
 
-      {/* Add Desire Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>What do you want?</Text>
-
-            <Text style={styles.label}>Tell me what you're looking for</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g., a new dishwasher, gaming laptop, vacation"
-              placeholderTextColor="#666"
-              value={desireName}
-              onChangeText={setDesireName}
-              multiline
-              autoFocus
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => {
-                  setShowAddModal(false);
-                  setDesireName('');
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+      {/* Add Modal */}
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>What do you want?</Text>
+            <Text style={s.label}>Tell me what you're looking for</Text>
+            <TextInput style={s.modalInput} placeholder="e.g., a new dishwasher, gaming laptop, vacation" placeholderTextColor="#555" value={desireName} onChangeText={setDesireName} multiline autoFocus />
+            <View style={s.modalButtons}>
+              <TouchableOpacity style={s.modalCancelButton} onPress={() => { setShowAddModal(false); setDesireName(''); }}>
+                <Text style={s.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalAddButton, !desireName.trim() && styles.modalAddButtonDisabled]}
-                onPress={handleStartResearch}
-                disabled={!desireName.trim()}
-              >
-                <Text style={styles.modalAddText}>✨ Research with AI</Text>
+              <TouchableOpacity style={[s.modalAddButton, !desireName.trim() && s.modalAddButtonDisabled]} onPress={handleStartResearch} disabled={!desireName.trim()}>
+                <Text style={s.modalAddText}>✨ Research with AI</Text>
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.manualButton}
-              onPress={handleManualAdd}
-              disabled={!desireName.trim()}
-            >
-              <Text style={styles.manualButtonText}>Skip AI, add manually</Text>
+            <TouchableOpacity style={s.manualButton} onPress={handleManualAdd} disabled={!desireName.trim()}>
+              <Text style={s.manualButtonText}>Skip AI, add manually</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Research Results Modal */}
-      <Modal
-        visible={showResearchModal}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setShowResearchModal(false)}
-      >
-        <View style={styles.researchContainer}>
-          <ScrollView style={styles.researchScrollView}>
+      {/* Research Modal */}
+      <Modal visible={showResearchModal} animationType="slide" transparent={false} onRequestClose={() => setShowResearchModal(false)}>
+        <View style={s.researchContainer}>
+          <ScrollView style={s.researchScrollView}>
             {isResearching ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#f4c430" />
-                <Text style={styles.loadingText}>AI is researching...</Text>
-                <Text style={styles.loadingSubtext}>
-                  Searching products, comparing prices, calculating impact
-                </Text>
+              <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={T.gold} />
+                <Text style={s.loadingText}>AI is researching...</Text>
+                <Text style={s.loadingSubtext}>Searching products, comparing prices, calculating impact</Text>
               </View>
             ) : researchResult?.error ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorTitle}>Research Failed</Text>
-                <Text style={styles.errorText}>{researchResult.message}</Text>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={handleStartResearch}
-                >
-                  <Text style={styles.retryButtonText}>Try Again</Text>
+              <View style={s.errorContainer}>
+                <Text style={s.errorTitle}>Research Failed</Text>
+                <Text style={s.errorText}>{researchResult.message}</Text>
+                <TouchableOpacity style={s.retryButton} onPress={handleStartResearch}>
+                  <Text style={s.retryButtonText}>Try Again</Text>
                 </TouchableOpacity>
               </View>
             ) : researchResult?.manual ? (
-              <View style={styles.manualContainer}>
-                <Text style={styles.researchTitle}>Add Manually</Text>
-                <Text style={styles.label}>Estimated Cost</Text>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0"
-                    placeholderTextColor="#666"
-                    keyboardType="numeric"
-                    onChangeText={(text) => {
-                      setResearchResult({
-                        ...researchResult,
-                        recommendedPrice: parseFloat(text) || 0,
-                      });
-                    }}
-                  />
+              <View style={{ padding: 20 }}>
+                <Text style={s.researchTitle}>Add Manually</Text>
+                <Text style={s.label}>Estimated Cost</Text>
+                <View style={s.inputContainer}>
+                  <Text style={[s.currencySymbol, { color: PURPLE }]}>$</Text>
+                  <TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric"
+                    onChangeText={(t) => setResearchResult({ ...researchResult, recommendedPrice: parseFloat(t) || 0 })} />
                 </View>
               </View>
             ) : researchResult ? (
-              <View style={styles.resultsContainer}>
-                <Text style={styles.researchTitle}>AI Recommendation</Text>
-                
-                {/* Product Info */}
-                <View style={styles.productBox}>
-                  <Text style={styles.productName}>{researchResult.productName}</Text>
-                  <Text style={styles.productPrice}>
-                    ${researchResult.recommendedPrice?.toLocaleString()}
-                  </Text>
-                  <Text style={styles.productDescription}>
-                    {researchResult.summary}
-                  </Text>
-                </View>
-
-                {/* Impact Analysis */}
-                <View style={styles.impactBox}>
-                  <Text style={styles.impactTitle}>Impact on Freedom Score</Text>
-                  <View style={styles.impactRow}>
-                    <Text style={styles.impactLabel}>Current:</Text>
-                    <Text style={styles.impactCurrent}>{freedom.formatted}</Text>
-                  </View>
-                  <View style={styles.impactRow}>
-                    <Text style={styles.impactLabel}>After purchase:</Text>
-                    <Text style={styles.impactAfter}>
-                      {researchResult.impactDays} days
+              <View style={{ paddingBottom: 100 }}>
+                <Text style={s.researchTitle}>AI Recommendation</Text>
+                <LinearGradient colors={T.gradients.purple} style={[s.productBox, { borderColor: PURPLE + '80' }]}>
+                  <Text style={s.productName}>{researchResult.productName}</Text>
+                  <Text style={s.productPrice}>${researchResult.recommendedPrice?.toLocaleString()}</Text>
+                  <Text style={s.productDescription}>{researchResult.summary}</Text>
+                </LinearGradient>
+                <LinearGradient colors={T.gradients.card} style={s.impactBox}>
+                  <Text style={s.impactTitle}>Impact on Freedom Score</Text>
+                  <View style={s.impactRow}><Text style={s.impactLabel}>Current:</Text><Text style={s.impactCurrent}>{freedom.formatted}</Text></View>
+                  <View style={s.impactRow}><Text style={s.impactLabel}>After purchase:</Text><Text style={s.impactAfter}>{researchResult.impactDays} days</Text></View>
+                  <View style={s.impactRow}><Text style={s.impactLabel}>Change:</Text>
+                    <Text style={[s.impactChange, researchResult.impactChange < 0 && s.impactChangeNegative]}>
+                      {researchResult.impactChange > 0 ? '+' : ''}{researchResult.impactChange} days
                     </Text>
                   </View>
-                  <View style={styles.impactRow}>
-                    <Text style={styles.impactLabel}>Change:</Text>
-                    <Text style={[
-                      styles.impactChange,
-                      researchResult.impactChange < 0 && styles.impactChangeNegative
-                    ]}>
-                      {researchResult.impactChange > 0 ? '+' : ''}
-                      {researchResult.impactChange} days
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Recommendation */}
-                <View style={styles.recommendationBox}>
-                  <Text style={styles.recommendationTitle}>💡 Recommendation</Text>
-                  <Text style={styles.recommendationText}>
-                    {researchResult.recommendation}
-                  </Text>
-                </View>
+                </LinearGradient>
+                <LinearGradient colors={T.gradients.card} style={s.recommendationBox}>
+                  <Text style={s.recommendationTitle}>💡 Recommendation</Text>
+                  <Text style={s.recommendationText}>{researchResult.recommendation}</Text>
+                </LinearGradient>
               </View>
             ) : null}
           </ScrollView>
 
           {!isResearching && !researchResult?.error && (
-            <View style={styles.researchButtonContainer}>
-              <TouchableOpacity
-                style={styles.researchCancelButton}
-                onPress={() => {
-                  setShowResearchModal(false);
-                  setResearchResult(null);
-                  setDesireName('');
-                }}
-              >
-                <Text style={styles.researchCancelText}>Cancel</Text>
+            <View style={s.researchButtonContainer}>
+              <TouchableOpacity style={s.researchCancelButton} onPress={() => { setShowResearchModal(false); setResearchResult(null); setDesireName(''); }}>
+                <Text style={s.researchCancelText}>Cancel</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.researchAddButton}
-                onPress={handleAddDesireFromResearch}
-              >
-                <Text style={styles.researchAddText}>Add to Desires</Text>
+              <TouchableOpacity style={s.researchAddButton} onPress={handleAddDesireFromResearch}>
+                <Text style={s.researchAddText}>Add to Desires</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -336,420 +202,92 @@ export default function DesiresScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0e1a',
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  summaryBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#9b59b6',
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#9b59b6',
-  },
-  summarySubtext: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  infoBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f4c430',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  addButton: {
-    backgroundColor: '#9b59b6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'center',
-  },
-  desireCard: {
-    backgroundColor: '#1a1f2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#9b59b6',
-  },
-  desireHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  desireHeaderLeft: {
-    flex: 1,
-  },
-  desireName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  aiLabel: {
-    fontSize: 12,
-    color: '#f4c430',
-    fontWeight: '600',
-  },
-  deleteButton: {
-    fontSize: 20,
-    color: '#ff4444',
-    padding: 4,
-  },
-  desireCost: {
-    fontSize: 20,
-    color: '#9b59b6',
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  desireNotes: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  viewDetailsButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-  },
-  viewDetailsText: {
-    fontSize: 14,
-    color: '#f4c430',
-    fontWeight: '600',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0a0e1a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '70%',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#f4c430',
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  modalInput: {
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  modalCancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#a0a0a0',
-    fontSize: 16,
-  },
-  modalAddButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#f4c430',
-    alignItems: 'center',
-  },
-  modalAddButtonDisabled: {
-    opacity: 0.5,
-  },
-  modalAddText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  manualButton: {
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  manualButtonText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  // Research modal styles
-  researchContainer: {
-    flex: 1,
-    backgroundColor: '#0a0e1a',
-  },
-  researchScrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 100,
-  },
-  loadingText: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginTop: 20,
-  },
-  loadingSubtext: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ff6b6b',
-    marginBottom: 12,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#f4c430',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  manualContainer: {
-    padding: 20,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-  },
-  currencySymbol: {
-    fontSize: 20,
-    color: '#9b59b6',
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 20,
-    color: '#ffffff',
-    paddingVertical: 16,
-  },
-  resultsContainer: {
-    paddingBottom: 100,
-  },
-  researchTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#f4c430',
-    marginBottom: 20,
-  },
-  productBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#9b59b6',
-  },
-  productName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  productPrice: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#9b59b6',
-    marginBottom: 12,
-  },
-  productDescription: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    lineHeight: 20,
-  },
-  impactBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  impactTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 12,
-  },
-  impactRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  impactLabel: {
-    fontSize: 16,
-    color: '#a0a0a0',
-  },
-  impactCurrent: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4ade80',
-  },
-  impactAfter: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  impactChange: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4ade80',
-  },
-  impactChangeNegative: {
-    color: '#ff6b6b',
-  },
-  recommendationBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f4c430',
-  },
-  recommendationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#f4c430',
-    marginBottom: 12,
-  },
-  recommendationText: {
-    fontSize: 16,
-    color: '#ffffff',
-    lineHeight: 24,
-  },
-  researchButtonContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    backgroundColor: '#0a0e1a',
-    borderTopWidth: 1,
-    borderTopColor: '#1a1f2e',
-  },
-  researchCancelButton: {
-    flex: 1,
-    padding: 18,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  researchCancelText: {
-    color: '#a0a0a0',
-    fontSize: 16,
-  },
-  researchAddButton: {
-    flex: 1,
-    padding: 18,
-    borderRadius: 12,
-    backgroundColor: '#9b59b6',
-    alignItems: 'center',
-  },
-  researchAddText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: T.bg },
+  scrollView: { flex: 1, padding: 20 },
+
+  summaryBox: { ...T.cardBase, borderWidth: 1.5, padding: 20 },
+  summaryLabel: { fontSize: 12, color: PURPLE + 'cc', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, fontFamily: T.fontBold },
+  summaryValue: { fontSize: 34, color: PURPLE, fontFamily: T.fontExtraBold },
+  summarySubtext: { fontSize: 13, color: T.textMuted, marginTop: 6, fontFamily: T.fontRegular },
+
+  infoBox: { ...T.cardBase, borderLeftWidth: 4, borderLeftColor: T.gold, borderColor: T.border },
+  infoText: { fontSize: 14, color: T.textSecondary, lineHeight: 21, fontFamily: T.fontRegular },
+
+  section: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 20, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  addButton: { backgroundColor: PURPLE, paddingHorizontal: 16, paddingVertical: 8, borderRadius: T.radius.sm },
+  addButtonText: { color: T.textPrimary, fontFamily: T.fontBold, fontSize: 14 },
+
+  emptyState: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 16, color: T.textMuted, marginBottom: 8, fontFamily: T.fontMedium },
+  emptySubtext: { fontSize: 14, color: T.textDim, textAlign: 'center', fontFamily: T.fontRegular },
+
+  desireCard: { ...T.cardBase, borderLeftWidth: 4, borderLeftColor: PURPLE },
+  desireHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  desireHeaderLeft: { flex: 1 },
+  desireName: { fontSize: 18, color: T.textPrimary, marginBottom: 4, fontFamily: T.fontBold },
+  aiLabel: { fontSize: 12, color: T.gold, fontFamily: T.fontSemiBold },
+  deleteButton: { fontSize: 20, color: T.redBright, padding: 4 },
+  desireCost: { fontSize: 22, color: PURPLE, marginBottom: 8, fontFamily: T.fontExtraBold },
+  desireNotes: { fontSize: 14, color: T.textSecondary, lineHeight: 20, marginBottom: 8, fontFamily: T.fontRegular },
+  viewDetailsButton: { marginTop: 8, paddingVertical: 8 },
+  viewDetailsText: { fontSize: 14, color: T.gold, fontFamily: T.fontSemiBold },
+
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: T.bg, borderTopLeftRadius: T.radius.xl, borderTopRightRadius: T.radius.xl, padding: 20, maxHeight: '70%' },
+  modalTitle: { fontSize: 24, color: T.gold, marginBottom: 20, fontFamily: T.fontExtraBold },
+  label: { fontSize: 15, color: T.textPrimary, marginBottom: 8, marginTop: 12, fontFamily: T.fontBold },
+  modalInput: { backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, fontSize: 16, color: T.textPrimary, borderWidth: 1.5, borderColor: T.border, minHeight: 80, textAlignVertical: 'top', fontFamily: T.fontRegular },
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  modalCancelButton: { flex: 1, padding: 16, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, alignItems: 'center' },
+  modalCancelText: { color: T.textSecondary, fontSize: 16, fontFamily: T.fontMedium },
+  modalAddButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.gold, alignItems: 'center' },
+  modalAddButtonDisabled: { opacity: 0.5 },
+  modalAddText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
+  manualButton: { padding: 12, alignItems: 'center', marginTop: 12 },
+  manualButtonText: { color: T.textMuted, fontSize: 14, fontFamily: T.fontRegular },
+
+  // Research
+  researchContainer: { flex: 1, backgroundColor: T.bg },
+  researchScrollView: { flex: 1, padding: 20 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 100 },
+  loadingText: { fontSize: 18, color: T.textPrimary, marginTop: 20, fontFamily: T.fontSemiBold },
+  loadingSubtext: { fontSize: 14, color: T.textMuted, marginTop: 8, textAlign: 'center', fontFamily: T.fontRegular },
+  errorContainer: { padding: 40, alignItems: 'center' },
+  errorTitle: { fontSize: 24, color: T.redBright, marginBottom: 12, fontFamily: T.fontExtraBold },
+  errorText: { fontSize: 16, color: T.textSecondary, textAlign: 'center', marginBottom: 20, fontFamily: T.fontRegular },
+  retryButton: { backgroundColor: T.gold, paddingHorizontal: 24, paddingVertical: 12, borderRadius: T.radius.sm },
+  retryButtonText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
+
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.bgCard, borderRadius: T.radius.md, paddingHorizontal: 16, borderWidth: 1.5, borderColor: T.border },
+  currencySymbol: { fontSize: 20, marginRight: 8, fontFamily: T.fontBold },
+  input: { flex: 1, fontSize: 20, color: T.textPrimary, paddingVertical: 16, fontFamily: T.fontSemiBold },
+
+  researchTitle: { fontSize: 28, color: T.gold, marginBottom: 20, fontFamily: T.fontExtraBold },
+  productBox: { ...T.cardBase, borderWidth: 1.5, padding: 20 },
+  productName: { fontSize: 20, color: T.textPrimary, marginBottom: 8, fontFamily: T.fontBold },
+  productPrice: { fontSize: 28, color: PURPLE, marginBottom: 12, fontFamily: T.fontExtraBold },
+  productDescription: { fontSize: 14, color: T.textSecondary, lineHeight: 20, fontFamily: T.fontRegular },
+
+  impactBox: { ...T.cardBase, borderColor: T.border, padding: 20 },
+  impactTitle: { fontSize: 18, color: T.textPrimary, marginBottom: 12, fontFamily: T.fontBold },
+  impactRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  impactLabel: { fontSize: 16, color: T.textSecondary, fontFamily: T.fontRegular },
+  impactCurrent: { fontSize: 16, color: T.green, fontFamily: T.fontBold },
+  impactAfter: { fontSize: 16, color: T.textPrimary, fontFamily: T.fontBold },
+  impactChange: { fontSize: 16, color: T.green, fontFamily: T.fontBold },
+  impactChangeNegative: { color: T.redBright },
+
+  recommendationBox: { ...T.cardBase, borderColor: T.border, borderLeftWidth: 4, borderLeftColor: T.gold, padding: 20 },
+  recommendationTitle: { fontSize: 18, color: T.gold, marginBottom: 12, fontFamily: T.fontBold },
+  recommendationText: { fontSize: 16, color: T.textPrimary, lineHeight: 24, fontFamily: T.fontRegular },
+
+  researchButtonContainer: { flexDirection: 'row', gap: 12, padding: 20, backgroundColor: T.bg, borderTopWidth: 1, borderTopColor: T.border },
+  researchCancelButton: { flex: 1, padding: 18, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, alignItems: 'center' },
+  researchCancelText: { color: T.textSecondary, fontSize: 16, fontFamily: T.fontMedium },
+  researchAddButton: { flex: 1, padding: 18, borderRadius: T.radius.md, backgroundColor: PURPLE, alignItems: 'center' },
+  researchAddText: { color: T.textPrimary, fontSize: 16, fontFamily: T.fontBold },
 });

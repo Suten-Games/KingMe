@@ -1,12 +1,14 @@
 // app/(tabs)/obligations.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useState, useMemo } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import type { Obligation } from '../../src/types';
 import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
+import { T } from '../../src/theme';
 
 export default function ObligationsScreen() {
   const obligations = useStore((state) => state.obligations);
@@ -17,11 +19,9 @@ export default function ObligationsScreen() {
   const updateObligation = useStore((state) => state.updateObligation);
   const toggleObligationPaid = useStore((state) => state.toggleObligationPaid);
   const toggleDebtPaid = useStore((state) => state.toggleDebtPaid);
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
-  
-  // Form state
   const [name, setName] = useState('');
   const [payee, setPayee] = useState('');
   const [amount, setAmount] = useState('');
@@ -32,325 +32,195 @@ export default function ObligationsScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
-  // Get payment data
-  const paymentStatus = useMemo(() => 
+  const paymentStatus = useMemo(() =>
     getMonthlyPaymentStatus(obligations, debts, bankAccounts, currentYear, currentMonth),
     [obligations, debts, bankAccounts, currentYear, currentMonth]
   );
-
-  const paymentEvents = useMemo(() => 
+  const paymentEvents = useMemo(() =>
     getPaymentEventsForMonth(obligations, debts, bankAccounts, currentYear, currentMonth),
     [obligations, debts, bankAccounts, currentYear, currentMonth]
   );
 
   const handleTogglePaid = (eventId: string, isPaid: boolean) => {
-    if (eventId.startsWith('obl_')) {
-      const id = eventId.replace('obl_', '');
-      toggleObligationPaid(id);
-    } else if (eventId.startsWith('debt_')) {
-      const id = eventId.replace('debt_', '');
-      toggleDebtPaid(id);
-    }
+    if (eventId.startsWith('obl_')) toggleObligationPaid(eventId.replace('obl_', ''));
+    else if (eventId.startsWith('debt_')) toggleDebtPaid(eventId.replace('debt_', ''));
   };
 
   const handleAddObligation = () => {
     if (!name || !amount) return;
-    
-    const newObligation: Obligation = {
-      id: Date.now().toString(),
-      name,
-      payee: payee || 'Various',
-      amount: parseFloat(amount),
-      category: 'other',
-      isRecurring: true,
-      dueDate: dueDate ? parseInt(dueDate): 1,
+    addObligation({
+      id: Date.now().toString(), name, payee: payee || 'Various',
+      amount: parseFloat(amount), category: 'other', isRecurring: true,
+      dueDate: dueDate ? parseInt(dueDate) : 1,
       bankAccountId: accountId || undefined,
-    };
-    
-    addObligation(newObligation);
-    
-    // Reset form
-    setName('');
-    setPayee('');
-    setAmount('');
-    setAccountId('');
-    setDueDate('');
+    });
+    setName(''); setPayee(''); setAmount(''); setAccountId(''); setDueDate('');
     setShowAddModal(false);
   };
 
   const handleEditObligation = (obligation: Obligation) => {
     setEditingObligation(obligation);
-    setName(obligation.name);
-    setPayee(obligation.payee);
+    setName(obligation.name); setPayee(obligation.payee);
     setAmount(obligation.amount.toString());
     setAccountId(obligation.bankAccountId || '');
-    setShowAddModal(true);
     setDueDate(obligation.dueDate?.toString() || '');
+    setShowAddModal(true);
   };
 
   const handleSaveEdit = () => {
     if (!editingObligation || !name || !amount) return;
-
     updateObligation(editingObligation.id, {
-      name,
-      payee: payee || 'Various',
-      amount: parseFloat(amount),
+      name, payee: payee || 'Various', amount: parseFloat(amount),
       bankAccountId: accountId || undefined,
       dueDate: dueDate ? parseInt(dueDate) : undefined,
     });
-
-    // Reset
-    setEditingObligation(null);
-    setName('');
-    setPayee('');
-    setAmount('');
-    setAccountId('');
-    setDueDate('');
-    setShowAddModal(false);
+    setEditingObligation(null); setName(''); setPayee(''); setAmount('');
+    setAccountId(''); setDueDate(''); setShowAddModal(false);
   };
 
   const handleCloseModal = () => {
-    setEditingObligation(null);
-    setName('');
-    setPayee('');
-    setAmount('');
-    setAccountId('');
-    setDueDate('');
-    setShowAddModal(false);
+    setEditingObligation(null); setName(''); setPayee(''); setAmount('');
+    setAccountId(''); setDueDate(''); setShowAddModal(false);
   };
 
-  const calculateMonthlyTotal = () => {
-    return obligations.reduce((sum, o) => sum + o.amount, 0);
-  };
+  const monthlyTotal = obligations.reduce((sum, o) => sum + o.amount, 0);
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Payment Status Banner */}
-        <PaymentStatusBanner 
-          status={paymentStatus} 
-          onShowCalendar={() => setShowCalendar(true)}
-        />
+    <View style={s.container}>
+      <ScrollView style={s.scrollView}>
+        <PaymentStatusBanner status={paymentStatus} onShowCalendar={() => setShowCalendar(true)} />
 
         {/* Summary */}
-        <View style={styles.summaryBox}>
-          <Text style={styles.summaryLabel}>Total Monthly Obligations</Text>
-          <Text style={styles.summaryValue}>${calculateMonthlyTotal().toLocaleString()}</Text>
-          <Text style={styles.summaryYearly}>${(calculateMonthlyTotal() * 12).toLocaleString()}/year</Text>
-        </View>
+        <LinearGradient colors={T.gradients.gold} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[s.summaryBox, { borderColor: T.gold + '80' }]}>
+          <Text style={s.summaryLabel}>Total Monthly Obligations</Text>
+          <Text style={s.summaryValue}>${monthlyTotal.toLocaleString()}</Text>
+          <Text style={s.summaryYearly}>${(monthlyTotal * 12).toLocaleString()}/year</Text>
+        </LinearGradient>
 
-        {/* Obligations List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Obligations</Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAddModal(true)}
-            >
-              <Text style={styles.addButtonText}>+ Add</Text>
+        {/* List */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Your Obligations</Text>
+            <TouchableOpacity style={s.addButton} onPress={() => setShowAddModal(true)}>
+              <Text style={s.addButtonText}>+ Add</Text>
             </TouchableOpacity>
           </View>
 
           {obligations.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No obligations yet</Text>
-              <Text style={styles.emptySubtext}>Tap "+ Add" to add your first obligation</Text>
+            <View style={s.emptyState}>
+              <Text style={s.emptyText}>No obligations yet</Text>
+              <Text style={s.emptySubtext}>Tap "+ Add" to add your first obligation</Text>
             </View>
           ) : (
-            obligations.slice()
-            .sort((a, b) => {
-              const dateA = a.dueDate ?? 999;
-              const dateB = b.dueDate ?? 999;
-              return dateA - dateB;
-            }).map((obligation) => (
-              <TouchableOpacity 
-                key={obligation.id} 
-                style={styles.obligationCard}
-                onPress={() => handleEditObligation(obligation)}
-              >
-                <View style={styles.obligationHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.obligationName}>{obligation.name}</Text>
-                    <Text style={styles.obligationPayee}>Paid to: {obligation.payee}</Text>
-                    {obligation.bankAccountId && (
-                      <Text style={styles.obligationAccount}>
-                        💳 {bankAccounts.find(a => a.id === obligation.bankAccountId)?.name || 'Unknown Account'}
-                      </Text>
-                    )}
-                    {!obligation.bankAccountId && (
-                      <Text style={styles.obligationWarning}>⚠️ No account assigned</Text>
-                    )}
-                    {obligation.dueDate && (
-                      <Text style={styles.obligationDueDate}>
-                        📅 Due on the {obligation.dueDate}{getDaySuffix(obligation.dueDate)} of each month
-                      </Text>
-                    )}
+            obligations.slice().sort((a, b) => (a.dueDate ?? 999) - (b.dueDate ?? 999)).map((ob) => (
+              <TouchableOpacity key={ob.id} onPress={() => handleEditObligation(ob)}>
+                <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={[s.obligationCard, { borderColor: T.gold + '40' }]}>
+                  <View style={s.obligationHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.obligationName}>{ob.name}</Text>
+                      <Text style={s.obligationPayee}>Paid to: {ob.payee}</Text>
+                      {ob.bankAccountId ? (
+                        <Text style={s.obligationAccount}>
+                          💳 {bankAccounts.find(a => a.id === ob.bankAccountId)?.name || 'Unknown'}
+                        </Text>
+                      ) : (
+                        <Text style={s.obligationWarning}>⚠️ No account assigned</Text>
+                      )}
+                      {ob.dueDate && (
+                        <Text style={s.obligationDueDate}>
+                          📅 Due on the {ob.dueDate}{getDaySuffix(ob.dueDate)} of each month
+                        </Text>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeObligation(ob.id); }} style={{ padding: 4 }}>
+                      <Text style={s.deleteButton}>✕</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TouchableOpacity 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      removeObligation(obligation.id);
-                    }}
-                    style={styles.deleteButtonContainer}
-                  >
-                    <Text style={styles.deleteButton}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.obligationAmount}>${obligation.amount.toFixed(2)}/month</Text>
+                  <Text style={s.obligationAmount}>${ob.amount.toFixed(2)}/month</Text>
+                </LinearGradient>
               </TouchableOpacity>
             ))
           )}
+
           {/* Calendar Modal */}
           <Modal visible={showCalendar} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <PaymentCalendar
-                  year={currentYear}
-                  month={currentMonth}
-                  events={paymentEvents}
-                  onDayPress={(day) => {
-                    setSelectedDay(day);
-                    setShowCalendar(false);
-                  }}
-                />
-                <TouchableOpacity onPress={() => setShowCalendar(false)}>
-                  <Text>Close</Text>
-                </TouchableOpacity>
+            <View style={s.modalOverlay}>
+              <View style={s.modalContent}>
+                <PaymentCalendar year={currentYear} month={currentMonth} events={paymentEvents}
+                  onDayPress={(day) => { setSelectedDay(day); setShowCalendar(false); }} />
+                <TouchableOpacity onPress={() => setShowCalendar(false)}><Text style={{ color: T.gold, fontFamily: T.fontSemiBold, textAlign: 'center', padding: 16 }}>Close</Text></TouchableOpacity>
               </View>
             </View>
           </Modal>
+
           {/* Day Detail Modal */}
           <Modal visible={selectedDay !== null} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
+            <View style={s.modalOverlay}>
               {selectedDay !== null && (
-                <DayPaymentsList
-                  day={selectedDay}
-                  month={currentMonth}
-                  year={currentYear}
+                <DayPaymentsList day={selectedDay} month={currentMonth} year={currentYear}
                   events={paymentEvents.filter(e => e.dueDate.getDate() === selectedDay)}
-                  onTogglePaid={handleTogglePaid}
-                  onClose={() => setSelectedDay(null)}
-                />
+                  onTogglePaid={handleTogglePaid} onClose={() => setSelectedDay(null)} />
               )}
             </View>
           </Modal>
         </View>
       </ScrollView>
 
-      {/* Add/Edit Obligation Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={handleCloseModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      {/* Add/Edit Modal */}
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={handleCloseModal}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>{editingObligation ? 'Edit Obligation' : 'Add Obligation'}</Text>
+              <Text style={s.modalTitle}>{editingObligation ? 'Edit Obligation' : 'Add Obligation'}</Text>
 
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g., Rent, Netflix, Car Payment"
-              placeholderTextColor="#666"
-              value={name}
-              onChangeText={setName}
-            />
+              <Text style={s.label}>Name</Text>
+              <TextInput style={s.modalInput} placeholder="e.g., Rent, Netflix, Car Payment" placeholderTextColor="#555" value={name} onChangeText={setName} />
 
-            <Text style={styles.label}>Who are you paying?</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g., XYZ Financial, Landlord"
-              placeholderTextColor="#666"
-              value={payee}
-              onChangeText={setPayee}
-            />
+              <Text style={s.label}>Who are you paying?</Text>
+              <TextInput style={s.modalInput} placeholder="e.g., XYZ Financial, Landlord" placeholderTextColor="#555" value={payee} onChangeText={setPayee} />
 
-            <Text style={styles.label}>Monthly Amount</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.currencySymbol}>$</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={setAmount}
-              />
-              <Text style={styles.period}>/month</Text>
-            </View>
-
-            {/* Account Picker */}
-            <Text style={styles.label}>Paid From (Optional)</Text>
-            <Text style={styles.helperText}>Assign to a bank account to track in cashflow</Text>
-            {bankAccounts.length === 0 ? (
-              <Text style={styles.noAccountsWarning}>⚠️ No bank accounts yet. Add one in Profile first.</Text>
-            ) : (
-              <View style={styles.accountList}>
-                <TouchableOpacity
-                  style={[styles.accountOption, !accountId && styles.accountOptionActive]}
-                  onPress={() => setAccountId('')}
-                >
-                  <Text style={[styles.accountOptionName, !accountId && styles.accountOptionNameActive]}>
-                    None (Don't track in cashflow)
-                  </Text>
-                  {!accountId && <Text style={styles.checkMark}>✓</Text>}
-                </TouchableOpacity>
-                {bankAccounts.map((acct) => (
-                  <TouchableOpacity
-                    key={acct.id}
-                    style={[styles.accountOption, accountId === acct.id && styles.accountOptionActive]}
-                    onPress={() => setAccountId(acct.id)}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.accountOptionName, accountId === acct.id && styles.accountOptionNameActive]}>
-                        {acct.name}
-                      </Text>
-                      <Text style={styles.accountOptionSub}>
-                        {acct.institution} · ${(acct.currentBalance ?? 0).toLocaleString()}
-                      </Text>
-                    </View>
-                    {accountId === acct.id && <Text style={styles.checkMark}>✓</Text>}
-                  </TouchableOpacity>
-                ))}
+              <Text style={s.label}>Monthly Amount</Text>
+              <View style={s.inputContainer}>
+                <Text style={s.currencySymbol}>$</Text>
+                <TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+                <Text style={s.period}>/month</Text>
               </View>
-              )}
-              <Text style={styles.label}>Due Date (Day of Month)</Text>
-              <Text style={styles.helperText}>
-                Enter 1-31. Bill will be tracked as due on this day each month.
-              </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="15"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-                value={dueDate}
-                onChangeText={(text) => {
-                  const num = parseInt(text);
-                  if (text === '' || (num >= 1 && num <= 31)) {
-                    setDueDate(text);
-                  }
-                }}
-                maxLength={2}
-              />              
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={handleCloseModal}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalAddButton, (!name || !amount) && styles.modalAddButtonDisabled]}
-                onPress={editingObligation ? handleSaveEdit : handleAddObligation}
-                disabled={!name || !amount}
-              >
-                <Text style={styles.modalAddText}>{editingObligation ? 'Save' : 'Add'}</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={s.label}>Due Day of Month (Optional)</Text>
+              <TextInput style={s.modalInput} placeholder="e.g., 1, 15" placeholderTextColor="#555" keyboardType="numeric" value={dueDate} onChangeText={setDueDate} />
+
+              <Text style={s.label}>Paid From (Optional)</Text>
+              {bankAccounts.length === 0 ? (
+                <Text style={s.noAccountsWarning}>⚠️ No bank accounts added yet</Text>
+              ) : (
+                <View style={s.accountList}>
+                  {bankAccounts.map((acct) => (
+                    <TouchableOpacity key={acct.id}
+                      style={[s.accountOption, accountId === acct.id && s.accountOptionActive]}
+                      onPress={() => setAccountId(acct.id)}>
+                      <View>
+                        <Text style={[s.accountOptionName, accountId === acct.id && s.accountOptionNameActive]}>{acct.name}</Text>
+                        <Text style={s.accountOptionSub}>{acct.institution} · ${(acct.currentBalance ?? 0).toLocaleString()}</Text>
+                      </View>
+                      {accountId === acct.id && <Text style={s.checkMark}>✓</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <View style={s.modalButtons}>
+                <TouchableOpacity style={s.modalCancelButton} onPress={handleCloseModal}>
+                  <Text style={s.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.modalAddButton, (!name || !amount) && s.modalAddButtonDisabled]}
+                  onPress={editingObligation ? handleSaveEdit : handleAddObligation}
+                  disabled={!name || !amount}>
+                  <Text style={s.modalAddText}>{editingObligation ? 'Save' : 'Add'}</Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -359,279 +229,65 @@ export default function ObligationsScreen() {
   );
 }
 
- function getDaySuffix(day: number): string {
+function getDaySuffix(day: number): string {
   if (day >= 11 && day <= 13) return 'th';
-  switch (day % 10) {
-    case 1: return 'st';
-    case 2: return 'nd';
-    case 3: return 'rd';
-    default: return 'th';
-  }
+  switch (day % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0e1a',
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  summaryBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#f4c430',
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#f4c430',
-  },
-  summaryYearly: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  addButton: {
-    backgroundColor: '#f4c430',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#0a0e1a',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'center',
-  },
-  obligationCard: {
-    backgroundColor: '#1a1f2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#f4c430',
-  },
-  obligationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  obligationName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  obligationPayee: {
-    fontSize: 14,
-    color: '#a0a0a0',
-  },
-  deleteButton: {
-    fontSize: 20,
-    color: '#ff4444',
-    padding: 4,
-  },
-  obligationAmount: {
-    fontSize: 16,
-    color: '#f4c430',
-    fontWeight: 'bold',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0a0e1a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#f4c430',
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  modalInput: {
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-  },
-  currencySymbol: {
-    fontSize: 20,
-    color: '#f4c430',
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 20,
-    color: '#ffffff',
-    paddingVertical: 16,
-  },
-  period: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  modalCancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#a0a0a0',
-    fontSize: 16,
-  },
-  modalAddButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#f4c430',
-    alignItems: 'center',
-  },
-  modalAddButtonDisabled: {
-    opacity: 0.5,
-  },
-  modalAddText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  obligationAccount: {
-    fontSize: 12,
-    color: '#4ade80',
-    marginTop: 4,
-  },
-  obligationWarning: {
-    fontSize: 12,
-    color: '#fb923c',
-    marginTop: 4,
-  },
-  deleteButtonContainer: {
-    padding: 4,
-  },
-  helperText: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-    marginTop: -4,
-  },
-  noAccountsWarning: {
-    fontSize: 14,
-    color: '#fb923c',
-    padding: 12,
-    backgroundColor: '#2a1a1e',
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  accountList: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  accountOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    backgroundColor: '#1a1f2e',
-  },
-  accountOptionActive: {
-    borderColor: '#f4c430',
-    backgroundColor: '#2a2620',
-  },
-  accountOptionName: {
-    fontSize: 15,
-    color: '#fff',
-    marginBottom: 2,
-  },
-  accountOptionNameActive: {
-    color: '#f4c430',
-    fontWeight: 'bold',
-  },
-  accountOptionSub: {
-    fontSize: 12,
-    color: '#666',
-  },
-  checkMark: {
-    fontSize: 18,
-    color: '#f4c430',
-    fontWeight: 'bold',
-  },
-  obligationDueDate: {
-    fontSize: 12,
-    color: '#60a5fa',
-    marginTop: 4,
-  },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: T.bg },
+  scrollView: { flex: 1, padding: 20 },
+
+  summaryBox: { ...T.cardBase, borderWidth: 1.5, padding: 20 },
+  summaryLabel: { fontSize: 12, color: T.gold + 'cc', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, fontFamily: T.fontBold },
+  summaryValue: { fontSize: 34, color: T.gold, fontFamily: T.fontExtraBold },
+  summaryYearly: { fontSize: 14, color: T.textMuted, marginTop: 6, fontFamily: T.fontRegular },
+
+  section: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 20, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  addButton: { backgroundColor: T.gold, paddingHorizontal: 16, paddingVertical: 8, borderRadius: T.radius.sm },
+  addButtonText: { color: T.bg, fontFamily: T.fontBold, fontSize: 14 },
+
+  emptyState: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 16, color: T.textMuted, marginBottom: 8, fontFamily: T.fontMedium },
+  emptySubtext: { fontSize: 14, color: T.textDim, textAlign: 'center', fontFamily: T.fontRegular },
+
+  obligationCard: { ...T.cardBase, borderLeftWidth: 4, borderLeftColor: T.gold },
+  obligationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  obligationName: { fontSize: 18, color: T.textPrimary, marginBottom: 4, fontFamily: T.fontBold },
+  obligationPayee: { fontSize: 14, color: T.textSecondary, fontFamily: T.fontRegular },
+  obligationAccount: { fontSize: 12, color: T.green, marginTop: 4, fontFamily: T.fontMedium },
+  obligationWarning: { fontSize: 12, color: T.orange, marginTop: 4, fontFamily: T.fontMedium },
+  obligationDueDate: { fontSize: 12, color: T.blue, marginTop: 4, fontFamily: T.fontMedium },
+  obligationAmount: { fontSize: 18, color: T.gold, fontFamily: T.fontExtraBold },
+  deleteButton: { fontSize: 20, color: T.redBright, padding: 4 },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: T.bg, borderTopLeftRadius: T.radius.xl, borderTopRightRadius: T.radius.xl, padding: 20, maxHeight: '90%' },
+  modalTitle: { fontSize: 24, color: T.gold, marginBottom: 20, fontFamily: T.fontExtraBold },
+  label: { fontSize: 15, color: T.textPrimary, marginBottom: 8, marginTop: 14, fontFamily: T.fontBold },
+  modalInput: { backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, fontSize: 16, color: T.textPrimary, borderWidth: 1.5, borderColor: T.border, fontFamily: T.fontRegular },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.bgCard, borderRadius: T.radius.md, paddingHorizontal: 16, borderWidth: 1.5, borderColor: T.border },
+  currencySymbol: { fontSize: 20, color: T.gold, marginRight: 8, fontFamily: T.fontBold },
+  input: { flex: 1, fontSize: 20, color: T.textPrimary, paddingVertical: 16, fontFamily: T.fontSemiBold },
+  period: { fontSize: 14, color: T.textMuted, marginLeft: 8, fontFamily: T.fontRegular },
+  helperText: { fontSize: 13, color: T.textMuted, marginBottom: 8, marginTop: -4, fontFamily: T.fontRegular },
+
+  noAccountsWarning: { fontSize: 14, color: T.orange, padding: 12, backgroundColor: '#2a1a1e', borderRadius: T.radius.sm, marginTop: 4, fontFamily: T.fontMedium },
+  accountList: { gap: 8, marginBottom: 8 },
+  accountOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.bgCard },
+  accountOptionActive: { borderColor: T.gold, backgroundColor: '#2a2620' },
+  accountOptionName: { fontSize: 15, color: T.textPrimary, marginBottom: 2, fontFamily: T.fontMedium },
+  accountOptionNameActive: { color: T.gold, fontFamily: T.fontBold },
+  accountOptionSub: { fontSize: 12, color: T.textMuted, fontFamily: T.fontRegular },
+  checkMark: { fontSize: 18, color: T.gold, fontFamily: T.fontBold },
+
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20, marginBottom: 20 },
+  modalCancelButton: { flex: 1, padding: 16, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, alignItems: 'center' },
+  modalCancelText: { color: T.textSecondary, fontSize: 16, fontFamily: T.fontMedium },
+  modalAddButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.gold, alignItems: 'center' },
+  modalAddButtonDisabled: { opacity: 0.5 },
+  modalAddText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
 });

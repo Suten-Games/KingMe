@@ -8,7 +8,8 @@
             "minSdkVersion": 23
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "kingme",
     "extra": {

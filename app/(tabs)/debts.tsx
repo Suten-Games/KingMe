@@ -1,41 +1,30 @@
 // app/(tabs)/debts.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import type { Debt, BankAccount } from '../../src/types';
+import { T } from '../../src/theme';
 
-// ── Standalone component so it doesn't nest inside DebtsScreen ──
 function AccountPicker({ bankAccounts, value, onChange }: { bankAccounts: BankAccount[]; value: string; onChange: (id: string) => void }) {
   return (
     <>
-      <Text style={styles.label}>Payment Account</Text>
+      <Text style={s.label}>Payment Account</Text>
       {bankAccounts.length === 0 ? (
-        <Text style={styles.noAccountsText}>⚠️ No bank accounts added yet</Text>
+        <Text style={s.noAccountsText}>⚠️ No bank accounts added yet</Text>
       ) : (
-        <View style={styles.accountsList}>
-          <TouchableOpacity
-            style={[styles.accountOption, value === '' && styles.accountOptionSelected]}
-            onPress={() => onChange('')}
-          >
-            <Text style={[styles.accountOptionText, value === '' && styles.accountOptionTextSelected]}>
-              Not assigned
-            </Text>
-            {value === '' && <Text style={styles.accountOptionCheck}>✓</Text>}
+        <View style={s.accountsList}>
+          <TouchableOpacity style={[s.accountOption, value === '' && s.accountOptionSelected]} onPress={() => onChange('')}>
+            <Text style={[s.accountOptionText, value === '' && s.accountOptionTextSelected]}>Not assigned</Text>
+            {value === '' && <Text style={s.accountOptionCheck}>✓</Text>}
           </TouchableOpacity>
-
           {bankAccounts.map((account) => (
-            <TouchableOpacity
-              key={account.id}
-              style={[styles.accountOption, value === account.id && styles.accountOptionSelected]}
-              onPress={() => onChange(account.id)}
-            >
+            <TouchableOpacity key={account.id} style={[s.accountOption, value === account.id && s.accountOptionSelected]} onPress={() => onChange(account.id)}>
               <View>
-                <Text style={[styles.accountOptionText, value === account.id && styles.accountOptionTextSelected]}>
-                  {account.name}
-                </Text>
-                <Text style={styles.accountOptionSub}>{account.institution} · ${(account.currentBalance ?? 0).toLocaleString()}</Text>
+                <Text style={[s.accountOptionText, value === account.id && s.accountOptionTextSelected]}>{account.name}</Text>
+                <Text style={s.accountOptionSub}>{account.institution} · ${(account.currentBalance ?? 0).toLocaleString()}</Text>
               </View>
-              {value === account.id && <Text style={styles.accountOptionCheck}>✓</Text>}
+              {value === account.id && <Text style={s.accountOptionCheck}>✓</Text>}
             </TouchableOpacity>
           ))}
         </View>
@@ -51,7 +40,6 @@ export default function DebtsScreen() {
   const removeDebt = useStore((state) => state.removeDebt);
   const updateDebt = useStore((state) => state.updateDebt);
 
-  // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [addName, setAddName] = useState('');
   const [addPrincipal, setAddPrincipal] = useState('');
@@ -59,7 +47,6 @@ export default function DebtsScreen() {
   const [addInterestRate, setAddInterestRate] = useState('');
   const [addBankAccountId, setAddBankAccountId] = useState('');
 
-  // Edit modal
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const [editName, setEditName] = useState('');
   const [editPrincipal, setEditPrincipal] = useState('');
@@ -67,35 +54,22 @@ export default function DebtsScreen() {
   const [editInterestRate, setEditInterestRate] = useState('');
   const [editBankAccountId, setEditBankAccountId] = useState('');
 
-  // ── Add ──
   const handleAddDebt = () => {
     if (!addName || !addPrincipal || !addMonthlyPayment) return;
-
-    const newDebt: Debt = {
-      id: Date.now().toString(),
-      name: addName,
-      principal: parseFloat(addPrincipal),
-      monthlyPayment: parseFloat(addMonthlyPayment),
+    addDebt({
+      id: Date.now().toString(), name: addName,
+      principal: parseFloat(addPrincipal), monthlyPayment: parseFloat(addMonthlyPayment),
       minimumPayment: parseFloat(addMonthlyPayment),
       interestRate: addInterestRate ? parseFloat(addInterestRate) / 100 : 0,
       ...(addBankAccountId && { bankAccountId: addBankAccountId }),
-    };
-
-    addDebt(newDebt);
-    setAddName('');
-    setAddPrincipal('');
-    setAddMonthlyPayment('');
-    setAddInterestRate('');
-    setAddBankAccountId('');
+    });
+    setAddName(''); setAddPrincipal(''); setAddMonthlyPayment(''); setAddInterestRate(''); setAddBankAccountId('');
     setShowAddModal(false);
   };
 
-  // ── Edit (opens when user taps a card) ──
   const openEdit = (debt: Debt) => {
-    setSelectedDebt(debt);
-    setEditName(debt.name);
-    setEditPrincipal(debt.principal.toString());
-    setEditMonthlyPayment(debt.monthlyPayment.toString());
+    setSelectedDebt(debt); setEditName(debt.name);
+    setEditPrincipal(debt.principal.toString()); setEditMonthlyPayment(debt.monthlyPayment.toString());
     setEditInterestRate(debt.interestRate ? (debt.interestRate * 100).toString() : '');
     setEditBankAccountId(debt.bankAccountId || '');
   };
@@ -103,8 +77,7 @@ export default function DebtsScreen() {
   const handleSaveEdit = () => {
     if (!selectedDebt) return;
     updateDebt(selectedDebt.id, {
-      name: editName,
-      principal: parseFloat(editPrincipal) || selectedDebt.principal,
+      name: editName, principal: parseFloat(editPrincipal) || selectedDebt.principal,
       monthlyPayment: parseFloat(editMonthlyPayment) || selectedDebt.monthlyPayment,
       minimumPayment: parseFloat(editMonthlyPayment) || selectedDebt.minimumPayment,
       interestRate: editInterestRate ? parseFloat(editInterestRate) / 100 : 0,
@@ -113,204 +86,140 @@ export default function DebtsScreen() {
     setSelectedDebt(null);
   };
 
-  // ── Normalize old debt records that used different field names ──
-  // Old shape: { totalAmount, remainingAmount, lender, interestRate as whole number }
-  // New shape: { principal, monthlyPayment, minimumPayment, interestRate as decimal }
   const normalize = (debt: any): Debt => ({
-    id: debt.id,
-    name: debt.name,
+    id: debt.id, name: debt.name,
     principal: debt.principal ?? debt.remainingAmount ?? debt.totalAmount ?? 0,
     monthlyPayment: debt.monthlyPayment ?? 0,
     minimumPayment: debt.minimumPayment ?? debt.monthlyPayment ?? 0,
-    interestRate: debt.interestRate != null
-      ? (debt.interestRate > 1 ? debt.interestRate / 100 : debt.interestRate) // auto-detect whole vs decimal
-      : 0,
+    interestRate: debt.interestRate != null ? (debt.interestRate > 1 ? debt.interestRate / 100 : debt.interestRate) : 0,
     bankAccountId: debt.bankAccountId,
   });
 
   const normalizedDebts = debts.map(normalize);
-
-  const getAccountName = (id?: string) => {
-    if (!id) return null;
-    return bankAccounts.find((a) => a.id === id)?.name || null;
-  };
-
-  const calculateMonthlyTotal = () => normalizedDebts.reduce((sum, d) => sum + d.monthlyPayment, 0);
-  const calculateTotalDebt = () => normalizedDebts.reduce((sum, d) => sum + d.principal, 0);
+  const getAccountName = (id?: string) => id ? bankAccounts.find((a) => a.id === id)?.name || null : null;
+  const monthlyTotal = normalizedDebts.reduce((sum, d) => sum + d.monthlyPayment, 0);
+  const totalDebt = normalizedDebts.reduce((sum, d) => sum + d.principal, 0);
   const unassignedCount = normalizedDebts.filter((d) => !d.bankAccountId).length;
 
-
-
-
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-
+    <View style={s.container}>
+      <ScrollView style={s.scrollView}>
         {/* Summary */}
-        <View style={styles.summaryBox}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Debt</Text>
-              <Text style={styles.summaryDebt}>${calculateTotalDebt().toLocaleString()}</Text>
+        <LinearGradient colors={T.gradients.red} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[s.summaryBox, { borderColor: T.redBright + '80' }]}>
+          <View style={s.summaryRow}>
+            <View style={s.summaryItem}>
+              <Text style={s.summaryLabel}>Total Debt</Text>
+              <Text style={s.summaryDebt}>${totalDebt.toLocaleString()}</Text>
             </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Monthly Payments</Text>
-              <Text style={styles.summaryPayment}>${calculateMonthlyTotal().toLocaleString()}/mo</Text>
+            <View style={s.summaryItem}>
+              <Text style={s.summaryLabel}>Monthly Payments</Text>
+              <Text style={s.summaryPayment}>${monthlyTotal.toLocaleString()}/mo</Text>
             </View>
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* Unassigned warning */}
         {unassignedCount > 0 && (
-          <View style={styles.unassignedBanner}>
-            <Text style={styles.unassignedBannerText}>
-              ⚠️ {unassignedCount} debt{unassignedCount > 1 ? 's' : ''} not assigned to an account. Tap to assign.
-            </Text>
+          <View style={s.unassignedBanner}>
+            <Text style={s.unassignedBannerText}>⚠️ {unassignedCount} debt{unassignedCount > 1 ? 's' : ''} not assigned to a bank account</Text>
           </View>
         )}
 
-        {/* Debts List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Debts</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-              <Text style={styles.addButtonText}>+ Add</Text>
+        {/* List */}
+        <View style={s.section}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Your Debts</Text>
+            <TouchableOpacity style={s.addButton} onPress={() => setShowAddModal(true)}>
+              <Text style={s.addButtonText}>+ Add</Text>
             </TouchableOpacity>
           </View>
 
-          {debts.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No debts tracked</Text>
-              <Text style={styles.emptySubtext}>Tap "+ Add" to add your first debt</Text>
+          {normalizedDebts.length === 0 ? (
+            <View style={s.emptyState}>
+              <Text style={s.emptyText}>No debts — nice!</Text>
+              <Text style={s.emptySubtext}>Add debts to track payoff and see freedom impact</Text>
             </View>
           ) : (
-            normalizedDebts.map((debt) => {
-              const accountName = getAccountName(debt.bankAccountId);
-              return (
-                <TouchableOpacity key={debt.id} style={styles.debtCard} onPress={() => openEdit(debt)}>
-                  <View style={styles.debtHeader}>
-                    <View style={styles.debtHeaderLeft}>
-                      <Text style={styles.debtName}>{debt.name}</Text>
-                      {accountName ? (
-                        <Text style={styles.debtAccount}>💳 Paid from {accountName}</Text>
+            normalizedDebts.map((debt) => (
+              <TouchableOpacity key={debt.id} onPress={() => openEdit(debt)}>
+                <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={[s.debtCard, { borderColor: T.redBright + '40' }]}>
+                  <View style={s.debtHeader}>
+                    <View style={s.debtHeaderLeft}>
+                      <Text style={s.debtName}>{debt.name}</Text>
+                      {debt.bankAccountId ? (
+                        <Text style={s.debtAccount}>💳 {getAccountName(debt.bankAccountId)}</Text>
                       ) : (
-                        <Text style={styles.debtAccountUnset}>Tap to assign account →</Text>
+                        <Text style={s.debtAccountUnset}>⚠️ No account assigned</Text>
                       )}
                     </View>
-                    <TouchableOpacity onPress={() => removeDebt(debt.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Text style={styles.deleteButton}>✕</Text>
+                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeDebt(debt.id); }}>
+                      <Text style={s.deleteButton}>✕</Text>
                     </TouchableOpacity>
                   </View>
-
-                  <View style={styles.debtDetails}>
-                    <View style={styles.debtDetail}>
-                      <Text style={styles.debtDetailLabel}>Remaining</Text>
-                      <Text style={styles.debtDetailValue}>${debt.principal.toLocaleString()}</Text>
+                  <View style={s.debtDetails}>
+                    <View style={s.debtDetail}>
+                      <Text style={s.debtDetailLabel}>Balance</Text>
+                      <Text style={s.debtDetailValue}>${debt.principal.toLocaleString()}</Text>
                     </View>
-                    <View style={styles.debtDetail}>
-                      <Text style={styles.debtDetailLabel}>Monthly</Text>
-                      <Text style={styles.debtPayment}>${debt.monthlyPayment.toLocaleString()}/mo</Text>
+                    <View style={s.debtDetail}>
+                      <Text style={s.debtDetailLabel}>Payment</Text>
+                      <Text style={s.debtPayment}>${debt.monthlyPayment.toLocaleString()}/mo</Text>
                     </View>
-                    <View style={styles.debtDetail}>
-                      <Text style={styles.debtDetailLabel}>Rate</Text>
-                      <Text style={styles.debtDetailValue}>
-                        {debt.interestRate ? (debt.interestRate * 100).toFixed(1) + '%' : '—'}
-                      </Text>
+                    <View style={s.debtDetail}>
+                      <Text style={s.debtDetailLabel}>Rate</Text>
+                      <Text style={s.debtDetailValue}>{(debt.interestRate * 100).toFixed(1)}%</Text>
                     </View>
                   </View>
-                </TouchableOpacity>
-              );
-            })
+                </LinearGradient>
+              </TouchableOpacity>
+            ))
           )}
         </View>
       </ScrollView>
 
-      {/* ── ADD MODAL ── */}
-      <Modal visible={showAddModal} animationType="slide" transparent={true} onRequestClose={() => setShowAddModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      {/* Add Modal */}
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
             <ScrollView>
-              <Text style={styles.modalTitle}>Add Debt</Text>
-
-              <Text style={styles.label}>Name</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g., Credit Card, Student Loan" placeholderTextColor="#666" value={addName} onChangeText={setAddName} />
-
-              <Text style={styles.label}>Total Amount Owed</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={addPrincipal} onChangeText={setAddPrincipal} />
-              </View>
-
-              <Text style={styles.label}>Monthly Payment</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={addMonthlyPayment} onChangeText={setAddMonthlyPayment} />
-                <Text style={styles.period}>/mo</Text>
-              </View>
-
-              <Text style={styles.label}>Interest Rate (optional)</Text>
-              <View style={styles.inputContainer}>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={addInterestRate} onChangeText={setAddInterestRate} />
-                <Text style={styles.percent}>%</Text>
-              </View>
-
+              <Text style={s.modalTitle}>Add Debt</Text>
+              <Text style={s.label}>Name</Text>
+              <TextInput style={s.modalInput} placeholder="e.g., Student Loan, Car Payment" placeholderTextColor="#555" value={addName} onChangeText={setAddName} />
+              <Text style={s.label}>Total Amount Owed</Text>
+              <View style={s.inputContainer}><Text style={s.currencySymbol}>$</Text><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={addPrincipal} onChangeText={setAddPrincipal} /></View>
+              <Text style={s.label}>Monthly Payment</Text>
+              <View style={s.inputContainer}><Text style={s.currencySymbol}>$</Text><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={addMonthlyPayment} onChangeText={setAddMonthlyPayment} /><Text style={s.period}>/mo</Text></View>
+              <Text style={s.label}>Interest Rate (optional)</Text>
+              <View style={s.inputContainer}><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={addInterestRate} onChangeText={setAddInterestRate} /><Text style={s.percent}>%</Text></View>
               <AccountPicker bankAccounts={bankAccounts} value={addBankAccountId} onChange={setAddBankAccountId} />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancelButton} onPress={() => setShowAddModal(false)}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalAddButton, (!addName || !addPrincipal || !addMonthlyPayment) && styles.modalAddButtonDisabled]}
-                  onPress={handleAddDebt}
-                  disabled={!addName || !addPrincipal || !addMonthlyPayment}
-                >
-                  <Text style={styles.modalAddText}>Add</Text>
-                </TouchableOpacity>
+              <View style={s.modalButtons}>
+                <TouchableOpacity style={s.modalCancelButton} onPress={() => setShowAddModal(false)}><Text style={s.modalCancelText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[s.modalAddButton, (!addName || !addPrincipal || !addMonthlyPayment) && s.modalAddButtonDisabled]} onPress={handleAddDebt} disabled={!addName || !addPrincipal || !addMonthlyPayment}><Text style={s.modalAddText}>Add</Text></TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* ── EDIT MODAL (tap a debt card) ── */}
-      <Modal visible={selectedDebt !== null} animationType="slide" transparent={true} onRequestClose={() => setSelectedDebt(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      {/* Edit Modal */}
+      <Modal visible={selectedDebt !== null} animationType="slide" transparent onRequestClose={() => setSelectedDebt(null)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
             <ScrollView>
-              <Text style={styles.modalTitle}>Edit Debt</Text>
-
-              <Text style={styles.label}>Name</Text>
-              <TextInput style={styles.modalInput} placeholder="Debt name" placeholderTextColor="#666" value={editName} onChangeText={setEditName} />
-
-              <Text style={styles.label}>Total Amount Owed</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={editPrincipal} onChangeText={setEditPrincipal} />
-              </View>
-
-              <Text style={styles.label}>Monthly Payment</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={editMonthlyPayment} onChangeText={setEditMonthlyPayment} />
-                <Text style={styles.period}>/mo</Text>
-              </View>
-
-              <Text style={styles.label}>Interest Rate (optional)</Text>
-              <View style={styles.inputContainer}>
-                <TextInput style={styles.input} placeholder="0" placeholderTextColor="#666" keyboardType="numeric" value={editInterestRate} onChangeText={setEditInterestRate} />
-                <Text style={styles.percent}>%</Text>
-              </View>
-
+              <Text style={s.modalTitle}>Edit Debt</Text>
+              <Text style={s.label}>Name</Text>
+              <TextInput style={s.modalInput} placeholder="Debt name" placeholderTextColor="#555" value={editName} onChangeText={setEditName} />
+              <Text style={s.label}>Total Amount Owed</Text>
+              <View style={s.inputContainer}><Text style={s.currencySymbol}>$</Text><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={editPrincipal} onChangeText={setEditPrincipal} /></View>
+              <Text style={s.label}>Monthly Payment</Text>
+              <View style={s.inputContainer}><Text style={s.currencySymbol}>$</Text><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={editMonthlyPayment} onChangeText={setEditMonthlyPayment} /><Text style={s.period}>/mo</Text></View>
+              <Text style={s.label}>Interest Rate (optional)</Text>
+              <View style={s.inputContainer}><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={editInterestRate} onChangeText={setEditInterestRate} /><Text style={s.percent}>%</Text></View>
               <AccountPicker bankAccounts={bankAccounts} value={editBankAccountId} onChange={setEditBankAccountId} />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancelButton} onPress={() => setSelectedDebt(null)}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalSaveButton} onPress={handleSaveEdit}>
-                  <Text style={styles.modalSaveText}>Save</Text>
-                </TouchableOpacity>
+              <View style={s.modalButtons}>
+                <TouchableOpacity style={s.modalCancelButton} onPress={() => setSelectedDebt(null)}><Text style={s.modalCancelText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={s.modalSaveButton} onPress={handleSaveEdit}><Text style={s.modalSaveText}>Save</Text></TouchableOpacity>
               </View>
             </ScrollView>
           </View>
@@ -320,75 +229,69 @@ export default function DebtsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0e1a' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: T.bg },
   scrollView: { flex: 1, padding: 20 },
 
-  // Summary
-  summaryBox: { backgroundColor: '#1a1f2e', padding: 20, borderRadius: 12, marginBottom: 12, borderWidth: 2, borderColor: '#ff6b6b' },
+  summaryBox: { ...T.cardBase, borderWidth: 1.5, padding: 20 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryItem: { flex: 1 },
-  summaryLabel: { fontSize: 14, color: '#a0a0a0', marginBottom: 4 },
-  summaryDebt: { fontSize: 24, fontWeight: 'bold', color: '#ffffff' },
-  summaryPayment: { fontSize: 24, fontWeight: 'bold', color: '#ff6b6b' },
+  summaryLabel: { fontSize: 12, color: T.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6, fontFamily: T.fontBold },
+  summaryDebt: { fontSize: 26, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  summaryPayment: { fontSize: 26, color: T.redBright, fontFamily: T.fontExtraBold },
 
-  // Unassigned banner
-  unassignedBanner: { backgroundColor: '#2a1a1e', borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#ff6b6b44' },
-  unassignedBannerText: { fontSize: 14, color: '#ff9f43', textAlign: 'center' },
+  unassignedBanner: { backgroundColor: '#2a1a1e', borderRadius: T.radius.md, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: T.redBright + '44' },
+  unassignedBannerText: { fontSize: 14, color: T.orange, textAlign: 'center', fontFamily: T.fontMedium },
 
-  // List
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff' },
-  addButton: { backgroundColor: '#ff6b6b', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  addButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
+  sectionTitle: { fontSize: 20, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  addButton: { backgroundColor: T.redBright, paddingHorizontal: 16, paddingVertical: 8, borderRadius: T.radius.sm },
+  addButtonText: { color: T.textPrimary, fontFamily: T.fontBold, fontSize: 14 },
   emptyState: { padding: 40, alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#666', marginBottom: 8 },
-  emptySubtext: { fontSize: 14, color: '#444', textAlign: 'center' },
+  emptyText: { fontSize: 16, color: T.textMuted, marginBottom: 8, fontFamily: T.fontMedium },
+  emptySubtext: { fontSize: 14, color: T.textDim, textAlign: 'center', fontFamily: T.fontRegular },
 
-  // Debt card (tappable)
-  debtCard: { backgroundColor: '#1a1f2e', padding: 16, borderRadius: 12, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#ff6b6b' },
+  debtCard: { ...T.cardBase, borderLeftWidth: 4, borderLeftColor: T.redBright },
   debtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   debtHeaderLeft: { flex: 1, marginRight: 12 },
-  debtName: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
-  debtAccount: { fontSize: 13, color: '#4ade80' },
-  debtAccountUnset: { fontSize: 13, color: '#ff9f43', fontStyle: 'italic' },
-  deleteButton: { fontSize: 20, color: '#ff4444', padding: 4 },
+  debtName: { fontSize: 18, color: T.textPrimary, marginBottom: 4, fontFamily: T.fontBold },
+  debtAccount: { fontSize: 13, color: T.green, fontFamily: T.fontMedium },
+  debtAccountUnset: { fontSize: 13, color: T.orange, fontStyle: 'italic', fontFamily: T.fontMedium },
+  deleteButton: { fontSize: 20, color: T.redBright, padding: 4 },
   debtDetails: { flexDirection: 'row', justifyContent: 'space-between' },
   debtDetail: { flex: 1 },
-  debtDetailLabel: { fontSize: 12, color: '#666', marginBottom: 4 },
-  debtDetailValue: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
-  debtPayment: { fontSize: 14, color: '#ff6b6b', fontWeight: 'bold' },
+  debtDetailLabel: { fontSize: 11, color: T.textMuted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: T.fontBold },
+  debtDetailValue: { fontSize: 15, color: T.textPrimary, fontFamily: T.fontSemiBold },
+  debtPayment: { fontSize: 15, color: T.redBright, fontFamily: T.fontBold },
 
-  // Modal shared
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#0a0e1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#ff6b6b', marginBottom: 20 },
-  label: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 8, marginTop: 12 },
-  modalInput: { backgroundColor: '#1a1f2e', borderRadius: 12, padding: 16, fontSize: 16, color: '#ffffff', borderWidth: 2, borderColor: '#2a2f3e' },
-  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a1f2e', borderRadius: 12, paddingHorizontal: 16, borderWidth: 2, borderColor: '#2a2f3e' },
-  currencySymbol: { fontSize: 20, color: '#ff6b6b', marginRight: 8 },
-  input: { flex: 1, fontSize: 20, color: '#ffffff', paddingVertical: 16 },
-  period: { fontSize: 14, color: '#666', marginLeft: 8 },
-  percent: { fontSize: 16, color: '#666', marginLeft: 8 },
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: T.bg, borderTopLeftRadius: T.radius.xl, borderTopRightRadius: T.radius.xl, padding: 20, maxHeight: '85%' },
+  modalTitle: { fontSize: 24, color: T.redBright, marginBottom: 20, fontFamily: T.fontExtraBold },
+  label: { fontSize: 15, color: T.textPrimary, marginBottom: 8, marginTop: 12, fontFamily: T.fontBold },
+  modalInput: { backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, fontSize: 16, color: T.textPrimary, borderWidth: 1.5, borderColor: T.border, fontFamily: T.fontRegular },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.bgCard, borderRadius: T.radius.md, paddingHorizontal: 16, borderWidth: 1.5, borderColor: T.border },
+  currencySymbol: { fontSize: 20, color: T.redBright, marginRight: 8, fontFamily: T.fontBold },
+  input: { flex: 1, fontSize: 20, color: T.textPrimary, paddingVertical: 16, fontFamily: T.fontSemiBold },
+  period: { fontSize: 14, color: T.textMuted, marginLeft: 8, fontFamily: T.fontRegular },
+  percent: { fontSize: 16, color: T.textMuted, marginLeft: 8, fontFamily: T.fontRegular },
 
-  // Account picker
-  noAccountsText: { fontSize: 14, color: '#ff6b6b', padding: 12, backgroundColor: '#2a1a1e', borderRadius: 8, marginTop: 4 },
+  noAccountsText: { fontSize: 14, color: T.redBright, padding: 12, backgroundColor: '#2a1a1e', borderRadius: T.radius.sm, fontFamily: T.fontMedium },
   accountsList: { gap: 8, marginTop: 4 },
-  accountOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 10, borderWidth: 2, borderColor: '#2a2f3e', backgroundColor: '#1a1f2e' },
-  accountOptionSelected: { borderColor: '#4ade80', backgroundColor: '#1a2f1e' },
-  accountOptionText: { fontSize: 15, color: '#ffffff', marginBottom: 2 },
-  accountOptionTextSelected: { color: '#4ade80', fontWeight: 'bold' },
-  accountOptionSub: { fontSize: 12, color: '#666' },
-  accountOptionCheck: { fontSize: 18, color: '#4ade80', fontWeight: 'bold' },
+  accountOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.bgCard },
+  accountOptionSelected: { borderColor: T.green, backgroundColor: '#1a2f1e' },
+  accountOptionText: { fontSize: 15, color: T.textPrimary, marginBottom: 2, fontFamily: T.fontMedium },
+  accountOptionTextSelected: { color: T.green, fontFamily: T.fontBold },
+  accountOptionSub: { fontSize: 12, color: T.textMuted, fontFamily: T.fontRegular },
+  accountOptionCheck: { fontSize: 18, color: T.green, fontFamily: T.fontBold },
 
-  // Modal buttons
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 20 },
-  modalCancelButton: { flex: 1, padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#2a2f3e', alignItems: 'center' },
-  modalCancelText: { color: '#a0a0a0', fontSize: 16 },
-  modalAddButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#ff6b6b', alignItems: 'center' },
+  modalCancelButton: { flex: 1, padding: 16, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, alignItems: 'center' },
+  modalCancelText: { color: T.textSecondary, fontSize: 16, fontFamily: T.fontMedium },
+  modalAddButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.redBright, alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
-  modalAddText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
-  modalSaveButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
-  modalSaveText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
+  modalAddText: { color: T.textPrimary, fontSize: 16, fontFamily: T.fontBold },
+  modalSaveButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.green, alignItems: 'center' },
+  modalSaveText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
 });

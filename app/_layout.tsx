@@ -1,11 +1,42 @@
-// app/_layout.tsx - FIXED VERSION
+// app/_layout.tsx
+import { useEffect, useState } from 'react';
+import { View, StyleSheet, Image } from 'react-native';
 import { Stack } from 'expo-router';
 import { WalletProvider } from '@/providers/wallet-provider';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_800ExtraBold,
+} from '@expo-google-fonts/inter';
 
-// ✅ CRITICAL: Import polyfills FIRST, before any other imports
+// CRITICAL: Import polyfills FIRST
 import '../src/polyfills';
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
+  });
+
+  // Show splash while fonts load
+  if (!fontsLoaded) {
+    return (
+      <View style={splash.container}>
+        <Image
+          source={require('../src/assets/images/kingmelogo.jpg')}
+          style={splash.logo}
+          resizeMode="contain"
+        />
+      </View>
+    );
+  }
+
   return (
     <WalletProvider>
       <Stack>
@@ -15,3 +46,16 @@ export default function RootLayout() {
     </WalletProvider>
   );
 }
+
+const splash = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0a0e1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 120,
+    height: 120,
+  },
+});
