@@ -1,13 +1,14 @@
 // src/components/assets/SKRCard.tsx
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../services/skr';
 
 interface SKRCardProps {
   holding: SKRHolding;
   income: SKRIncomeSnapshot;
+  onEdit?: () => void;
 }
 
-export default function SKRCard({ holding, income }: SKRCardProps) {
+export default function SKRCard({ holding, income, onEdit }: SKRCardProps) {
   const stakedPercentage = holding.totalBalance > 0 
     ? (holding.stakedBalance / holding.totalBalance) * 100 
     : 0;
@@ -22,10 +23,17 @@ export default function SKRCard({ holding, income }: SKRCardProps) {
             <Text style={styles.subtitle}>Auto-detected from wallet</Text>
           </View>
         </View>
-        <View style={styles.apyBadge}>
-          <Text style={styles.apyText}>
-            {((holding.apy ?? 0) * 100).toFixed(0)}% APY
-          </Text>
+        <View style={styles.headerRight}>
+          <View style={styles.apyBadge}>
+            <Text style={styles.apyText}>
+              {((holding.apy ?? 0) * 100).toFixed(0)}% APY
+            </Text>
+          </View>
+          {onEdit && (
+            <TouchableOpacity onPress={onEdit} style={styles.editBtn}>
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -85,6 +93,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   logo: {
     fontSize: 28,
@@ -100,6 +109,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 1,
   },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
   apyBadge: {
     backgroundColor: '#f4c43022',
     borderWidth: 1,
@@ -112,6 +125,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     color: '#f4c430',
+  },
+  editBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#4ade80',
+  },
+  editBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4ade80',
   },
   barBackground: {
     height: 8,
