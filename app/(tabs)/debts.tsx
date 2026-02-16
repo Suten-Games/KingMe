@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput 
 import { useState, useMemo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
+import { useRouter } from 'expo-router';
 import type { Debt, BankAccount  } from '../../src/types';
 import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
@@ -92,6 +93,7 @@ function AccountPicker({ bankAccounts, value, onChange }: { bankAccounts: BankAc
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function DebtsScreen() {
+  const router = useRouter();
   const debts = useStore((state) => state.debts);
   const obligations = useStore((state) => state.obligations);
   const bankAccounts = useStore((state) => state.bankAccounts);
@@ -332,7 +334,7 @@ export default function DebtsScreen() {
                 : 0;
 
               return (
-                <TouchableOpacity key={debt.id} onPress={() => openEdit(debt)} activeOpacity={0.7}>
+                <TouchableOpacity key={debt.id} onPress={() => router.push(`/debt/${debt.id}`)} activeOpacity={0.7}>
                   <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={[s.debtCard, { borderColor: isPaid ? T.green + '60' : T.redBright + '40' }]}>
 
@@ -362,9 +364,14 @@ export default function DebtsScreen() {
                         )}
                       </View>
 
-                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeDebt(debt.id); }} style={{ padding: 4 }}>
-                        <Text style={s.deleteButton}>✕</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); openEdit(debt); }} style={{ padding: 4 }}>
+                          <Text style={s.editButton}>✎</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeDebt(debt.id); }} style={{ padding: 4 }}>
+                          <Text style={s.deleteButton}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
 
                     {/* Details row */}
@@ -415,6 +422,13 @@ export default function DebtsScreen() {
                         <Text style={s.paidBadgeText}>✓ Paid This Month</Text>
                       </View>
                     )}
+
+                    {/* Tap hint */}
+                    <View style={s.tapHint}>
+                      <Text style={s.tapHintText}>
+                        💳 {bankTransactions.filter(t => t.bankAccountId === debt.id).length} transactions · Tap to view →
+                      </Text>
+                    </View>
                   </LinearGradient>
                 </TouchableOpacity>
               );
@@ -614,6 +628,7 @@ const s = StyleSheet.create({
   debtAccountUnset: { fontSize: 13, color: T.orange, fontStyle: 'italic', fontFamily: T.fontMedium },
   debtDueDate: { fontSize: 12, color: T.blue, marginTop: 4, fontFamily: T.fontMedium },
   deleteButton: { fontSize: 20, color: T.redBright, padding: 4 },
+  editButton: { fontSize: 18, color: '#60a5fa', padding: 4 },
 
   // Paid toggle checkbox
   paidToggle: {
@@ -642,6 +657,8 @@ const s = StyleSheet.create({
   // Paid badge
   paidBadge: { backgroundColor: T.green + '20', borderRadius: T.radius.sm, paddingVertical: 6, paddingHorizontal: 12, alignSelf: 'flex-start', marginTop: 10 },
   paidBadgeText: { fontSize: 12, color: T.green, fontFamily: T.fontBold },
+  tapHint: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: T.border, alignItems: 'center' },
+  tapHintText: { fontSize: 12, color: T.textMuted, fontFamily: T.fontRegular },
 
   // Calendar close
   closeCalendarText: { color: T.gold, fontFamily: T.fontSemiBold, textAlign: 'center', padding: 16 },
