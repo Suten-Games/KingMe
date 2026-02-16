@@ -1,5 +1,5 @@
 // src/utils/csvBankImport.ts
-import type { BankTransaction, BankTransactionCategory } from '../types/bankTransaction';
+import { BankTransaction, BankTransactionCategory } from "@/types/bankTransactionTypes";
 
 /**
  * Auto-categorization rules based on transaction description keywords.
@@ -9,76 +9,76 @@ const AUTO_CATEGORY_RULES: Array<{
   keywords: string[];
   category: BankTransactionCategory;
 }> = [
-  // Income
-  { keywords: ['payroll', 'direct dep', 'salary', 'wages', 'employer'], category: 'income_salary' },
-  { keywords: ['venmo', 'zelle', 'cashapp', 'paypal'], category: 'income_transfer_in' },
-  { keywords: ['refund', 'return', 'credit adj', 'rebate'], category: 'income_refund' },
-  { keywords: ['9dtpayment', 'interest', 'dividend', 'princ'], category: 'income_other' },
+    // Income
+    { keywords: ['payroll', 'direct dep', 'salary', 'wages', 'employer', 'ach credit'], category: 'income_salary' },
+    { keywords: ['venmo', 'zelle', 'cashapp', 'paypal'], category: 'income_transfer_in' },
+    { keywords: ['refund', 'return', 'credit adj', 'rebate'], category: 'income_refund' },
+    { keywords: ['9dtpayment', 'interest', 'dividend', 'princ'], category: 'income_other' },
 
-  // Housing
-  { keywords: ['rent', 'lease', 'landlord', 'property mgmt'], category: 'housing_rent' },
-  { keywords: ['mortgage', 'home loan', 'escrow'], category: 'housing_mortgage' },
+    // Housing
+    { keywords: ['rent', 'lease', 'landlord', 'property mgmt'], category: 'housing_rent' },
+    { keywords: ['mortgage', 'home loan', 'escrow'], category: 'housing_mortgage' },
 
-  // Utilities
-  { keywords: ['electric', 'power', 'energy', 'eversource', 'con edison', 'duke energy', 'pge'], category: 'utilities_electric' },
-  { keywords: ['water', 'sewer', 'water bill'], category: 'utilities_water' },
-  { keywords: ['gas bill', 'natural gas', 'gas co'], category: 'utilities_gas' },
-  { keywords: ['comcast', 'xfinity', 'spectrum', 'att internet', 'verizon fios', 'internet', 'wifi', 'broadband'], category: 'utilities_internet' },
-  { keywords: ['t-mobile', 'tmobile', 'at&t', 'verizon wireless', 'phone bill', 'sprint', 'mint mobile', 'cricket', 'postpaid'], category: 'utilities_phone' },
+    // Utilities
+    { keywords: ['electric', 'power', 'energy', 'eversource', 'con edison', 'duke energy', 'pge'], category: 'utilities_electric' },
+    { keywords: ['water', 'sewer', 'water bill'], category: 'utilities_water' },
+    { keywords: ['gas bill', 'natural gas', 'gas co'], category: 'utilities_gas' },
+    { keywords: ['comcast', 'xfinity', 'spectrum', 'att internet', 'verizon fios', 'internet', 'wifi', 'broadband'], category: 'utilities_internet' },
+    { keywords: ['t-mobile', 'tmobile', 'at&t', 'verizon wireless', 'phone bill', 'sprint', 'mint mobile', 'cricket', 'postpaid'], category: 'utilities_phone' },
 
-  // Food
-  { keywords: ['walmart', 'target', 'costco', 'kroger', 'safeway', 'publix', 'whole foods', 'trader joe', 'aldi', 'grocery', 'heb ', 'piggly'], category: 'food_grocery' },
-  { keywords: ['uber eats', 'doordash', 'grubhub', 'instacart', 'postmates', 'delivery'], category: 'food_delivery' },
-  { keywords: ['starbucks', 'dunkin', 'coffee', 'peets', 'dutch bros'], category: 'food_coffee' },
-  { keywords: ['restaurant', 'dine', 'dining', 'pizza', 'burger', 'taco', 'sushi', 'bar ', 'grill', 'bbq', 'mcdonald', 'wendy', 'chick-fil', 'chipotle', 'panera', 'olive garden', 'applebee', 'ihop', 'waffle'], category: 'food_restaurant' },
+    // Food
+    { keywords: ['walmart', 'target', 'costco', 'kroger', 'safeway', 'publix', 'whole foods', 'trader joe', 'aldi', 'grocery', 'heb ', 'piggly'], category: 'food_grocery' },
+    { keywords: ['uber eats', 'doordash', 'grubhub', 'instacart', 'postmates', 'delivery'], category: 'food_delivery' },
+    { keywords: ['starbucks', 'dunkin', 'coffee', 'peets', 'dutch bros'], category: 'food_coffee' },
+    { keywords: ['restaurant', 'dine', 'dining', 'pizza', 'burger', 'taco', 'sushi', 'bar ', 'grill', 'bbq', 'mcdonald', 'wendy', 'chick-fil', 'chipotle', 'panera', 'olive garden', 'applebee', 'ihop', 'waffle'], category: 'food_restaurant' },
 
-  // Transport
-  { keywords: ['shell', 'exxon', 'bp ', 'chevron', 'gas station', 'fuel', 'gasoline', 'speedway', 'wawa', 'sunoco'], category: 'transport_fuel' },
-  { keywords: ['uber', 'lyft', 'rideshare'], category: 'transport_rideshare' },
-  { keywords: ['parking', 'meter', 'garage'], category: 'transport_parking' },
-  { keywords: ['mta', 'metro', 'transit', 'bus', 'subway', 'rail'], category: 'transport_public' },
-  { keywords: ['autozone', 'jiffy', 'meineke', 'mechanic', 'tire', 'oil change', 'car wash'], category: 'transport_maintenance' },
+    // Transport
+    { keywords: ['shell', 'exxon', 'bp ', 'chevron', 'gas station', 'fuel', 'gasoline', 'speedway', 'wawa', 'sunoco'], category: 'transport_fuel' },
+    { keywords: ['uber', 'lyft', 'rideshare'], category: 'transport_rideshare' },
+    { keywords: ['parking', 'meter', 'garage'], category: 'transport_parking' },
+    { keywords: ['mta', 'metro', 'transit', 'bus', 'subway', 'rail'], category: 'transport_public' },
+    { keywords: ['autozone', 'jiffy', 'meineke', 'mechanic', 'tire', 'oil change', 'car wash'], category: 'transport_maintenance' },
 
-  // Insurance
-  { keywords: ['geico', 'progressive', 'allstate', 'state farm', 'auto insurance', 'car insurance'], category: 'insurance_auto' },
-  { keywords: ['health insurance', 'medical insurance', 'anthem', 'blue cross', 'cigna', 'aetna', 'united health', 'kaiser'], category: 'insurance_health' },
-  { keywords: ['life insurance', 'term life', 'whole life'], category: 'insurance_life' },
-  { keywords: ['home insurance', 'homeowner', 'renter insurance', 'renters ins'], category: 'insurance_home' },
+    // Insurance
+    { keywords: ['geico', 'progressive', 'allstate', 'state farm', 'auto insurance', 'car insurance'], category: 'insurance_auto' },
+    { keywords: ['health insurance', 'medical insurance', 'anthem', 'blue cross', 'cigna', 'aetna', 'united health', 'kaiser'], category: 'insurance_health' },
+    { keywords: ['life insurance', 'term life', 'whole life'], category: 'insurance_life' },
+    { keywords: ['home insurance', 'homeowner', 'renter insurance', 'renters ins'], category: 'insurance_home' },
 
-  // Medical
-  { keywords: ['cvs', 'walgreens', 'pharmacy', 'rite aid', 'prescription'], category: 'medical_pharmacy' },
-  { keywords: ['doctor', 'clinic', 'hospital', 'medical', 'urgent care', 'health center'], category: 'medical_doctor' },
-  { keywords: ['dentist', 'dental', 'orthodont'], category: 'medical_dental' },
+    // Medical
+    { keywords: ['cvs', 'walgreens', 'pharmacy', 'rite aid', 'prescription'], category: 'medical_pharmacy' },
+    { keywords: ['doctor', 'clinic', 'hospital', 'medical', 'urgent care', 'health center'], category: 'medical_doctor' },
+    { keywords: ['dentist', 'dental', 'orthodont'], category: 'medical_dental' },
 
-  // Subscriptions
-  { keywords: ['netflix', 'hulu', 'disney+', 'hbo', 'paramount', 'peacock', 'apple tv', 'youtube premium', 'spotify', 'apple music', 'amazon prime', 'prime pmts'], category: 'subscription_streaming' },
-  { keywords: ['adobe', 'microsoft', 'google storage', 'icloud', 'dropbox', 'github', 'notion', 'slack', 'openai', 'chatgpt', 'apple.com/bill', 'asurion'], category: 'subscription_software' },
-  { keywords: ['gym', 'fitness', 'planet fitness', 'la fitness', 'ymca', 'equinox', 'crossfit', 'orange theory'], category: 'subscription_gym' },
+    // Subscriptions
+    { keywords: ['netflix', 'hulu', 'disney+', 'hbo', 'paramount', 'peacock', 'apple tv', 'youtube premium', 'spotify', 'apple music', 'amazon prime', 'prime pmts'], category: 'subscription_streaming' },
+    { keywords: ['adobe', 'microsoft', 'google storage', 'icloud', 'dropbox', 'github', 'notion', 'slack', 'openai', 'chatgpt', 'apple.com/bill', 'asurion'], category: 'subscription_software' },
+    { keywords: ['gym', 'fitness', 'planet fitness', 'la fitness', 'ymca', 'equinox', 'crossfit', 'orange theory'], category: 'subscription_gym' },
 
-  // Personal
-  { keywords: ['amazon', 'amzn'], category: 'other' }, // Amazon is ambiguous - user can recategorize
-  { keywords: ['clothing', 'apparel', 'shoes', 'nike', 'adidas', 'gap ', 'old navy', 'h&m', 'zara', 'nordstrom'], category: 'personal_clothing' },
-  { keywords: ['haircut', 'salon', 'barber', 'spa', 'nail'], category: 'personal_grooming' },
+    // Personal
+    { keywords: ['amazon', 'amzn'], category: 'other' }, // Amazon is ambiguous - user can recategorize
+    { keywords: ['clothing', 'apparel', 'shoes', 'nike', 'nike.com', 'adidas', 'gap ', 'old navy', 'h&m', 'zara', 'nordstrom'], category: 'personal_clothing' },
+    { keywords: ['haircut', 'salon', 'barber', 'spa', 'nail'], category: 'personal_grooming' },
 
-  // Entertainment
-  { keywords: ['ticketmaster', 'stubhub', 'concert', 'movie', 'amc', 'regal', 'cinema'], category: 'entertainment_events' },
-  { keywords: ['steam', 'playstation', 'xbox', 'nintendo', 'gaming'], category: 'entertainment_hobbies' },
-  { keywords: ['airline', 'hotel', 'airbnb', 'booking.com', 'expedia', 'travel', 'marriott', 'hilton'], category: 'entertainment_travel' },
+    // Entertainment
+    { keywords: ['ticketmaster', 'stubhub', 'concert', 'movie', 'amc', 'regal', 'cinema'], category: 'entertainment_events' },
+    { keywords: ['steam', 'playstation', 'xbox', 'nintendo', 'gaming'], category: 'entertainment_hobbies' },
+    { keywords: ['airline', 'hotel', 'airbnb', 'booking.com', 'expedia', 'travel', 'marriott', 'hilton'], category: 'entertainment_travel' },
 
-  // Financial
-  { keywords: ['atm', 'withdrawal', 'cash back'], category: 'other' },
-  { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage'], category: 'financial_investment' },
-  { keywords: ['savings transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
-  { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment'], category: 'financial_debt_payment' },
-  { keywords: ['overdraft', 'nsf', 'fee', 'service charge', 'monthly fee', 'maintenance fee'], category: 'financial_fees' },
-  { keywords: ['irs', 'tax', 'state tax', 'property tax'], category: 'financial_taxes' },
+    // Financial
+    { keywords: ['atm', 'withdrawal', 'cash back'], category: 'other' },
+    { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley'], category: 'financial_investment' },
+    { keywords: ['savings transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
+    { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment', 'capital one mobile pmt', 'american express', 'amex', 'discover payment', 'chase payment', 'bridgecrest', 'foris dax'], category: 'financial_debt_payment' },
+    { keywords: ['overdraft', 'nsf', 'fee', 'service charge', 'monthly fee', 'maintenance fee'], category: 'financial_fees' },
+    { keywords: ['irs', 'tax', 'state tax', 'property tax'], category: 'financial_taxes' },
 
-  // Transfers
-  { keywords: ['transfer', 'xfer', 'wire', 'apple cash', 'sent money'], category: 'transfer_between_accounts' },
+    // Transfers
+    { keywords: ['transfer', 'xfer', 'wire', 'apple cash', 'sent money', 'money transfer', 'apple cash balance'], category: 'transfer_between_accounts' },
 
-  // Habits
-  { keywords: ['tobacco', 'cigarette', 'smoke shop', 'vape'], category: 'smoking' },
-];
+    // Habits
+    { keywords: ['tobacco', 'cigarette', 'smoke shop', 'vape'], category: 'smoking' },
+  ];
 
 /**
  * Auto-categorize a transaction description
@@ -225,20 +225,20 @@ function typeFromBankType(bankType: string, amount: number): 'income' | 'expense
 
   // Income types
   if (upper === 'DEPOSIT' || upper === 'DIRECT_DEPOSIT' || upper === 'ACH_CREDIT' ||
-      upper === 'INTEREST' || upper === 'REFUND' || upper === 'CREDIT') {
+    upper === 'INTEREST' || upper === 'REFUND' || upper === 'CREDIT') {
     return 'income';
   }
 
   // Transfer types
   if (upper === 'P2P' || upper === 'TRANSFER' || upper === 'WIRE' ||
-      upper === 'ACH_TRANSFER' || upper === 'INTERNAL_TRANSFER') {
+    upper === 'ACH_TRANSFER' || upper === 'INTERNAL_TRANSFER') {
     return 'transfer';
   }
 
   // Expense types
   if (upper === 'DEBIT_CARD' || upper === 'DEBIT' || upper === 'CHECK' ||
-      upper === 'ATM' || upper === 'WITHDRAWAL' || upper === 'FEE' ||
-      upper === 'ACH_DEBIT' || upper === 'POS' || upper === 'PURCHASE') {
+    upper === 'ATM' || upper === 'WITHDRAWAL' || upper === 'FEE' ||
+    upper === 'ACH_DEBIT' || upper === 'POS' || upper === 'PURCHASE') {
     return 'expense';
   }
 
@@ -324,6 +324,79 @@ function parseCSVRows(csvText: string): string[][] {
 }
 
 /**
+ * Check if a string looks like a date
+ */
+function looksLikeDate(str: string): boolean {
+  const cleaned = str.trim().replace(/"/g, '');
+  // MM/DD/YYYY or M/D/YYYY or MM-DD-YYYY
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(cleaned)) return true;
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return true;
+  return false;
+}
+
+/**
+ * Check if a string looks like a number/amount
+ */
+function looksLikeAmount(str: string): boolean {
+  const cleaned = str.trim().replace(/"/g, '').replace(/[\$,]/g, '');
+  return /^[\-\+]?\d+\.?\d*$/.test(cleaned) || /^\([\d\.]+\)$/.test(cleaned);
+}
+
+/**
+ * For headerless data (like Wells Fargo), detect columns by scanning content.
+ * Returns column map + whether we detected it as headerless.
+ */
+function detectHeaderless(rows: string[][]): { isHeaderless: boolean; columns: ColumnMap } | null {
+  if (rows.length < 1) return null;
+
+  const firstRow = rows[0];
+
+  // If the first cell looks like a date, this is likely headerless data
+  if (!looksLikeDate(firstRow[0] || '')) return null;
+
+  // Headerless! Scan first row to find columns by content type
+  let dateCol = -1;
+  let amountCol = -1;
+  let descCol = -1;
+
+  for (let c = 0; c < firstRow.length; c++) {
+    const val = firstRow[c].trim();
+    if (dateCol === -1 && looksLikeDate(val)) {
+      dateCol = c;
+    } else if (amountCol === -1 && looksLikeAmount(val)) {
+      amountCol = c;
+    } else if (descCol === -1 && val.length > 5 && !looksLikeDate(val) && !looksLikeAmount(val) && val !== '*') {
+      descCol = c;
+    }
+  }
+
+  // If we couldn't find description, pick the longest non-date/amount field
+  if (descCol === -1) {
+    let maxLen = 0;
+    for (let c = 0; c < firstRow.length; c++) {
+      const val = firstRow[c].trim();
+      if (c !== dateCol && c !== amountCol && val.length > maxLen && val !== '*') {
+        maxLen = val.length;
+        descCol = c;
+      }
+    }
+  }
+
+  if (dateCol === -1 || amountCol === -1) return null;
+  if (descCol === -1) descCol = amountCol + 1 < firstRow.length ? amountCol + 1 : 1;
+
+  return {
+    isHeaderless: true,
+    columns: {
+      dateCol,
+      descCol,
+      amountCol,
+    },
+  };
+}
+
+/**
  * Main CSV import function
  * Takes raw CSV text and a bankAccountId, returns parsed transactions
  */
@@ -336,20 +409,32 @@ export function parseCSVTransactions(
   const batchId = `csv_${Date.now()}`;
 
   const rows = parseCSVRows(csvText);
-  if (rows.length < 2) {
+  if (rows.length < 1) {
     return { transactions: [], errors: ['CSV file is empty or has no data rows'], summary: 'No data found' };
   }
 
-  // First row = headers
-  const headers = rows[0];
-  const columns = detectColumns(headers);
+  // ── Detect headerless vs header format ──
+  const headerlessResult = detectHeaderless(rows);
+  let columns: ColumnMap;
+  let dataStartIndex: number;
 
-  console.log('[CSV_IMPORT] Headers detected:', headers);
+  if (headerlessResult) {
+    // Headerless (Wells Fargo, some other banks)
+    columns = headerlessResult.columns;
+    dataStartIndex = 0; // All rows are data
+    console.log('[CSV_IMPORT] Headerless format detected (e.g., Wells Fargo)');
+  } else {
+    // Has headers (SoFi, Chase, etc.)
+    columns = detectColumns(rows[0]);
+    dataStartIndex = 1; // Skip header row
+    console.log('[CSV_IMPORT] Headers detected:', rows[0]);
+  }
+
   console.log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
-  console.log('[CSV_IMPORT] Total rows:', rows.length);
+  console.log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
 
   // Parse data rows
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = dataStartIndex; i < rows.length; i++) {
     const row = rows[i];
     if (row.length < 2) continue; // skip empty-ish rows
 

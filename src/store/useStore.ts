@@ -1128,27 +1128,44 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       console.log('[SYNC] Starting wallet sync for', walletAddress);
 
+      // Collect mints from manual assets for price lookup
+      const currentAssets = get().assets;
+      const manualAssets = currentAssets.filter(a => !a.isAutoSynced);
+      const manualMints = manualAssets
+        .map(a => (a.metadata as any)?.mint)
+        .filter((m: string) => m && m.length > 10);
+
+      if (manualMints.length > 0) {
+        console.log(`[SYNC] Requesting prices for ${manualMints.length} manual asset mints`);
+      }
+
       // Call your Vercel API
       const response = await fetch('https://kingme-iota.vercel.app/api/wallet/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress }),
+        body: JSON.stringify({ walletAddress, manualMints }),
       });
 
       if (!response.ok) {
         throw new Error(`Sync failed: ${response.status}`);
       }
 
-      const { assets: syncedAssets, totalValue } = await response.json();
+      const { assets: syncedAssets, totalValue, manualPrices } = await response.json();
 
       console.log(`[SYNC] Synced ${syncedAssets.length} assets worth $${(totalValue || 0).toFixed(2)}`);
+      if (manualPrices && Object.keys(manualPrices).length > 0) {
+        console.log(`[SYNC] Got ${Object.keys(manualPrices).length} manual asset prices from Jupiter`);
+      }
 
 
-      // Get current assets
-      const currentAssets = get().assets;
+      // Build lookup of existing auto-synced assets to preserve user-set data
+      const existingAutoMap = new Map<string, typeof currentAssets[0]>();
+      currentAssets.filter(a => a.isAutoSynced).forEach(a => {
+        existingAutoMap.set(a.id, a);
+      });
 
-      // Keep manual assets (not auto-synced)
-      const manualAssets = currentAssets.filter(a => !a.isAutoSynced);
+      // Commodity token symbols — these should be categorized as commodities, not crypto
+      const COMMODITY_SYMBOLS = ['GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM', 'OIL', 'COPPER'];
 
       // Convert API assets to app format
       const newAutoAssets = syncedAssets.map((sa: any) => {
@@ -1156,23 +1173,50 @@ export const useStore = create<AppState>((set, get) => ({
         const safePrice = sa.priceUSD || 0;
         const safeValue = sa.valueUSD || 0;
         const safeApy = sa.apy || 0;
+        const assetId = `auto_${sa.mint}`;
+
+        // Check if this is a commodity token by symbol
+        const symbolUpper = (sa.symbol || '').toUpperCase();
+        const isCommodity = COMMODITY_SYMBOLS.includes(symbolUpper) ||
+                            sa.category === 'commodities';
+        const effectiveCategory = isCommodity ? 'commodities' : (sa.category || 'crypto');
+
+        // Preserve existing APY and annualIncome if API returns 0
+        const existing = existingAutoMap.get(assetId);
+        const preservedApy = safeApy > 0 ? safeApy : (existing?.metadata?.apy || 0);
+
+        // Preserve value if API returns $0 but we had a real value (price feed outage)
+        const preservedValue = safeValue > 0 ? safeValue :
+          (existing?.value && existing.value > 0 ? existing.value : 0);
+        const preservedPrice = safePrice > 0 ? safePrice :
+          (existing?.metadata?.priceUSD && existing.metadata.priceUSD > 0 ? existing.metadata.priceUSD : 0);
+
+        const preservedAnnualIncome = preservedApy > 0
+          ? (preservedValue * preservedApy) / 100
+          : (existing?.annualIncome || 0);
+
+        if (safeValue === 0 && existing?.value && existing.value > 0) {
+          console.log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${existing.value.toFixed(2)} — preserving`);
+        }
+
+        console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apiApy=${safeApy} | preservedApy=${preservedApy} | category=${effectiveCategory}`);
 
         return {
-          id: `auto_${sa.mint}`,
-          type: mapCategoryToAssetType(sa.category),
-          subtype: sa.category === 'crypto' ? undefined : sa.category,
+          id: assetId,
+          type: mapCategoryToAssetType(effectiveCategory),
+          subtype: effectiveCategory === 'crypto' ? undefined : effectiveCategory,
           name: sa.name,
-          value: safeValue,
-          annualIncome: safeApy ? (safeValue * safeApy) / 100 : 0,
+          value: preservedValue,
+          annualIncome: preservedAnnualIncome,
           isLiquid: true,
           isAutoSynced: true,
           lastSynced: new Date().toISOString(),
           metadata: {
             type: 'other' as const,
             description: sa.name,
-            apy: safeApy,
+            apy: preservedApy,
             balance: sa.balance || 0,
-            priceUSD: safePrice, // ✅ NOW SAFE
+            priceUSD: preservedPrice,
             mint: sa.mint,
             symbol: sa.symbol,
             logoURI: sa.logoURI,
@@ -1180,8 +1224,101 @@ export const useStore = create<AppState>((set, get) => ({
         };
       });
 
-      // Merge: manual + tokens + drift
-      const allAssets = [...manualAssets, ...newAutoAssets];
+      // ── Update manual assets with fresh prices from Jupiter ──
+      const syncedByMint = new Map<string, any>();
+      const syncedBySymbol = new Map<string, any>();
+      for (const sa of syncedAssets) {
+        if (sa.mint) syncedByMint.set(sa.mint, sa);
+        if (sa.symbol) syncedBySymbol.set(sa.symbol.toUpperCase(), sa);
+      }
+
+      const updatedManualAssets = manualAssets.map(asset => {
+        const meta = asset.metadata || {} as any;
+        const mint = meta.mint;
+        const balance = meta.balance || 0;
+
+        // First try: Jupiter price lookup (for staked positions etc.)
+        if (mint && manualPrices && manualPrices[mint]) {
+          const newPrice = manualPrices[mint].price;
+          if (newPrice > 0 && balance > 0) {
+            const newValue = balance * newPrice;
+            console.log(`[SYNC] 📌 Manual "${asset.name}": ${balance} × $${newPrice.toFixed(6)} = $${newValue.toFixed(2)} (was $${asset.value.toFixed(2)})`);
+
+            // Recalculate annual income if APY is set
+            const apy = meta.apy || 0;
+            const newAnnualIncome = apy > 0 ? (newValue * apy) / 100 : asset.annualIncome;
+
+            return {
+              ...asset,
+              value: newValue,
+              annualIncome: newAnnualIncome,
+              lastSynced: new Date().toISOString(),
+              metadata: {
+                ...meta,
+                priceUSD: newPrice,
+              },
+            };
+          }
+        }
+
+        // Second try: match against wallet assets (for tokens held in wallet)
+        let matched: any = null;
+        if (mint) matched = syncedByMint.get(mint);
+        if (!matched && meta.symbol) matched = syncedBySymbol.get(meta.symbol.toUpperCase());
+        if (!matched && asset.name.toLowerCase().includes('drift')) matched = syncedBySymbol.get('DRIFT');
+
+        if (matched) {
+          const newValue = matched.valueUSD || 0;
+          const newPrice = matched.priceUSD || 0;
+          if (newValue > 0 || newPrice > 0) {
+            console.log(`[SYNC] 📌 Manual "${asset.name}" matched wallet asset: $${asset.value.toFixed(2)} → $${newValue.toFixed(2)}`);
+            return {
+              ...asset,
+              value: newValue > 0 ? newValue : asset.value,
+              lastSynced: new Date().toISOString(),
+              metadata: {
+                ...meta,
+                priceUSD: newPrice > 0 ? newPrice : (meta.priceUSD || 0),
+                balance: matched.balance || meta.balance || 0,
+              },
+            };
+          }
+        }
+
+        return asset;
+      });
+
+      // Build set of mints/symbols that matched manual assets (to avoid duplicates)
+      const manualMatchedMints = new Set<string>();
+      const manualMatchedSymbols = new Set<string>();
+      for (const asset of updatedManualAssets) {
+        const meta = asset.metadata || {} as any;
+        if (meta.mint) {
+          const matched = syncedByMint.get(meta.mint);
+          if (matched) manualMatchedMints.add(matched.mint);
+        }
+        if (meta.symbol) {
+          const matched = syncedBySymbol.get(meta.symbol.toUpperCase());
+          if (matched) manualMatchedSymbols.add(matched.symbol?.toUpperCase());
+        }
+        if (asset.name.toLowerCase().includes('drift')) {
+          manualMatchedSymbols.add('DRIFT');
+        }
+      }
+
+      // Filter out auto-synced assets that duplicate a manual asset
+      const dedupedAutoAssets = newAutoAssets.filter((a: any) => {
+        const sym = (a.metadata?.symbol || '').toUpperCase();
+        const mint = a.metadata?.mint || '';
+        if (manualMatchedMints.has(mint) || manualMatchedSymbols.has(sym)) {
+          console.log(`[SYNC] Skipping auto "${a.name}" — manual asset exists`);
+          return false;
+        }
+        return true;
+      });
+
+      // Merge: updated manual + deduped auto-synced
+      const allAssets = [...updatedManualAssets, ...dedupedAutoAssets];
 
       // Merge: manual + auto
       set({
@@ -1190,7 +1327,9 @@ export const useStore = create<AppState>((set, get) => ({
         lastAssetSync: new Date().toISOString(),
       });
 
-      console.log(`[SYNC] Complete: ${manualAssets.length} manual + ${newAutoAssets.length} synced`);
+      const manualUpdatedCount = updatedManualAssets.filter((a, i) => a !== manualAssets[i]).length;
+      const dedupCount = newAutoAssets.length - dedupedAutoAssets.length;
+      console.log(`[SYNC] Complete: ${updatedManualAssets.length} manual (${manualUpdatedCount} price-updated) + ${dedupedAutoAssets.length} synced (${dedupCount} deduped)`);
 
       // Save immediately
       await get().saveProfile();

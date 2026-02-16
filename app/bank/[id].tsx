@@ -94,6 +94,8 @@ export default function BankAccountDetailScreen() {
   const importBankTransactions = useStore(s => s.importBankTransactions);
   const addObligation = useStore(s => s.addObligation);
   const obligations = useStore(s => s.obligations);
+  const debts = useStore(s => s.debts);
+  const addDebt = useStore(s => s.addDebt);
 
   const account = bankAccounts.find(a => a.id === id);
   const accountTransactions = useMemo(
@@ -267,6 +269,105 @@ export default function BankAccountDetailScreen() {
     };
   }, [obligations, filteredTransactions, id]);
 
+  // ── Debts cross-reference ──
+  const debtsAnalysis = useMemo(() => {
+    const accountDebts = debts.filter(
+      d => d.bankAccountId === id || !d.bankAccountId
+    );
+
+    const tracked: Array<{
+      debt: typeof accountDebts[0];
+      matchingTransactions: BankTransaction[];
+      isPaidThisMonth: boolean;
+    }> = [];
+
+    const matchedTransactionIds = new Set<string>();
+
+    for (const debt of accountDebts) {
+      const debtNameNorm = normalize(debt.name);
+      const debtPayeeNorm = normalize((debt as any).payee || '');
+      const debtAmount = debt.monthlyPayment || 0;
+
+      const matches = filteredTransactions.filter(t => {
+        if (t.type === 'income') return false;
+        const descNorm = normalize(t.description);
+
+        // Name match (debt name or payee)
+        const directNameMatch =
+          descNorm.includes(debtNameNorm) ||
+          debtNameNorm.includes(descNorm.substring(0, 15)) ||
+          (debtPayeeNorm && descNorm.includes(debtPayeeNorm)) ||
+          (debtPayeeNorm && debtPayeeNorm.includes(descNorm.substring(0, 15)));
+
+        const tokenMatch =
+          hasTokenOverlap(t.description, debt.name) ||
+          hasTokenOverlap(t.description, (debt as any).payee || '');
+
+        const amountClose = debtAmount > 0 && Math.abs(t.amount - debtAmount) / debtAmount < 0.15;
+        const amountExact = Math.abs(t.amount - debtAmount) < 0.02;
+
+        // Standard: name/payee signal + amount match
+        if ((directNameMatch || tokenMatch) && (amountClose || amountExact)) return true;
+        if (amountExact && tokenMatch) return true;
+        if (directNameMatch && t.amount === debtAmount) return true;
+
+        // Debt-specific: exact amount + same bank account + categorized as debt payment
+        // (handles "Truck Loan" debt vs "Bridgecrest" transaction)
+        if (amountExact && t.category === 'financial_debt_payment' && debt.bankAccountId === t.bankAccountId) return true;
+
+        return false;
+      });
+
+      matches.forEach(m => matchedTransactionIds.add(m.id));
+
+      tracked.push({
+        debt,
+        matchingTransactions: matches,
+        isPaidThisMonth: debt.isPaidThisMonth || matches.length > 0,
+      });
+    }
+
+    const totalTracked = tracked.reduce((s, t) =>
+      s + (t.matchingTransactions.length > 0
+        ? t.matchingTransactions.reduce((ss, m) => ss + m.amount, 0)
+        : 0
+      ), 0);
+
+    return {
+      tracked,
+      matchedTransactionIds,
+      totalTracked,
+      paidCount: tracked.filter(t => t.isPaidThisMonth).length,
+      totalDebts: tracked.length,
+    };
+  }, [debts, filteredTransactions, id]);
+
+  // ── Combined matched IDs (obligations + debts) for untracked calculation ──
+  const allMatchedIds = useMemo(() => {
+    const combined = new Set(obligationsAnalysis.matchedTransactionIds);
+    debtsAnalysis.matchedTransactionIds.forEach(id => combined.add(id));
+    return combined;
+  }, [obligationsAnalysis.matchedTransactionIds, debtsAnalysis.matchedTransactionIds]);
+
+  // Override unmatched to exclude debt-matched transactions too
+  const combinedUnmatchedExpenses = useMemo(() => {
+    return filteredTransactions.filter(
+      t => t.type === 'expense' && !allMatchedIds.has(t.id)
+    );
+  }, [filteredTransactions, allMatchedIds]);
+
+  const combinedUnmatchedByCategory = useMemo(() => {
+    const groups: Record<string, { transactions: BankTransaction[]; total: number }> = {};
+    for (const t of combinedUnmatchedExpenses) {
+      const meta = TRANSACTION_CATEGORY_META[t.category];
+      const groupKey = meta?.group || 'other';
+      if (!groups[groupKey]) groups[groupKey] = { transactions: [], total: 0 };
+      groups[groupKey].transactions.push(t);
+      groups[groupKey].total += t.amount;
+    }
+    return groups;
+  }, [combinedUnmatchedExpenses]);
+
   // ── Month navigation ──
   const navigateMonth = (direction: -1 | 1) => {
     const [year, month] = filterMonth.split('-').map(Number);
@@ -385,6 +486,20 @@ export default function BankAccountDetailScreen() {
     Alert.alert('Added!', `"${name}" added to your Obligations at ${formatCurrency(amount)}/month`, [{ text: 'OK' }]);
   };
 
+  const handleAddAsDebt = (name: string, amount: number) => {
+    addDebt({
+      id: `debt_${Date.now()}`,
+      name,
+      principal: 0, // User can update later
+      monthlyPayment: amount,
+      minimumPayment: amount,
+      interestRate: 0,
+      dueDate: 1,
+      bankAccountId: id,
+    });
+    Alert.alert('Added!', `"${name}" added to your Debts at ${formatCurrency(amount)}/month`, [{ text: 'OK' }]);
+  };
+
   // ── Guard ──
   if (!account) {
     return (
@@ -471,7 +586,7 @@ export default function BankAccountDetailScreen() {
               onPress={() => setViewMode(mode)}
             >
               <Text style={[s.viewTabText, viewMode === mode && s.viewTabTextActive]}>
-                {mode === 'transactions' ? '📋 Ledger' : mode === 'budget' ? '📊 Budget' : '🔁 Obligations'}
+                {mode === 'transactions' ? '📋 Ledger' : mode === 'budget' ? '📊 Budget' : '🔁 Tracking'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -614,11 +729,11 @@ export default function BankAccountDetailScreen() {
             <View style={s.obligationSummaryBanner}>
               <View style={s.obligationSummaryRow}>
                 <View style={s.obligationSummaryStat}>
-                  <Text style={s.obligationSummaryValue}>{formatCurrency(obligationsAnalysis.totalTracked)}</Text>
+                  <Text style={s.obligationSummaryValue}>{formatCurrency(obligationsAnalysis.totalTracked + debtsAnalysis.totalTracked)}</Text>
                   <Text style={[s.obligationSummaryLabel, { color: '#4ade80' }]}>Tracked</Text>
                 </View>
                 <View style={s.obligationSummaryStat}>
-                  <Text style={[s.obligationSummaryValue, { color: '#fbbf24' }]}>{formatCurrency(obligationsAnalysis.totalUnmatched)}</Text>
+                  <Text style={[s.obligationSummaryValue, { color: '#fbbf24' }]}>{formatCurrency(combinedUnmatchedExpenses.reduce((s, t) => s + t.amount, 0))}</Text>
                   <Text style={[s.obligationSummaryLabel, { color: '#fbbf24' }]}>Untracked</Text>
                 </View>
                 <View style={s.obligationSummaryStat}>
@@ -629,12 +744,12 @@ export default function BankAccountDetailScreen() {
               <View style={s.obligationProgressBarBg}>
                 <View style={[s.obligationProgressBarFill, {
                   width: obligationsAnalysis.totalExpenses > 0
-                    ? `${(obligationsAnalysis.totalTracked / obligationsAnalysis.totalExpenses) * 100}%`
+                    ? `${((obligationsAnalysis.totalTracked + debtsAnalysis.totalTracked) / obligationsAnalysis.totalExpenses) * 100}%`
                     : '0%'
                 }]} />
               </View>
               <Text style={s.obligationProgressLabel}>
-                {obligationsAnalysis.paidCount} of {obligationsAnalysis.totalObligations} obligations matched this month
+                {obligationsAnalysis.paidCount + debtsAnalysis.paidCount} of {obligationsAnalysis.totalObligations + debtsAnalysis.totalDebts} obligations & debts matched
               </Text>
             </View>
 
@@ -681,18 +796,63 @@ export default function BankAccountDetailScreen() {
             )}
 
             {/* ── ⚠️ UNTRACKED — Expenses NOT in obligations ── */}
+            <Text style={[s.subsectionTitle, { marginTop: 24 }]}>💳 Tracked Debt Payments</Text>
+            <Text style={s.subsectionInfo}>
+              These match your debts list.
+            </Text>
+            {debtsAnalysis.tracked.length === 0 ? (
+              <Text style={s.noDataText}>No debts assigned to this account</Text>
+            ) : (
+              debtsAnalysis.tracked.map((item) => (
+                <View
+                  key={item.debt.id}
+                  style={[s.obligationMatchCard, item.isPaidThisMonth ? s.obligationMatchCardPaid : s.obligationMatchCardUnpaid,
+                    { borderLeftColor: item.isPaidThisMonth ? '#4ade80' : '#f87171' }
+                  ]}
+                >
+                  <View style={s.obligationMatchHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.obligationMatchName}>{item.debt.name}</Text>
+                      <Text style={s.obligationMatchPayee}>
+                        Balance: {formatCurrency(item.debt.principal)} · {formatCurrency(item.debt.monthlyPayment)}/mo
+                        {item.debt.interestRate > 0 ? ` · ${(item.debt.interestRate * 100).toFixed(1)}%` : ''}
+                      </Text>
+                    </View>
+                    <View style={[s.statusBadge, item.isPaidThisMonth ? s.statusBadgePaid : s.statusBadgeUnpaid]}>
+                      <Text style={[s.statusBadgeText, item.isPaidThisMonth ? s.statusBadgeTextPaid : s.statusBadgeTextUnpaid]}>
+                        {item.isPaidThisMonth ? '✓ Paid' : 'Not Found'}
+                      </Text>
+                    </View>
+                  </View>
+                  {item.matchingTransactions.length > 0 && (
+                    <View style={s.obligationMatchDetails}>
+                      {item.matchingTransactions.map(t => (
+                        <View key={t.id} style={s.obligationMatchTransaction}>
+                          <Text style={s.obligationMatchTxDesc} numberOfLines={1}>
+                            {TRANSACTION_CATEGORY_META[t.category]?.emoji} {t.description}
+                          </Text>
+                          <Text style={s.obligationMatchTxAmount}>{formatCurrency(t.amount)} on {formatDate(t.date)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+
+            {/* ── ⚠️ UNTRACKED — Expenses NOT in obligations or debts ── */}
             <Text style={[s.subsectionTitle, { marginTop: 24 }]}>⚠️ Untracked Expenses</Text>
             <Text style={s.subsectionInfo}>
-              These expenses don't match any obligation. Recurring ones should probably be added.
+              These expenses don't match any obligation or debt payment.
             </Text>
-            {obligationsAnalysis.unmatchedExpenses.length === 0 ? (
+            {combinedUnmatchedExpenses.length === 0 ? (
               <View style={s.allTrackedBanner}>
                 <Text style={s.allTrackedEmoji}>🎉</Text>
                 <Text style={s.allTrackedText}>All expenses are tracked! Nice work.</Text>
               </View>
             ) : (
               <>
-                {Object.entries(obligationsAnalysis.unmatchedByCategory)
+                {Object.entries(combinedUnmatchedByCategory)
                   .sort(([, a], [, b]) => b.total - a.total)
                   .map(([groupKey, data]) => {
                     const groupMeta = TRANSACTION_GROUP_META[groupKey as BankTransactionGroup];
@@ -721,12 +881,20 @@ export default function BankAccountDetailScreen() {
                                 </View>
                                 <View style={s.untrackedItemRight}>
                                   <Text style={s.untrackedItemAmount}>{formatCurrency(t.amount)}</Text>
-                                  <TouchableOpacity
-                                    style={s.addObligationBtnSmall}
-                                    onPress={() => handleAddAsObligation(t.description, t.amount)}
-                                  >
-                                    <Text style={s.addObligationBtnSmallText}>+ Track</Text>
-                                  </TouchableOpacity>
+                                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                                    <TouchableOpacity
+                                      style={s.addObligationBtnSmall}
+                                      onPress={() => handleAddAsObligation(t.description, t.amount)}
+                                    >
+                                      <Text style={s.addObligationBtnSmallText}>+ Bill</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                      style={[s.addObligationBtnSmall, { backgroundColor: '#f87171' }]}
+                                      onPress={() => handleAddAsDebt(t.description, t.amount)}
+                                    >
+                                      <Text style={s.addObligationBtnSmallText}>+ Debt</Text>
+                                    </TouchableOpacity>
+                                  </View>
                                 </View>
                               </View>
                             );
@@ -745,8 +913,8 @@ export default function BankAccountDetailScreen() {
                   These appear monthly across all your transaction history.
                 </Text>
                 {recurringCandidates.map((rc, idx) => {
-                  // Check if already in obligations
-                  const alreadyTracked = obligations.some(o => {
+                  // Check if already in obligations or debts
+                  const inObligations = obligations.some(o => {
                     const nameMatch = hasTokenOverlap(o.name, rc.name) ||
                                       hasTokenOverlap(o.payee || '', rc.name);
                     const amountMatch = Math.abs(o.amount - rc.averageAmount) < 1;
@@ -757,14 +925,30 @@ export default function BankAccountDetailScreen() {
                     return (nameMatch && amountMatch) || (normNameMatch && amountMatch) || (nameMatch);
                   });
 
+                  const inDebts = debts.some(d => {
+                    const nameMatch = hasTokenOverlap(d.name, rc.name);
+                    const amountMatch = Math.abs(d.monthlyPayment - rc.averageAmount) < 1;
+                    const normNameMatch =
+                      normalize(d.name).includes(normalize(rc.name).substring(0, 12)) ||
+                      normalize(rc.name).includes(normalize(d.name).substring(0, 12));
+                    return (nameMatch && amountMatch) || (normNameMatch && amountMatch) || (nameMatch);
+                  });
+
+                  const alreadyTracked = inObligations || inDebts;
+
                   return (
                     <View key={idx} style={[s.recurringCard, alreadyTracked && s.recurringCardTracked]}>
                       <View style={s.recurringInfo}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <Text style={s.recurringName} numberOfLines={1}>{rc.name}</Text>
-                          {alreadyTracked && (
+                          {inObligations && (
                             <View style={s.trackedPill}>
-                              <Text style={s.trackedPillText}>✓ In Obligations</Text>
+                              <Text style={s.trackedPillText}>✓ Obligation</Text>
+                            </View>
+                          )}
+                          {inDebts && (
+                            <View style={[s.trackedPill, { backgroundColor: '#f8717120', borderColor: '#f8717140' }]}>
+                              <Text style={[s.trackedPillText, { color: '#f87171' }]}>✓ Debt</Text>
                             </View>
                           )}
                         </View>
@@ -774,12 +958,20 @@ export default function BankAccountDetailScreen() {
                         <Text style={s.recurringLastDate}>Last: {formatDate(rc.lastDate)}</Text>
                       </View>
                       {!alreadyTracked && (
-                        <TouchableOpacity
-                          style={s.addObligationBtn}
-                          onPress={() => handleAddAsObligation(rc.name, rc.averageAmount)}
-                        >
-                          <Text style={s.addObligationBtnText}>+ Obligation</Text>
-                        </TouchableOpacity>
+                        <View style={{ gap: 6 }}>
+                          <TouchableOpacity
+                            style={s.addObligationBtn}
+                            onPress={() => handleAddAsObligation(rc.name, rc.averageAmount)}
+                          >
+                            <Text style={s.addObligationBtnText}>+ Bill</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[s.addObligationBtn, { backgroundColor: '#f87171' }]}
+                            onPress={() => handleAddAsDebt(rc.name, rc.averageAmount)}
+                          >
+                            <Text style={s.addObligationBtnText}>+ Debt</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                     </View>
                   );

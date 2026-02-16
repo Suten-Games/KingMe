@@ -78,6 +78,7 @@ export default function AddAssetModal({
   const [searchResults, setSearchResults] = useState<TokenInfo[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [mintAddress, setMintAddress] = useState('');
 
   // ── Stock vesting fields ─────────────────────────────────
   const [hasUnvestedShares, setHasUnvestedShares] = useState(false);
@@ -136,6 +137,7 @@ export default function AddAssetModal({
       setSymbol(meta?.symbol || meta?.ticker || '');
       setLogoUri(meta?.logoURI || '');
       setProtocol(meta?.protocol || '');
+      setMintAddress(meta?.mint || '');
 
       const qty = meta?.quantity || meta?.balance || meta?.shares;
       setTokenAmount(qty?.toString() || '');
@@ -185,6 +187,7 @@ export default function AddAssetModal({
     setSelectedToken(token);
     setSymbol(token.symbol);
     setLogoUri(token.logoURI);
+    setMintAddress(token.mint || '');
     setShowSearchResults(false);
     if (!name) setName(token.name);
   }, [name]);
@@ -207,7 +210,7 @@ export default function AddAssetModal({
     const apyNum = parseFloat(apy) || undefined;
     const sym = symbol.trim().toUpperCase() || undefined;
     const logo = logoUri || undefined;
-    const mint = selectedToken?.mint || undefined;
+    const mint = selectedToken?.mint || mintAddress.trim() || undefined;
     const proto = protocol.trim() || undefined;
 
     switch (type) {
@@ -231,7 +234,7 @@ export default function AddAssetModal({
           ticker: sym, shares: qty, quantity: qty,
           currentPrice: price, priceUSD: price,
           dividendYield: apyNum, apy: apyNum,
-          description: name,
+          description: name, mint,
           ...(hasUnvestedShares ? {
             vestedShares: parseFloat(vestedShares) || 0,
             unvestedShares: parseFloat(unvestedShares) || 0,
@@ -277,7 +280,7 @@ export default function AddAssetModal({
         const meta: OtherAsset = {
           type: 'other', description: name,
           quantity: qty, balance: qty, priceUSD: price,
-          symbol: sym, logoURI: logo, apy: apyNum,
+          symbol: sym, logoURI: logo, apy: apyNum, mint,
         };
         return meta;
       }
@@ -353,7 +356,7 @@ export default function AddAssetModal({
   const resetAndClose = () => {
     setType('crypto'); setName(''); setValue(''); setApy(''); setAnnualIncome('');
     setSymbol(''); setTokenAmount(''); setTokenPrice(''); setLogoUri(''); setProtocol('');
-    setSearchResults([]); setShowSearchResults(false); setSelectedToken(null);
+    setSearchResults([]); setShowSearchResults(false); setSelectedToken(null); setMintAddress('');
     setHasUnvestedShares(false); setVestedShares(''); setUnvestedShares('');
     setSharesPerVest(''); setVestingFrequency('quarterly'); setNextVestDate('');
     setIsPrimaryResidence(false);
@@ -545,6 +548,26 @@ export default function AddAssetModal({
                     <Text style={styles.helper}>e.g. Drift, Kamino, Marinade, MarginFi</Text>
                     <TextInput style={styles.modalInput} placeholder="e.g. Drift"
                       placeholderTextColor="#666" value={protocol} onChangeText={setProtocol} />
+                  </>
+                )}
+
+                {/* Mint Address — for price sync */}
+                {showTokenFields && (
+                  <>
+                    <Text style={styles.label}>Token Mint Address</Text>
+                    <Text style={styles.helper}>
+                      Solana token address — enables auto price updates on wallet sync.{' '}
+                      {selectedToken?.mint ? 'Auto-filled from token search.' : 'Paste from Solscan or Birdeye.'}
+                    </Text>
+                    <TextInput
+                      style={[styles.modalInput, { fontSize: 12, fontFamily: 'monospace' }]}
+                      placeholder="e.g. J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+                      placeholderTextColor="#444"
+                      value={mintAddress}
+                      onChangeText={setMintAddress}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
                   </>
                 )}
 

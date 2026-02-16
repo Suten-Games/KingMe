@@ -10,6 +10,9 @@ export interface AssetsByCategory {
   retirement: Asset[];
 }
 
+// Alias for components that import this name
+export type CategorizedAssets = AssetsByCategory;
+
 export function categorizeAssets(assets: Asset[], bankAccounts: BankAccount[]): AssetsByCategory {
   // Convert bank accounts to asset objects
   const bankAssets: Asset[] = bankAccounts.map((account) => ({
@@ -26,12 +29,27 @@ export function categorizeAssets(assets: Asset[], bankAccounts: BankAccount[]): 
     },
   }));
 
+  // Commodity symbols for detection
+  const COMMODITY_SYMBOLS = ['gold', 'silver', 'platinum', 'palladium', 'oil', 'copper'];
+
+  const isCommodity = (a: Asset): boolean => {
+    // Check subtype first (set by wallet sync)
+    if ((a as any).subtype === 'commodities') return true;
+    // Check symbol in metadata
+    const sym = (a.metadata?.symbol || '').toLowerCase();
+    if (COMMODITY_SYMBOLS.includes(sym)) return true;
+    // Check name as fallback
+    const nameLower = a.name.toLowerCase();
+    if (COMMODITY_SYMBOLS.some(c => nameLower.includes(c))) return true;
+    return false;
+  };
+
   return {
-    brokerage: assets.filter(a => a.type === 'stocks'),
+    brokerage: assets.filter(a => (a.type === 'stocks' || a.type === 'brokerage') && !isCommodity(a)),
     cash: bankAssets,
     realEstate: assets.filter(a => a.type === 'real_estate'),
-    commodities: assets.filter(a => a.type === 'other' && a.name.toLowerCase().includes('gold')), // Simple heuristic
-    crypto: assets.filter(a => a.type === 'crypto' || a.type === 'defi'),
+    commodities: assets.filter(a => isCommodity(a)),
+    crypto: assets.filter(a => (a.type === 'crypto' || a.type === 'defi') && !isCommodity(a)),
     retirement: assets.filter(a => a.type === 'retirement'),
   };
 }

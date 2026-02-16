@@ -330,6 +330,7 @@ export interface Debt {
   dueDate: number;
   isPaidThisMonth?: boolean;
   lastPaidDate?: string;
+  payee?: string;
 
 }
 
