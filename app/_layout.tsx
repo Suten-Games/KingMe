@@ -39,9 +39,33 @@ export default function RootLayout() {
 
   return (
     <WalletProvider>
-      <Stack>
+      <Stack
+        screenOptions={{
+          // ── Dark theme for ALL screens by default ──
+          headerStyle: { backgroundColor: '#0a0e1a' },
+          headerTintColor: '#f4c430',             // Gold back arrow
+          headerTitleStyle: {
+            fontFamily: 'Inter_700Bold',
+            fontSize: 18,
+            color: '#e8e0d0',
+          },
+          headerShadowVisible: false,             // No bottom border
+          headerBackTitleVisible: false,           // Just arrow, no "Back" text
+          contentStyle: { backgroundColor: '#0a0e1a' },
+          animation: 'slide_from_right',
+        }}
+      >
+        {/* ── No header — these have their own ── */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="asset/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="bank/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="debt/[id]" options={{ headerShown: false }} />
+
+        {/* ── Styled dark header with gold back arrow ── */}
+        <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="trading" options={{ title: 'Trading' }} />
+        <Stack.Screen name="expenses" options={{ title: 'Daily Expenses' }} />
       </Stack>
     </WalletProvider>
   );

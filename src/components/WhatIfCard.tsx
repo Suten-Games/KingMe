@@ -1,6 +1,7 @@
-// app/components/WhatIfCard.tsx
+// src/components/WhatIfCard.tsx
 import { WhatIfScenario } from '@/types';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { isOnChainScenario } from '@/services/jupiterSwap';
 
 interface WhatIfCardProps {
   scenario: WhatIfScenario;
@@ -9,20 +10,21 @@ interface WhatIfCardProps {
 
 export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
   const { impact, emoji, title, description, difficulty, timeframe } = scenario;
-  
+  const onChain = isOnChainScenario(scenario.type);
+
   const freedomGainMonths = impact.freedomDelta;
   const freedomGainYears = freedomGainMonths / 12;
-  
+
   // Format freedom gain
   const freedomDisplay = freedomGainYears >= 1
     ? `+${freedomGainYears.toFixed(1)} years`
     : `+${freedomGainMonths.toFixed(1)} months`;
-  
+
   // Color based on impact
-  const impactColor = 
-    freedomGainMonths > 12 ? '#4ade80' :  // Huge impact (>1 year)
-    freedomGainMonths > 3 ? '#60a5fa' :   // Good impact (>3 months)
-    '#a855f7';                             // Small impact
+  const impactColor =
+    freedomGainMonths > 12 ? '#4ade80' :
+    freedomGainMonths > 3 ? '#60a5fa' :
+    '#a855f7';
 
   const difficultyColor = {
     easy: '#4ade80',
@@ -31,14 +33,19 @@ export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
   }[difficulty];
 
   return (
-    <TouchableOpacity 
-      style={styles.card}
+    <TouchableOpacity
+      style={[styles.card, onChain && styles.cardOnChain]}
       onPress={onPress}
       activeOpacity={0.8}
     >
       <View style={styles.header}>
         <Text style={styles.emoji}>{emoji}</Text>
         <View style={styles.headerRight}>
+          {onChain && (
+            <View style={styles.onChainBadge}>
+              <Text style={styles.onChainText}>⚡ On-Chain</Text>
+            </View>
+          )}
           <View style={[styles.difficultyBadge, { backgroundColor: difficultyColor + '20' }]}>
             <Text style={[styles.difficultyText, { color: difficultyColor }]}>
               {difficulty}
@@ -47,10 +54,10 @@ export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
           <Text style={styles.timeframe}>{timeframe}</Text>
         </View>
       </View>
-      
+
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.description}>{description}</Text>
-      
+
       <View style={styles.impactRow}>
         <View style={styles.impactItem}>
           <Text style={styles.impactLabel}>Freedom</Text>
@@ -58,16 +65,16 @@ export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
             {freedomDisplay}
           </Text>
         </View>
-        
+
         <View style={styles.impactDivider} />
-        
+
         <View style={styles.impactItem}>
           <Text style={styles.impactLabel}>Income</Text>
           <Text style={styles.impactValue}>
             +${Math.round(impact.monthlyIncomeDelta)}/mo
           </Text>
         </View>
-        
+
         {impact.investmentRequired > 0 && (
           <>
             <View style={styles.impactDivider} />
@@ -80,9 +87,14 @@ export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
           </>
         )}
       </View>
-      
-      <TouchableOpacity style={styles.actionButton} onPress={onPress}>
-        <Text style={styles.actionText}>View Details →</Text>
+
+      <TouchableOpacity
+        style={[styles.actionButton, onChain && styles.actionButtonOnChain]}
+        onPress={onPress}
+      >
+        <Text style={[styles.actionText, onChain && styles.actionTextOnChain]}>
+          {onChain ? '⚡ Execute On-Chain →' : 'View Details →'}
+        </Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -97,6 +109,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2a2f3e',
   },
+  cardOnChain: {
+    borderColor: '#f4c43030',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -110,6 +125,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+  },
+  onChainBadge: {
+    backgroundColor: '#f4c43018',
+    borderWidth: 1,
+    borderColor: '#f4c43050',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  onChainText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#f4c430',
   },
   difficultyBadge: {
     paddingHorizontal: 10,
@@ -176,9 +204,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
+  actionButtonOnChain: {
+    backgroundColor: '#f4c43012',
+    borderWidth: 1,
+    borderColor: '#f4c43040',
+  },
   actionText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#60a5fa',
+  },
+  actionTextOnChain: {
+    color: '#f4c430',
   },
 });

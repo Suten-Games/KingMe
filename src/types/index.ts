@@ -216,6 +216,7 @@ export interface WhatIfScenario {
     monthlyIncomeDelta: number;
     annualIncomeDelta: number;
     investmentRequired: number;
+    totalDeposit?: number;
     roi?: number;
   };
   reasoning: string;
@@ -331,6 +332,7 @@ export interface Debt {
   isPaidThisMonth?: boolean;
   lastPaidDate?: string;
   payee?: string;
+  balance?: number;
 
 }
 

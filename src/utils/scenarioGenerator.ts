@@ -1,17 +1,22 @@
 // src/utils/scenarioGenerator.ts
-import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario } from '../types';
+import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario, InvestmentThesis } from '../types';
+import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '../types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
+import { detectRecurring } from './csvBankImport';
 
 interface UserProfile {
   assets: Asset[];
   incomeSources: IncomeSource[];
   obligations: Obligation[];
   debts: Debt[];
+  bankTransactions?: BankTransaction[];
+  investmentTheses?: InvestmentThesis[];
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   const scenarios: WhatIfScenario[] = [];
 
-  const { assets, incomeSources, obligations, debts } = profile;
+  const { assets, incomeSources, obligations, debts, bankTransactions, investmentTheses } = profile;
 
   // Calculate current state
   const currentMonthlyIncome = calculateMonthlyIncome(assets, incomeSources);
@@ -29,12 +34,13 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (cashScenario) scenarios.push(cashScenario);
 
-  // 2. IDLE CRYPTO → Staking
+  // 2. IDLE CRYPTO → Staking (only if no thesis set)
   const cryptoScenario = generateStakeCryptoScenario(
     assets,
     currentMonthlyIncome,
     currentFreedom,
-    currentMonthlyNeeds
+    currentMonthlyNeeds,
+    investmentTheses || []
   );
   if (cryptoScenario) scenarios.push(cryptoScenario);
 
@@ -56,14 +62,62 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (brokerageScenario) scenarios.push(brokerageScenario);
 
-  // 5. REDUCE EXPENSES
+  // 5. REDUCE EXPENSES (with real transaction data)
   const expenseScenario = generateReduceExpensesScenario(
     obligations,
     currentMonthlyIncome,
     currentFreedom,
-    currentMonthlyNeeds
+    currentMonthlyNeeds,
+    bankTransactions || []
   );
   if (expenseScenario) scenarios.push(expenseScenario);
+
+  // 6. DEBT PAYOFF (Avalanche)
+  const debtPayoffScenario = generateDebtPayoffScenario(
+    debts,
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (debtPayoffScenario) scenarios.push(debtPayoffScenario);
+
+  // 7. DEBT REFINANCE
+  const debtRefiScenario = generateDebtRefinanceScenario(
+    debts,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (debtRefiScenario) scenarios.push(debtRefiScenario);
+
+  // 8. TAX OPTIMIZATION (401k / IRA)
+  const taxScenario = generateTaxOptimizationScenario(
+    incomeSources,
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (taxScenario) scenarios.push(taxScenario);
+
+  // 9. PERENA STABLECOIN YIELD
+  const perenaScenario = generatePerenaYieldScenario(
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (perenaScenario) scenarios.push(perenaScenario);
+
+  // 10. HIGH-YIELD SAVINGS ACCOUNT
+  const hysaScenario = generateHYSAScenario(
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (hysaScenario) scenarios.push(hysaScenario);
 
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
@@ -175,13 +229,18 @@ function generateStakeCryptoScenario(
   assets: Asset[],
   currentMonthlyIncome: number,
   currentFreedom: number,
-  monthlyNeeds: number
+  monthlyNeeds: number,
+  investmentTheses: InvestmentThesis[]
 ): WhatIfScenario | null {
-  // Find crypto with low APY
+  // Build set of asset IDs that have an investment thesis
+  const assetsWithThesis = new Set(investmentTheses.map(t => t.assetId));
+
+  // Find crypto with low APY AND no investment thesis
   const cryptoAssets = assets.filter(a =>
     a.type === 'crypto' &&
     (a.metadata as any)?.apy < 3 &&
-    a.value > 500
+    a.value > 500 &&
+    !assetsWithThesis.has(a.id)  // ← Skip if thesis exists
   );
 
   if (cryptoAssets.length === 0) return null;
@@ -239,7 +298,7 @@ function generateStakeCryptoScenario(
       roi: targetAPY,
     },
 
-    reasoning: `You have $${totalIdleCrypto.toLocaleString()} in crypto earning little to no yield. By staking in DeFi protocols, you can earn ${targetAPY}% APY ($${annualIncomeDelta.toFixed(0)}/year) with moderate risk.`,
+    reasoning: `You have ${cryptoAssets.length} idle token${cryptoAssets.length > 1 ? 's' : ''} worth $${totalIdleCrypto.toLocaleString()} earning little to no yield (${cryptoAssets.map(a => `${(a.metadata as any)?.symbol || a.name}: ${formatCurrencyShort(a.value)}`).join(', ')}). None of these have an investment thesis set, so staking at ${targetAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income.`,
 
     risks: [
       'Smart contract risk (protocol hacks)',
@@ -434,21 +493,34 @@ function generateReduceExpensesScenario(
   obligations: Obligation[],
   currentMonthlyIncome: number,
   currentFreedom: number,
-  monthlyNeeds: number
+  monthlyNeeds: number,
+  bankTransactions: BankTransaction[]
 ): WhatIfScenario | null {
-  // Find discretionary obligations
+
+  // ── Analyze real spending data if available ──
+  const now = new Date();
+  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 7);
+  const recentTransactions = bankTransactions.filter(
+    t => t.type === 'expense' && t.date >= threeMonthsAgo
+  );
+
+  // If we have transaction data, generate specific actionable cuts
+  if (recentTransactions.length >= 10) {
+    return generateDataDrivenExpenseScenario(
+      obligations, recentTransactions, currentMonthlyIncome, currentFreedom, monthlyNeeds
+    );
+  }
+
+  // ── Fallback: obligation-based (less specific) ──
   const discretionary = obligations.filter(o =>
     o.category !== 'housing' &&
     o.category !== 'utilities' &&
     o.amount > 50
   );
-
   if (discretionary.length === 0) return null;
 
-  // Assume 20% reduction is achievable
   const totalDiscretionary = discretionary.reduce((sum, o) => sum + o.amount, 0);
   const reduction = totalDiscretionary * 0.2;
-
   const newMonthlyNeeds = monthlyNeeds - reduction;
   const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
 
@@ -456,16 +528,237 @@ function generateReduceExpensesScenario(
     id: 'reduce_expenses',
     type: 'reduce_expenses',
     title: `Cut $${reduction.toFixed(0)}/mo in expenses`,
-    description: `Reduce discretionary spending by 20%`,
+    description: `Import bank/credit card transactions for specific recommendations`,
     emoji: '✂️',
     difficulty: 'medium',
     timeframe: 'This month',
-
     changes: {
       reduceObligations: discretionary.map(o => ({
         id: o.id,
         newAmount: o.amount * 0.8,
       }))
+    },
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+    },
+    reasoning: `You have $${totalDiscretionary.toFixed(0)}/mo in discretionary obligations. Import your bank and credit card statements for specific, data-driven cut recommendations.`,
+    risks: [
+      'Requires discipline and lifestyle changes',
+      'May feel restrictive initially',
+      'Import transactions for more specific advice',
+    ],
+    steps: [
+      'Go to your bank/credit card detail screen',
+      'Import CSV statements for the last 3 months',
+      'Come back here for personalized cut recommendations',
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Data-Driven Expense Analysis
+// ═══════════════════════════════════════════════════════════════
+
+interface SpendingInsight {
+  category: string;
+  emoji: string;
+  label: string;
+  monthlyAvg: number;
+  suggestedCut: number;
+  cutPercentage: number;
+  topMerchants: Array<{ name: string; total: number; count: number }>;
+  actionItem: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+function generateDataDrivenExpenseScenario(
+  obligations: Obligation[],
+  recentTransactions: BankTransaction[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+
+  // ── Calculate months spanned ──
+  const dates = recentTransactions.map(t => t.date).sort();
+  const earliest = new Date(dates[0] + 'T12:00:00');
+  const latest = new Date(dates[dates.length - 1] + 'T12:00:00');
+  const monthsSpanned = Math.max(1,
+    (latest.getFullYear() - earliest.getFullYear()) * 12 + (latest.getMonth() - earliest.getMonth()) + 1
+  );
+
+  // ── Group by spending group ──
+  const groupSpending: Record<string, { total: number; txns: BankTransaction[] }> = {};
+  for (const t of recentTransactions) {
+    const meta = TRANSACTION_CATEGORY_META[t.category];
+    const group = meta?.group || 'other';
+    if (!groupSpending[group]) groupSpending[group] = { total: 0, txns: [] };
+    groupSpending[group].total += t.amount;
+    groupSpending[group].txns.push(t);
+  }
+
+  // ── Build merchant spending map per group ──
+  function topMerchants(txns: BankTransaction[], limit = 5): Array<{ name: string; total: number; count: number }> {
+    const merchants: Record<string, { total: number; count: number }> = {};
+    for (const t of txns) {
+      const key = cleanMerchantName(t.description);
+      if (!merchants[key]) merchants[key] = { total: 0, count: 0 };
+      merchants[key].total += t.amount;
+      merchants[key].count++;
+    }
+    return Object.entries(merchants)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, limit);
+  }
+
+  // ── Analyze each group for cut potential ──
+  const insights: SpendingInsight[] = [];
+  const totalMonthlySpending = recentTransactions.reduce((s, t) => s + t.amount, 0) / monthsSpanned;
+
+  // CUT RULES per category group
+  const cutRules: Record<string, { percentage: number; difficulty: 'easy' | 'medium' | 'hard'; action: string }> = {
+    food: { percentage: 30, difficulty: 'medium', action: 'Meal prep, reduce delivery orders, cook at home more' },
+    subscription: { percentage: 50, difficulty: 'easy', action: 'Audit and cancel unused subscriptions' },
+    entertainment: { percentage: 40, difficulty: 'easy', action: 'Reduce discretionary entertainment spending' },
+    shopping: { percentage: 35, difficulty: 'medium', action: 'Implement 48-hour rule before purchases' },
+    personal: { percentage: 25, difficulty: 'medium', action: 'Find cheaper alternatives for personal care' },
+    transport: { percentage: 20, difficulty: 'medium', action: 'Carpool, reduce rideshare usage, optimize fuel' },
+    medical: { percentage: 10, difficulty: 'hard', action: 'Shop around for prescriptions, use generic brands' },
+    financial: { percentage: 15, difficulty: 'medium', action: 'Negotiate fees, avoid late payments, refinance' },
+    utilities: { percentage: 10, difficulty: 'hard', action: 'Reduce usage, switch to cheaper plans' },
+    // housing and other are generally non-discretionary
+  };
+
+  for (const [group, data] of Object.entries(groupSpending)) {
+    const rule = cutRules[group];
+    if (!rule) continue; // Skip housing, other
+
+    const monthlyAvg = data.total / monthsSpanned;
+    if (monthlyAvg < 20) continue; // Too small to matter
+
+    const suggestedCut = monthlyAvg * (rule.percentage / 100);
+    const merchants = topMerchants(data.txns);
+    const gm = TRANSACTION_GROUP_META[group as BankTransactionGroup];
+
+    // Build specific action item from top merchants
+    let action = rule.action;
+    if (merchants.length > 0) {
+      const topNames = merchants.slice(0, 3).map(m => m.name);
+      const topTotal = merchants.slice(0, 3).reduce((s, m) => s + m.total, 0) / monthsSpanned;
+      action = `Top merchants: ${topNames.join(', ')} (${formatCurrencyShort(topTotal)}/mo). ${rule.action}`;
+    }
+
+    insights.push({
+      category: group,
+      emoji: gm?.emoji || '💸',
+      label: gm?.label || group,
+      monthlyAvg,
+      suggestedCut,
+      cutPercentage: rule.percentage,
+      topMerchants: merchants,
+      actionItem: action,
+      difficulty: rule.difficulty,
+    });
+  }
+
+  // Sort by largest potential savings
+  insights.sort((a, b) => b.suggestedCut - a.suggestedCut);
+
+  if (insights.length === 0) return null;
+
+  // ── Detect subscriptions specifically ──
+  const recurring = detectRecurring(recentTransactions);
+  const subscriptionRecurring = recurring.filter(r => {
+    const cat = TRANSACTION_CATEGORY_META[r.category]?.group;
+    return cat === 'subscription' || cat === 'entertainment';
+  });
+
+  // ── Calculate total savings ──
+  const totalSuggestedCut = insights.reduce((s, i) => s + i.suggestedCut, 0);
+  const topInsights = insights.slice(0, 5); // Top 5 categories
+  const easyCuts = insights.filter(i => i.difficulty === 'easy');
+  const easyTotal = easyCuts.reduce((s, i) => s + i.suggestedCut, 0);
+
+  const newMonthlyNeeds = monthlyNeeds - totalSuggestedCut;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  // ── Build specific steps ──
+  const steps: string[] = [];
+  for (const insight of topInsights) {
+    const topM = insight.topMerchants[0];
+    if (topM) {
+      steps.push(`${insight.emoji} ${insight.label}: Cut ${formatCurrencyShort(insight.suggestedCut)}/mo — ${topM.name} is ${formatCurrencyShort(topM.total / monthsSpanned)}/mo alone`);
+    } else {
+      steps.push(`${insight.emoji} ${insight.label}: Cut ${formatCurrencyShort(insight.suggestedCut)}/mo (${insight.cutPercentage}% reduction)`);
+    }
+  }
+  if (subscriptionRecurring.length > 0) {
+    const subTotal = subscriptionRecurring.reduce((s, r) => s + r.averageAmount, 0);
+    steps.push(`🔁 ${subscriptionRecurring.length} recurring subscriptions totaling ${formatCurrencyShort(subTotal)}/mo — audit each one`);
+  }
+
+  // ── Build detailed description ──
+  const descParts: string[] = [];
+  for (const insight of topInsights.slice(0, 3)) {
+    descParts.push(`${insight.emoji} ${insight.label}: ${formatCurrencyShort(insight.monthlyAvg)}/mo → cut ${formatCurrencyShort(insight.suggestedCut)}`);
+  }
+
+  // ── Build reasoning with real numbers ──
+  const reasoningParts: string[] = [
+    `Based on ${recentTransactions.length} transactions over ${monthsSpanned} month${monthsSpanned > 1 ? 's' : ''},`,
+    `you're spending ${formatCurrencyShort(totalMonthlySpending)}/mo across ${Object.keys(groupSpending).length} categories.`,
+  ];
+
+  if (easyCuts.length > 0) {
+    reasoningParts.push(`Easy wins alone (${easyCuts.map(c => c.label.toLowerCase()).join(', ')}) could save ${formatCurrencyShort(easyTotal)}/mo.`);
+  }
+
+  const biggestCategory = topInsights[0];
+  if (biggestCategory) {
+    const topM = biggestCategory.topMerchants[0];
+    reasoningParts.push(
+      `Your biggest cut opportunity is ${biggestCategory.label.toLowerCase()} at ${formatCurrencyShort(biggestCategory.monthlyAvg)}/mo` +
+      (topM ? ` — ${topM.name} alone is ${formatCurrencyShort(topM.total / monthsSpanned)}/mo (${topM.count} charges).` : '.')
+    );
+  }
+
+  // ── Build obligation changes ──
+  // Match insights back to obligations where possible
+  const obligationChanges: Array<{ id: string; newAmount: number }> = [];
+  for (const ob of obligations) {
+    if (ob.category === 'housing') continue;
+    // Crude mapping: if obligation name matches any top merchant
+    const obLower = ob.name.toLowerCase();
+    for (const insight of insights) {
+      const matchedMerchant = insight.topMerchants.find(m =>
+        m.name.toLowerCase().includes(obLower) || obLower.includes(m.name.toLowerCase().substring(0, 10))
+      );
+      if (matchedMerchant) {
+        obligationChanges.push({ id: ob.id, newAmount: ob.amount * (1 - insight.cutPercentage / 100) });
+        break;
+      }
+    }
+  }
+
+  return {
+    id: 'reduce_expenses',
+    type: 'reduce_expenses',
+    title: `Cut ${formatCurrencyShort(totalSuggestedCut)}/mo based on your real spending`,
+    description: descParts.join('\n'),
+    emoji: '✂️',
+    difficulty: easyTotal > totalSuggestedCut * 0.4 ? 'easy' : 'medium',
+    timeframe: 'This month',
+
+    changes: {
+      ...(obligationChanges.length > 0 ? { reduceObligations: obligationChanges } : {}),
     },
 
     impact: {
@@ -479,20 +772,552 @@ function generateReduceExpensesScenario(
       investmentRequired: 0,
     },
 
-    reasoning: `By reducing discretionary expenses by 20%, you effectively increase your freedom by needing less income to cover needs. This is equivalent to earning $${reduction.toFixed(0)}/mo more.`,
+    reasoning: reasoningParts.join(' '),
 
     risks: [
-      'Requires discipline and lifestyle changes',
-      'May feel restrictive initially',
-      'Easy to backslide without tracking',
+      `Based on ${recentTransactions.length} real transactions — accuracy depends on import completeness`,
+      'Some "cuts" may be one-time purchases that won\'t recur',
+      'Easy to backslide without continued tracking',
+    ],
+
+    steps,
+
+    // Attach insights for UI to render if desired
+    ...(topInsights.length > 0 ? {
+      metadata: {
+        insights: topInsights,
+        totalMonthlySpending,
+        monthsAnalyzed: monthsSpanned,
+        transactionCount: recentTransactions.length,
+        subscriptionCount: subscriptionRecurring.length,
+      }
+    } : {}),
+  } as WhatIfScenario;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEW Scenario Generators
+// ═══════════════════════════════════════════════════════════════
+
+function generateDebtPayoffScenario(
+  debts: Debt[],
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Find active debts sorted by interest rate (avalanche method)
+  const activeDebts = debts
+    .filter(d => d.isActive && d.interestRate > 0 && d.balance > 0)
+    .sort((a, b) => b.interestRate - a.interestRate);
+
+  if (activeDebts.length === 0) return null;
+
+  const highestRateDebt = activeDebts[0];
+  const totalDebtPayments = activeDebts.reduce((sum, d) => sum + d.minimumPayment, 0);
+
+  // Find available cash to throw at debt
+  const cashAssets = assets.filter(a =>
+    a.type === 'bank_account' &&
+    ((a.metadata as any)?.accountType === 'savings' ||
+      (a.metadata as any)?.accountType === 'checking')
+  );
+  const totalCash = cashAssets.reduce((sum, a) => sum + a.value, 0);
+
+  // Keep $2K emergency fund, use up to 50% of the rest for debt payoff
+  const emergencyFund = 2000;
+  const availableForDebt = Math.max(0, (totalCash - emergencyFund) * 0.5);
+
+  // Extra monthly payment: either $500 or 15% of income, whichever is less
+  const extraMonthly = Math.min(500, currentMonthlyIncome * 0.15);
+  if (extraMonthly < 50) return null;
+
+  // Calculate interest saved by paying off highest-rate debt faster
+  const monthsToPayOff = highestRateDebt.balance / (highestRateDebt.minimumPayment + extraMonthly);
+  const monthsOriginal = highestRateDebt.balance / highestRateDebt.minimumPayment;
+  const monthsSaved = Math.floor(monthsOriginal - monthsToPayOff);
+
+  const monthlyInterestSaved = (highestRateDebt.balance * (highestRateDebt.interestRate / 100)) / 12;
+  const annualInterestSaved = monthlyInterestSaved * 12;
+
+  // Once debt is paid off, the minimum payment becomes "freed up" income
+  const freedUpPayment = highestRateDebt.minimumPayment;
+  const newMonthlyNeeds = monthlyNeeds - freedUpPayment;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  return {
+    id: 'debt_payoff_avalanche',
+    type: 'debt_payoff',
+    title: `Crush ${highestRateDebt.name} (${highestRateDebt.interestRate}% APR)`,
+    description: `Avalanche method: add $${extraMonthly.toFixed(0)}/mo to highest-interest debt`,
+    emoji: '🔥',
+    difficulty: 'medium',
+    timeframe: `${Math.ceil(monthsToPayOff)} months`,
+
+    changes: {
+      updateDebts: [{
+        id: highestRateDebt.id,
+        updates: {
+          minimumPayment: highestRateDebt.minimumPayment + extraMonthly,
+        }
+      }]
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+      monthlySavings: freedUpPayment,
+      interestSaved: annualInterestSaved,
+    },
+
+    reasoning: `Your ${highestRateDebt.name} at ${highestRateDebt.interestRate}% APR is costing you $${monthlyInterestSaved.toFixed(0)}/mo in interest alone. By adding $${extraMonthly.toFixed(0)}/mo extra, you pay it off ${monthsSaved} months sooner and free up $${freedUpPayment.toFixed(0)}/mo in cash flow.`,
+
+    risks: [
+      'Requires consistent extra payments each month',
+      'Less cash available for other investments during payoff',
+      'Opportunity cost if investment returns exceed debt rate',
     ],
 
     steps: [
-      'Review last 3 months of spending',
-      'Cancel unused subscriptions',
-      'Negotiate bills (insurance, phone, internet)',
-      'Meal prep instead of eating out',
-      'Use cash for discretionary spending',
+      `Set up auto-pay of $${(highestRateDebt.minimumPayment + extraMonthly).toFixed(0)}/mo on ${highestRateDebt.name}`,
+      'Once paid off, roll that payment into the next highest-rate debt',
+      'Avoid taking on new debt during payoff period',
+      'Consider balance transfer to 0% APR card if available',
+    ],
+  };
+}
+
+function generateDebtRefinanceScenario(
+  debts: Debt[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Find debts with high interest rates that could be refinanced
+  const refinanceable = debts.filter(d =>
+    d.isActive &&
+    d.balance > 2000 &&
+    d.interestRate > 10 // Only suggest refi for 10%+ rates
+  );
+
+  if (refinanceable.length === 0) return null;
+
+  const totalBalance = refinanceable.reduce((sum, d) => sum + d.balance, 0);
+  const totalCurrentPayments = refinanceable.reduce((sum, d) => sum + d.minimumPayment, 0);
+  const weightedRate = refinanceable.reduce((sum, d) =>
+    sum + (d.interestRate * (d.balance / totalBalance)), 0
+  );
+
+  // Target: consolidate at 7% (personal loan / balance transfer rate)
+  const targetRate = 7;
+  if (weightedRate <= targetRate + 2) return null; // Not worth it if rate is close
+
+  // Calculate new monthly payment (same term, lower rate)
+  const avgRemainingMonths = 36; // Assume 3-year consolidation loan
+  const monthlyRate = targetRate / 100 / 12;
+  const newMonthlyPayment = totalBalance *
+    (monthlyRate * Math.pow(1 + monthlyRate, avgRemainingMonths)) /
+    (Math.pow(1 + monthlyRate, avgRemainingMonths) - 1);
+
+  const monthlySavings = totalCurrentPayments - newMonthlyPayment;
+  if (monthlySavings < 25) return null;
+
+  const annualSavings = monthlySavings * 12;
+  const newMonthlyNeeds = monthlyNeeds - monthlySavings;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  return {
+    id: 'debt_refinance',
+    type: 'debt_refinance',
+    title: `Refinance $${totalBalance.toLocaleString()} debt from ${weightedRate.toFixed(1)}% → ${targetRate}%`,
+    description: `Consolidate high-interest debt into a lower-rate personal loan`,
+    emoji: '🔄',
+    difficulty: 'medium',
+    timeframe: '2-4 weeks',
+
+    changes: {
+      removeDebts: refinanceable.map(d => d.id),
+      addDebts: [{
+        name: 'Consolidated Personal Loan',
+        balance: totalBalance,
+        interestRate: targetRate,
+        minimumPayment: newMonthlyPayment,
+        isActive: true,
+      }]
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+      monthlySavings: monthlySavings,
+    },
+
+    reasoning: `You're paying ${weightedRate.toFixed(1)}% across $${totalBalance.toLocaleString()} in debt. Consolidating at ${targetRate}% saves $${monthlySavings.toFixed(0)}/mo ($${annualSavings.toFixed(0)}/year) and simplifies payments into one bill.`,
+
+    risks: [
+      'Requires good credit score (680+) for best rates',
+      'Origination fees may apply (1-6% of loan amount)',
+      'Longer term means more total interest if not paid early',
+      'Temptation to rack up new debt on freed-up credit',
+    ],
+
+    steps: [
+      'Check credit score (Credit Karma, Experian)',
+      'Compare personal loan rates (SoFi, LightStream, Marcus)',
+      'Apply for consolidation loan',
+      'Use proceeds to pay off high-interest debts',
+      'Set up autopay on new loan for rate discount',
+    ],
+  };
+}
+
+function generateTaxOptimizationScenario(
+  incomeSources: IncomeSource[],
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Estimate annual salary from income sources
+  const salarySource = incomeSources.find(s =>
+    s.isActive && (s.type === 'salary' || s.type === 'w2' || s.frequency === 'biweekly')
+  );
+
+  if (!salarySource) return null;
+
+  let annualSalary = 0;
+  if (salarySource.frequency === 'monthly') annualSalary = salarySource.amount * 12;
+  else if (salarySource.frequency === 'biweekly') annualSalary = salarySource.amount * 26;
+  else if (salarySource.frequency === 'weekly') annualSalary = salarySource.amount * 52;
+  else annualSalary = salarySource.amount;
+
+  if (annualSalary < 40000) return null; // Too low to benefit meaningfully
+
+  // Check if they already have retirement accounts
+  const retirementAssets = assets.filter(a =>
+    a.name?.toLowerCase().includes('401k') ||
+    a.name?.toLowerCase().includes('ira') ||
+    a.name?.toLowerCase().includes('roth') ||
+    a.name?.toLowerCase().includes('retirement') ||
+    (a.metadata as any)?.accountType === 'retirement'
+  );
+
+  const currentContributions = retirementAssets.reduce((sum, a) =>
+    sum + ((a.metadata as any)?.annualContribution || 0), 0
+  );
+
+  // 2025 limits: 401k = $23,500, IRA = $7,000
+  const max401k = 23500;
+  const maxIRA = 7000;
+  const maxTotal = max401k + maxIRA;
+
+  const additionalContribution = Math.min(
+    maxTotal - currentContributions,
+    annualSalary * 0.15 // Cap at 15% of salary as reasonable
+  );
+
+  if (additionalContribution < 1000) return null;
+
+  // Estimate tax bracket (simplified)
+  let marginalRate = 0.22; // Default to 22% bracket
+  if (annualSalary > 191950) marginalRate = 0.32;
+  else if (annualSalary > 100525) marginalRate = 0.24;
+  else if (annualSalary > 47150) marginalRate = 0.22;
+  else marginalRate = 0.12;
+
+  const annualTaxSavings = additionalContribution * marginalRate;
+  const monthlyTaxSavings = annualTaxSavings / 12;
+  const monthlyContribution = additionalContribution / 12;
+
+  // Net cost after tax savings
+  const netMonthlyCost = monthlyContribution - monthlyTaxSavings;
+
+  // Freedom impact: monthly needs increase by net cost (deferred, not spent)
+  const newMonthlyNeeds = monthlyNeeds + netMonthlyCost;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  return {
+    id: 'tax_optimization',
+    type: 'tax_optimization',
+    title: `Max retirement contributions → save $${annualTaxSavings.toLocaleString()}/yr in taxes`,
+    description: `Increase 401(k)/IRA contributions by $${additionalContribution.toLocaleString()}/yr`,
+    emoji: '🏦',
+    difficulty: 'easy',
+    timeframe: 'This pay period',
+
+    changes: {
+      addAssets: [{
+        name: 'Additional Retirement Contribution',
+        type: 'stocks',
+        value: 0, // Builds over time
+        annualIncome: 0,
+        isLiquid: false,
+        metadata: {
+          type: 'retirement',
+          accountType: 'retirement',
+          annualContribution: additionalContribution,
+          taxBenefit: annualTaxSavings,
+          description: '401(k) / Traditional IRA',
+        }
+      }]
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: additionalContribution,
+      annualTaxSavings: annualTaxSavings,
+      roi: (annualTaxSavings / additionalContribution) * 100,
+    },
+
+    reasoning: `At the ${(marginalRate * 100).toFixed(0)}% tax bracket, every dollar into your 401(k) saves $${marginalRate.toFixed(2)} in taxes immediately. Contributing $${additionalContribution.toLocaleString()}/yr puts $${annualTaxSavings.toLocaleString()} back in your pocket and builds long-term wealth. Your money also grows tax-deferred.`,
+
+    risks: [
+      'Funds locked until age 59½ (10% early withdrawal penalty)',
+      'Reduces take-home pay in the short term',
+      'Traditional contributions taxed on withdrawal in retirement',
+      'Contribution limits change annually',
+    ],
+
+    steps: [
+      'Log into employer benefits portal',
+      `Increase 401(k) contribution to ${Math.min(((currentContributions + additionalContribution) / annualSalary) * 100, 15).toFixed(0)}% of salary`,
+      'Open Traditional or Roth IRA if needed (Fidelity, Vanguard, Schwab)',
+      'Set up automatic monthly IRA contribution',
+      'Choose target-date fund or low-cost index fund (e.g., VTI)',
+    ],
+  };
+}
+
+function generatePerenaYieldScenario(
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Find idle stablecoins or cash that could go into Perena
+  const stablecoinAssets = assets.filter(a =>
+    a.type === 'crypto' && (
+      (a.metadata as any)?.symbol?.toUpperCase() === 'USDC' ||
+      (a.metadata as any)?.symbol?.toUpperCase() === 'USDT' ||
+      (a.metadata as any)?.symbol?.toUpperCase() === 'DAI' ||
+      (a.metadata as any)?.symbol?.toUpperCase() === 'PYUSD'
+    ) &&
+    ((a.metadata as any)?.apy || 0) < 8 && // Not already earning competitive yield
+    a.value > 100
+  );
+
+  // Also consider idle cash for conversion to stablecoins → Perena
+  const cashAssets = assets.filter(a =>
+    a.type === 'bank_account' &&
+    ((a.metadata as any)?.accountType === 'savings' ||
+      (a.metadata as any)?.accountType === 'checking')
+  );
+  const totalCash = cashAssets.reduce((sum, a) => sum + a.value, 0);
+
+  const totalStablecoins = stablecoinAssets.reduce((sum, a) => sum + a.value, 0);
+
+  // Consider moving up to 30% of excess cash into Perena as well
+  const emergencyFund = 2000;
+  const excessCash = Math.max(0, totalCash - emergencyFund);
+  const cashToConvert = Math.floor(excessCash * 0.3);
+
+  const totalToDeposit = totalStablecoins + cashToConvert;
+  if (totalToDeposit < 100) return null;
+
+  const perenaAPY = 9.34;
+  const currentStablecoinIncome = stablecoinAssets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
+
+  const newAnnualIncome = totalToDeposit * (perenaAPY / 100);
+  const annualIncomeDelta = newAnnualIncome - currentStablecoinIncome;
+  const monthlyIncomeDelta = annualIncomeDelta / 12;
+
+  const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
+  const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
+
+  const description = cashToConvert > 0
+    ? `Deposit $${totalStablecoins.toLocaleString()} stablecoins + convert $${cashToConvert.toLocaleString()} cash into Perena`
+    : `Deposit $${totalToDeposit.toLocaleString()} stablecoins into Perena`;
+
+  return {
+    id: 'perena_yield',
+    type: 'perena_yield',
+    title: `Earn ${perenaAPY}% on $${totalToDeposit.toLocaleString()} via Perena`,
+    description,
+    emoji: '🌊',
+    difficulty: stablecoinAssets.length > 0 ? 'easy' : 'medium',
+    timeframe: 'This week',
+
+    changes: {
+      updateAssets: stablecoinAssets.map(a => ({
+        id: a.id,
+        updates: {
+          annualIncome: a.value * (perenaAPY / 100),
+          metadata: {
+            ...(a.metadata as any),
+            apy: perenaAPY,
+            protocol: 'Perena',
+            description: 'Perena Stablecoin Yield',
+          }
+        }
+      })),
+      ...(cashToConvert > 0 ? {
+        addAssets: [{
+          name: 'Perena USDC Deposit',
+          type: 'crypto' as const,
+          value: cashToConvert,
+          annualIncome: cashToConvert * (perenaAPY / 100),
+          isLiquid: true,
+          metadata: {
+            type: 'other' as const,
+            symbol: 'USDC',
+            apy: perenaAPY,
+            protocol: 'Perena',
+            description: 'USDC deposited in Perena',
+          }
+        }]
+      } : {})
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: monthlyIncomeDelta,
+      annualIncomeDelta: annualIncomeDelta,
+      investmentRequired: cashToConvert,
+      totalDeposit: totalToDeposit,  // ← add this line
+      roi: perenaAPY,
+    },
+
+    reasoning: `You have $${totalToDeposit.toLocaleString()} in stablecoins${cashToConvert > 0 ? ' and convertible cash' : ''} that could earn ${perenaAPY}% APY through Perena's stablecoin infrastructure. That's $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk — no price exposure to volatile crypto.`,
+
+    risks: [
+      'Smart contract risk (Perena protocol)',
+      'Stablecoin depeg risk (unlikely for USDC but non-zero)',
+      'APY may fluctuate based on protocol utilization',
+      'DeFi protocols are not FDIC insured',
+    ],
+
+    steps: [
+      ...(cashToConvert > 0 ? [
+        'Buy USDC on Coinbase or through on-ramp',
+        'Transfer USDC to Solana wallet',
+      ] : []),
+      'Go to Perena (perena.org)',
+      'Connect your wallet',
+      'Deposit stablecoins into yield vault',
+      'Monitor yield and rebalance periodically',
+    ],
+  };
+}
+
+function generateHYSAScenario(
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Find checking accounts with significant balances
+  const checkingAssets = assets.filter(a =>
+    a.type === 'bank_account' &&
+    (a.metadata as any)?.accountType === 'checking' &&
+    a.value > 3000
+  );
+
+  if (checkingAssets.length === 0) return null;
+
+  const totalChecking = checkingAssets.reduce((sum, a) => sum + a.value, 0);
+
+  // Keep 1 month of expenses in checking, move rest to HYSA
+  const keepInChecking = monthlyNeeds > 0 ? monthlyNeeds * 1.5 : 2000;
+  const moveToHYSA = Math.max(0, totalChecking - keepInChecking);
+
+  if (moveToHYSA < 1000) return null;
+
+  // HYSA rate ~4.5% APY (current competitive rate)
+  const hysaAPY = 4.5;
+  const annualIncome = moveToHYSA * (hysaAPY / 100);
+  const monthlyIncome = annualIncome / 12;
+
+  const newMonthlyIncome = currentMonthlyIncome + monthlyIncome;
+  const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
+
+  return {
+    id: 'hysa_transfer',
+    type: 'hysa_transfer',
+    title: `Move $${moveToHYSA.toLocaleString()} to a high-yield savings account`,
+    description: `Earn ${hysaAPY}% APY on idle cash instead of ~0.01% in checking`,
+    emoji: '💵',
+    difficulty: 'easy',
+    timeframe: 'This week',
+
+    changes: {
+      addAssets: [{
+        name: 'High-Yield Savings Account',
+        type: 'bank_account' as const,
+        value: moveToHYSA,
+        annualIncome: annualIncome,
+        isLiquid: true,
+        metadata: {
+          type: 'other' as const,
+          accountType: 'savings',
+          apy: hysaAPY,
+          description: 'High-Yield Savings (FDIC Insured)',
+        }
+      }],
+      updateAssets: checkingAssets.map(a => ({
+        id: a.id,
+        updates: {
+          value: a.value - (moveToHYSA * (a.value / totalChecking))
+        }
+      }))
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: monthlyIncome,
+      annualIncomeDelta: annualIncome,
+      investmentRequired: 0,
+      roi: hysaAPY,
+    },
+
+    reasoning: `You have $${totalChecking.toLocaleString()} sitting in checking earning essentially nothing. Moving $${moveToHYSA.toLocaleString()} to a HYSA earns $${monthlyIncome.toFixed(0)}/mo risk-free while staying fully liquid and FDIC insured.`,
+
+    risks: [
+      'HYSA rates fluctuate with the Fed funds rate',
+      'Takes 1-2 business days to transfer back if needed',
+      'Some HYSAs have withdrawal limits (6/month)',
+    ],
+
+    steps: [
+      'Open HYSA (Marcus, Ally, Wealthfront, SoFi)',
+      'Link your checking account',
+      `Transfer $${moveToHYSA.toLocaleString()} to HYSA`,
+      'Set up automatic monthly sweep from checking',
     ],
   };
 }
@@ -520,7 +1345,7 @@ function calculateMonthlyIncome(
 
 function calculateMonthlyNeeds(
   obligations: Obligation[],
-  debts: DebtPayment[]
+  debts: Debt[]
 ): number {
   const obligationTotal = obligations.reduce((sum, o) => sum + o.amount, 0);
   const debtTotal = debts
@@ -528,4 +1353,22 @@ function calculateMonthlyNeeds(
     .reduce((sum, d) => sum + d.minimumPayment, 0);
 
   return obligationTotal + debtTotal;
+}
+
+function formatCurrencyShort(amt: number): string {
+  if (amt >= 1000) return `$${(amt / 1000).toFixed(1)}k`;
+  return `$${Math.round(amt)}`;
+}
+
+function cleanMerchantName(description: string): string {
+  // Remove common suffixes, reference numbers, dates, and normalize
+  return description
+    .replace(/\b\d{4,}\b/g, '')           // Remove long numbers (ref IDs, dates)
+    .replace(/\b(debit|credit|purchase|pos|web|online|mobile|pmnt?|pmt|ach|autopay)\b/gi, '')
+    .replace(/\b\d{1,2}\/\d{1,2}\b/g, '') // Remove dates like 02/13
+    .replace(/[*#]+/g, '')                 // Remove asterisks and hashes
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 30)                      // Cap length
+    .trim() || description.substring(0, 30);
 }

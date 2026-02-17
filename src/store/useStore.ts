@@ -1010,6 +1010,8 @@ export const useStore = create<AppState>((set, get) => ({
       incomeSources: state.income.sources || [],
       obligations: state.obligations,
       debts: state.debts,
+      bankTransactions: state.bankTransactions || [],
+      investmentTheses: state.investmentTheses || [],
     };
 
     const scenarios = generateSmartScenarios(profile);
@@ -1178,7 +1180,7 @@ export const useStore = create<AppState>((set, get) => ({
         // Check if this is a commodity token by symbol
         const symbolUpper = (sa.symbol || '').toUpperCase();
         const isCommodity = COMMODITY_SYMBOLS.includes(symbolUpper) ||
-                            sa.category === 'commodities';
+          sa.category === 'commodities';
         const effectiveCategory = isCommodity ? 'commodities' : (sa.category || 'crypto');
 
         // Preserve existing APY and annualIncome if API returns 0
@@ -1351,6 +1353,7 @@ export const useFreedomScore = () => {
     obligations: state.obligations,
     desires: state.desires,
     debts: state.debts,
+    investmentTheses: state.investmentTheses,
   }));
 
   return calculateFreedom(profile as UserProfile);

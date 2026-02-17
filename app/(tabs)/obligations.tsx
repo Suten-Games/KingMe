@@ -1,14 +1,37 @@
 // app/(tabs)/obligations.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
-import { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Animated } from 'react-native';
+import { useState, useMemo, useRef } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useStore } from '../../src/store/useStore';
+import { useStore, useFreedomScore } from '../../src/store/useStore';
 import type { Obligation } from '../../src/types';
 import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
 import { T } from '../../src/theme';
+
+// ─── Audit helpers ──────────────────────────────────────────────────────────
+type NecessityLevel = 'essential' | 'important' | 'nice_to_have' | 'cuttable' | 'unreviewed';
+
+const NECESSITY_META: Record<NecessityLevel, { label: string; emoji: string; color: string; description: string }> = {
+  essential:    { label: 'Essential',     emoji: '🔒', color: '#ef4444', description: 'Cannot function without this' },
+  important:    { label: 'Important',     emoji: '⚡', color: '#f97316', description: 'Significantly impacts quality of life' },
+  nice_to_have: { label: 'Nice to Have',  emoji: '✨', color: '#eab308', description: 'Enjoyable but could live without' },
+  cuttable:     { label: 'Cut This',      emoji: '✂️', color: '#22c55e', description: 'Not worth the cost — cut it' },
+  unreviewed:   { label: 'Not Reviewed',  emoji: '❓', color: '#6b7280', description: 'Tap to evaluate' },
+};
+
+const CHALLENGE_QUESTIONS: Record<string, string[]> = {
+  housing:       ['Is this the most cost-effective option?', 'Could you negotiate a lower rate?', 'Would a roommate offset this?'],
+  utilities:     ['Are you on the cheapest plan?', 'Have you compared providers recently?', 'Can you reduce usage?'],
+  insurance:     ['When did you last shop around?', 'Are you over-insured?', 'Could you raise deductibles?'],
+  subscription:  ['When did you last use this?', 'Does anyone in your household actually use this?', 'Is there a free alternative?'],
+  food:          ['How often do you cook at home?', 'Could meal prepping replace some of this?', 'Is delivery worth the markup?'],
+  transport:     ['Is there a cheaper route or mode?', 'Could you bike, walk, or carpool?', 'Are you overpaying for insurance?'],
+  entertainment: ['How often do you actually use this?', 'Could you share with someone?', 'Is there a cheaper tier?'],
+  debt:          ['Can you refinance for a lower rate?', 'Would extra payments save more in interest?', 'Is consolidation an option?'],
+  other:         ['What exactly is this for?', 'Would you sign up for this again today?', 'What happens if you stop paying?'],
+};
 
 export default function ObligationsScreen() {
   const obligations = useStore((state) => state.obligations);
@@ -31,6 +54,72 @@ export default function ObligationsScreen() {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+
+  // ── Audit mode ──
+  const [auditMode, setAuditMode] = useState(false);
+  const [auditRatings, setAuditRatings] = useState<Record<string, NecessityLevel>>({});
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
+
+  // ── Freedom score ──
+  const freedom = useFreedomScore();
+
+  // ── Per-obligation freedom impact ──
+  const obligationImpacts = useMemo(() => {
+    const totalMonthlyObs = obligations.reduce((s, o) => s + o.amount, 0);
+    const totalMonthlyDebts = debts.reduce((s, d) => s + (d.monthlyPayment || 0), 0);
+    const totalMonthlyNeeds = totalMonthlyObs + totalMonthlyDebts;
+    const dailyNeeds = totalMonthlyNeeds / 30;
+
+    // Estimate daily passive income from freedom score
+    // freedom.days = dailyPassiveIncome / dailyNeeds (approximately)
+    // So dailyPassiveIncome ≈ freedom.days * dailyNeeds (if days < infinity)
+    const freedomDays = freedom.days || 0;
+    const dailyPassive = dailyNeeds > 0 && freedomDays > 0 ? freedomDays * dailyNeeds : 0;
+
+    const impacts: Record<string, { freedomDelta: number; newFreedomDays: number; yearlyAmount: number; percentOfNeeds: number }> = {};
+
+    for (const ob of obligations) {
+      const newDailyNeeds = dailyNeeds - (ob.amount / 30);
+      const newFreedomDays = newDailyNeeds > 0 && dailyPassive > 0 ? dailyPassive / newDailyNeeds : 0;
+      const delta = newFreedomDays - freedomDays;
+
+      impacts[ob.id] = {
+        freedomDelta: delta,
+        newFreedomDays: newFreedomDays,
+        yearlyAmount: ob.amount * 12,
+        percentOfNeeds: totalMonthlyNeeds > 0 ? (ob.amount / totalMonthlyNeeds) * 100 : 0,
+      };
+    }
+
+    return impacts;
+  }, [obligations, debts, freedom]);
+
+  // ── Audit summary ──
+  const auditSummary = useMemo(() => {
+    const cuttable = obligations.filter(o => auditRatings[o.id] === 'cuttable');
+    const niceToHave = obligations.filter(o => auditRatings[o.id] === 'nice_to_have');
+    const unreviewed = obligations.filter(o => !auditRatings[o.id] || auditRatings[o.id] === 'unreviewed');
+    const reviewed = obligations.filter(o => auditRatings[o.id] && auditRatings[o.id] !== 'unreviewed');
+
+    const cuttableTotal = cuttable.reduce((s, o) => s + o.amount, 0);
+    const niceToHaveTotal = niceToHave.reduce((s, o) => s + o.amount, 0);
+    const cuttableFreedomGain = cuttable.reduce((s, o) => s + (obligationImpacts[o.id]?.freedomDelta || 0), 0);
+
+    return { cuttable, niceToHave, unreviewed, reviewed, cuttableTotal, niceToHaveTotal, cuttableFreedomGain };
+  }, [obligations, auditRatings, obligationImpacts]);
+
+  const setRating = (obId: string, level: NecessityLevel) => {
+    setAuditRatings(prev => ({ ...prev, [obId]: level }));
+  };
+
+  const handleCutAll = () => {
+    auditSummary.cuttable.forEach(o => removeObligation(o.id));
+    setAuditRatings(prev => {
+      const next = { ...prev };
+      auditSummary.cuttable.forEach(o => delete next[o.id]);
+      return next;
+    });
+  };
 
   const paymentStatus = useMemo(() =>
     getMonthlyPaymentStatus(obligations, debts, bankAccounts, currentYear, currentMonth),
@@ -102,10 +191,65 @@ export default function ObligationsScreen() {
         <View style={s.section}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Your Obligations</Text>
-            <TouchableOpacity style={s.addButton} onPress={() => setShowAddModal(true)}>
-              <Text style={s.addButtonText}>+ Add</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[s.auditToggle, auditMode && s.auditToggleActive]}
+                onPress={() => { setAuditMode(!auditMode); setExpandedAuditId(null); }}>
+                <Text style={[s.auditToggleText, auditMode && s.auditToggleTextActive]}>
+                  {auditMode ? '✓ Auditing' : '🔍 Audit'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.addButton} onPress={() => setShowAddModal(true)}>
+                <Text style={s.addButtonText}>+ Add</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* ── Audit Summary Banner ── */}
+          {auditMode && auditSummary.reviewed.length > 0 && (
+            <LinearGradient colors={['#1a2a1a', '#0e1e0e', '#0a0e1a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={s.auditBanner}>
+              <Text style={s.auditBannerTitle}>📋 Audit Progress</Text>
+              <View style={s.auditProgressRow}>
+                <View style={s.auditProgressBarBg}>
+                  <View style={[s.auditProgressBarFill, { width: `${(auditSummary.reviewed.length / obligations.length) * 100}%` }]} />
+                </View>
+                <Text style={s.auditProgressText}>{auditSummary.reviewed.length}/{obligations.length}</Text>
+              </View>
+
+              <View style={s.auditStatsRow}>
+                <View style={s.auditStat}>
+                  <Text style={[s.auditStatValue, { color: '#22c55e' }]}>{auditSummary.cuttable.length}</Text>
+                  <Text style={s.auditStatLabel}>Can Cut</Text>
+                </View>
+                <View style={s.auditStat}>
+                  <Text style={[s.auditStatValue, { color: '#eab308' }]}>{auditSummary.niceToHave.length}</Text>
+                  <Text style={s.auditStatLabel}>Nice to Have</Text>
+                </View>
+                <View style={s.auditStat}>
+                  <Text style={[s.auditStatValue, { color: '#6b7280' }]}>{auditSummary.unreviewed.length}</Text>
+                  <Text style={s.auditStatLabel}>Unreviewed</Text>
+                </View>
+              </View>
+
+              {auditSummary.cuttableTotal > 0 && (
+                <View style={s.auditSavings}>
+                  <View>
+                    <Text style={s.auditSavingsLabel}>If you cut everything marked "Cut This":</Text>
+                    <Text style={s.auditSavingsValue}>
+                      Save ${auditSummary.cuttableTotal.toFixed(0)}/mo · ${(auditSummary.cuttableTotal * 12).toLocaleString()}/yr
+                    </Text>
+                    <Text style={s.auditSavingsFreedom}>
+                      +{auditSummary.cuttableFreedomGain.toFixed(1)} days of freedom
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={s.cutAllBtn} onPress={handleCutAll}>
+                    <Text style={s.cutAllBtnText}>✂️ Cut All</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </LinearGradient>
+          )}
 
           {obligations.length === 0 ? (
             <View style={s.emptyState}>
@@ -113,13 +257,41 @@ export default function ObligationsScreen() {
               <Text style={s.emptySubtext}>Tap "+ Add" to add your first obligation</Text>
             </View>
           ) : (
-            obligations.slice().sort((a, b) => (a.dueDate ?? 999) - (b.dueDate ?? 999)).map((ob) => (
-              <TouchableOpacity key={ob.id} onPress={() => handleEditObligation(ob)}>
+            obligations.slice().sort((a, b) => {
+              // In audit mode, sort unreviewed first
+              if (auditMode) {
+                const aRating = auditRatings[a.id] || 'unreviewed';
+                const bRating = auditRatings[b.id] || 'unreviewed';
+                if (aRating === 'unreviewed' && bRating !== 'unreviewed') return -1;
+                if (aRating !== 'unreviewed' && bRating === 'unreviewed') return 1;
+              }
+              return (a.dueDate ?? 999) - (b.dueDate ?? 999);
+            }).map((ob) => {
+              const rating = auditRatings[ob.id] || 'unreviewed';
+              const ratingMeta = NECESSITY_META[rating];
+              const impact = obligationImpacts[ob.id];
+              const isExpanded = expandedAuditId === ob.id;
+              const category = ob.category || 'other';
+              const questions = CHALLENGE_QUESTIONS[category] || CHALLENGE_QUESTIONS.other;
+
+              return (
+              <TouchableOpacity key={ob.id} onPress={() => auditMode ? setExpandedAuditId(isExpanded ? null : ob.id) : handleEditObligation(ob)}>
                 <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                  style={[s.obligationCard, { borderColor: T.gold + '40' }]}>
+                  style={[
+                    s.obligationCard,
+                    { borderColor: auditMode ? ratingMeta.color + '60' : T.gold + '40' },
+                    auditMode && rating === 'cuttable' && s.obligationCardCuttable,
+                  ]}>
                   <View style={s.obligationHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.obligationName}>{ob.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={s.obligationName}>{ob.name}</Text>
+                        {auditMode && (
+                          <View style={[s.ratingBadge, { backgroundColor: ratingMeta.color + '20', borderColor: ratingMeta.color + '60' }]}>
+                            <Text style={[s.ratingBadgeText, { color: ratingMeta.color }]}>{ratingMeta.emoji} {ratingMeta.label}</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={s.obligationPayee}>Paid to: {ob.payee}</Text>
                       {ob.bankAccountId ? (
                         <Text style={s.obligationAccount}>
@@ -138,10 +310,90 @@ export default function ObligationsScreen() {
                       <Text style={s.deleteButton}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={s.obligationAmount}>${ob.amount.toFixed(2)}/month</Text>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={s.obligationAmount}>${ob.amount.toFixed(2)}/month</Text>
+                    {auditMode && impact && (
+                      <Text style={s.freedomChip}>
+                        +{impact.freedomDelta.toFixed(1)}d freedom if cut
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* ── Audit Expanded Section ── */}
+                  {auditMode && isExpanded && (
+                    <View style={s.auditExpanded}>
+                      {/* Freedom impact */}
+                      <View style={s.auditImpactBox}>
+                        <Text style={s.auditImpactTitle}>💡 What cutting this means</Text>
+                        <View style={s.auditImpactRow}>
+                          <View style={s.auditImpactStat}>
+                            <Text style={s.auditImpactValue}>${ob.amount.toFixed(0)}/mo</Text>
+                            <Text style={s.auditImpactLabel}>Saved Monthly</Text>
+                          </View>
+                          <View style={s.auditImpactStat}>
+                            <Text style={s.auditImpactValue}>${(ob.amount * 12).toLocaleString()}/yr</Text>
+                            <Text style={s.auditImpactLabel}>Saved Yearly</Text>
+                          </View>
+                          <View style={s.auditImpactStat}>
+                            <Text style={[s.auditImpactValue, { color: '#22c55e' }]}>+{impact?.freedomDelta.toFixed(1)}d</Text>
+                            <Text style={s.auditImpactLabel}>More Freedom</Text>
+                          </View>
+                        </View>
+                        <Text style={s.auditImpactPercent}>
+                          This is {impact?.percentOfNeeds.toFixed(1)}% of your total monthly needs
+                        </Text>
+                      </View>
+
+                      {/* Challenge questions */}
+                      <View style={s.auditQuestions}>
+                        <Text style={s.auditQuestionsTitle}>🤔 Ask yourself...</Text>
+                        {questions.map((q, i) => (
+                          <View key={i} style={s.auditQuestionRow}>
+                            <Text style={s.auditQuestionBullet}>•</Text>
+                            <Text style={s.auditQuestionText}>{q}</Text>
+                          </View>
+                        ))}
+                        <Text style={s.auditQuestionPrompt}>
+                          If you wouldn't sign up for this again today at ${ob.amount.toFixed(0)}/mo, it might be time to cut it.
+                        </Text>
+                      </View>
+
+                      {/* Rating buttons */}
+                      <Text style={s.auditRateTitle}>Rate this obligation:</Text>
+                      <View style={s.auditRateGrid}>
+                        {(['essential', 'important', 'nice_to_have', 'cuttable'] as NecessityLevel[]).map(level => {
+                          const meta = NECESSITY_META[level];
+                          const isSelected = rating === level;
+                          return (
+                            <TouchableOpacity key={level}
+                              style={[s.auditRateBtn, isSelected && { borderColor: meta.color, backgroundColor: meta.color + '15' }]}
+                              onPress={() => setRating(ob.id, level)}>
+                              <Text style={s.auditRateEmoji}>{meta.emoji}</Text>
+                              <Text style={[s.auditRateBtnLabel, isSelected && { color: meta.color, fontFamily: T.fontBold }]}>{meta.label}</Text>
+                              <Text style={s.auditRateBtnDesc}>{meta.description}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Quick actions */}
+                      {rating === 'cuttable' && (
+                        <TouchableOpacity style={s.cutBtn} onPress={() => { removeObligation(ob.id); setExpandedAuditId(null); }}>
+                          <Text style={s.cutBtnText}>✂️ Cut this — save ${ob.amount.toFixed(0)}/month</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Tap hint in audit mode */}
+                  {auditMode && !isExpanded && (
+                    <Text style={s.auditTapHint}>{rating === 'unreviewed' ? 'Tap to review →' : 'Tap to change rating →'}</Text>
+                  )}
                 </LinearGradient>
               </TouchableOpacity>
-            ))
+            );
+            })
           )}
 
           {/* Calendar Modal */}
@@ -254,6 +506,7 @@ const s = StyleSheet.create({
   emptySubtext: { fontSize: 14, color: T.textDim, textAlign: 'center', fontFamily: T.fontRegular },
 
   obligationCard: { ...T.cardBase, borderLeftWidth: 4, borderLeftColor: T.gold },
+  obligationCardCuttable: { borderLeftColor: '#22c55e', opacity: 0.85 },
   obligationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   obligationName: { fontSize: 18, color: T.textPrimary, marginBottom: 4, fontFamily: T.fontBold },
   obligationPayee: { fontSize: 14, color: T.textSecondary, fontFamily: T.fontRegular },
@@ -290,4 +543,70 @@ const s = StyleSheet.create({
   modalAddButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.gold, alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
+
+  // ── Audit Mode ──
+  auditToggle: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: T.radius.sm, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.bgCard },
+  auditToggleActive: { borderColor: '#22c55e', backgroundColor: '#22c55e20' },
+  auditToggleText: { fontSize: 13, color: T.textMuted, fontFamily: T.fontMedium },
+  auditToggleTextActive: { color: '#22c55e', fontFamily: T.fontBold },
+
+  // Rating badge
+  ratingBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  ratingBadgeText: { fontSize: 10, fontFamily: T.fontSemiBold },
+
+  // Freedom chip
+  freedomChip: { fontSize: 12, color: '#22c55e', fontFamily: T.fontSemiBold, backgroundColor: '#22c55e15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+
+  // Audit banner
+  auditBanner: { ...T.cardBase, borderWidth: 1.5, borderColor: '#22c55e40', padding: 18, marginBottom: 16 },
+  auditBannerTitle: { fontSize: 16, color: T.textPrimary, fontFamily: T.fontExtraBold, marginBottom: 12 },
+  auditProgressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  auditProgressBarBg: { flex: 1, height: 8, backgroundColor: T.border, borderRadius: 4 },
+  auditProgressBarFill: { height: 8, backgroundColor: '#22c55e', borderRadius: 4 },
+  auditProgressText: { fontSize: 13, color: T.textMuted, fontFamily: T.fontSemiBold },
+  auditStatsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 14 },
+  auditStat: { alignItems: 'center' },
+  auditStatValue: { fontSize: 22, fontFamily: T.fontExtraBold },
+  auditStatLabel: { fontSize: 11, color: T.textMuted, fontFamily: T.fontMedium, marginTop: 2 },
+  auditSavings: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#22c55e10', borderRadius: T.radius.md, padding: 14, borderWidth: 1, borderColor: '#22c55e30' },
+  auditSavingsLabel: { fontSize: 12, color: T.textMuted, fontFamily: T.fontRegular, marginBottom: 4 },
+  auditSavingsValue: { fontSize: 16, color: '#22c55e', fontFamily: T.fontBold },
+  auditSavingsFreedom: { fontSize: 13, color: '#22c55e', fontFamily: T.fontSemiBold, marginTop: 2 },
+  cutAllBtn: { backgroundColor: '#22c55e', paddingHorizontal: 16, paddingVertical: 10, borderRadius: T.radius.sm },
+  cutAllBtnText: { color: T.bg, fontFamily: T.fontBold, fontSize: 14 },
+
+  // Audit expanded
+  auditExpanded: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: T.border },
+
+  // Impact box
+  auditImpactBox: { backgroundColor: '#1a2a3a', borderRadius: T.radius.md, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#60a5fa30' },
+  auditImpactTitle: { fontSize: 14, color: '#60a5fa', fontFamily: T.fontBold, marginBottom: 10 },
+  auditImpactRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
+  auditImpactStat: { alignItems: 'center' },
+  auditImpactValue: { fontSize: 18, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  auditImpactLabel: { fontSize: 10, color: T.textMuted, fontFamily: T.fontMedium, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  auditImpactPercent: { fontSize: 12, color: T.textMuted, textAlign: 'center', fontFamily: T.fontRegular },
+
+  // Questions
+  auditQuestions: { backgroundColor: '#2a1a2a', borderRadius: T.radius.md, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#c084fc30' },
+  auditQuestionsTitle: { fontSize: 14, color: '#c084fc', fontFamily: T.fontBold, marginBottom: 10 },
+  auditQuestionRow: { flexDirection: 'row', marginBottom: 8, paddingLeft: 4 },
+  auditQuestionBullet: { fontSize: 14, color: '#c084fc', marginRight: 8, fontFamily: T.fontBold },
+  auditQuestionText: { fontSize: 14, color: T.textSecondary, fontFamily: T.fontRegular, flex: 1, lineHeight: 20 },
+  auditQuestionPrompt: { fontSize: 13, color: T.gold, fontFamily: T.fontMedium, marginTop: 8, fontStyle: 'italic', lineHeight: 18 },
+
+  // Rating grid
+  auditRateTitle: { fontSize: 14, color: T.textPrimary, fontFamily: T.fontBold, marginBottom: 10 },
+  auditRateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  auditRateBtn: { width: '47%' as any, padding: 12, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.bgCard },
+  auditRateEmoji: { fontSize: 20, marginBottom: 4 },
+  auditRateBtnLabel: { fontSize: 13, color: T.textPrimary, fontFamily: T.fontMedium, marginBottom: 2 },
+  auditRateBtnDesc: { fontSize: 10, color: T.textMuted, fontFamily: T.fontRegular, lineHeight: 14 },
+
+  // Cut button
+  cutBtn: { backgroundColor: '#22c55e', borderRadius: T.radius.md, padding: 14, alignItems: 'center' },
+  cutBtnText: { color: T.bg, fontSize: 15, fontFamily: T.fontBold },
+
+  // Tap hint
+  auditTapHint: { fontSize: 11, color: T.textDim, marginTop: 8, fontFamily: T.fontRegular, textAlign: 'right' },
 });

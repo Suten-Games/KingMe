@@ -14,6 +14,8 @@ import WhatIfModal from '@/components/WhatIfModal';
 import { Asset, WhatIfScenario } from '@/types';
 import { generateSmartScenarios } from '@/utils/scenarioGenerator';
 import ThesisAlerts from '@/components/ThesisAlerts';
+import { useSwapScenario } from '@/hooks/useSwapScenario';
+import { isOnChainScenario } from '@/services/jupiterSwap';
 
 const HEALTH_COLORS: Record<string, { bg: string[]; text: string; border: string }> = {
   critical:   { bg: ['#7a2020', '#3a0e0e', '#1a0808'], text: '#ff8a8a', border: '#ff6b6b80' },
@@ -48,6 +50,8 @@ export default function HomeScreen() {
   const dismissThesisAlert = useStore(s => s.dismissThesisAlert);
   const checkThesisAlerts = useStore(s => s.checkThesisAlerts);
 
+  const { swapState, previewScenario, applyWithSwap, reset } = useSwapScenario();
+
   const freedom = useFreedomScore();
 
   const cashFlow = useMemo(
@@ -78,10 +82,28 @@ export default function HomeScreen() {
 
   useEffect(() => { generateScenarios(); }, []);
 
-  const handleViewScenario = (s: WhatIfScenario) => { setSelectedScenario(s); setShowModal(true); };
+  //const handleViewScenario = (s: WhatIfScenario) => { setSelectedScenario(s); setShowModal(true); };
+  const handleViewScenario = (s: WhatIfScenario) => {
+    setSelectedScenario(s);
+    setShowModal(true);
+    previewScenario(s);  // Fetches Jupiter quote in background for on-chain scenarios
+  };
+  // const handleApplyScenario = async (s: WhatIfScenario) => {
+  //   try { await applyScenario(s); setShowModal(false); Alert.alert('Scenario Applied! 🎉', 'Your assets have been updated.', [{ text: 'OK' }]); }
+  //   catch { Alert.alert('Error', 'Failed to apply scenario'); }
+  // };
   const handleApplyScenario = async (s: WhatIfScenario) => {
-    try { await applyScenario(s); setShowModal(false); Alert.alert('Scenario Applied! 🎉', 'Your assets have been updated.', [{ text: 'OK' }]); }
-    catch { Alert.alert('Error', 'Failed to apply scenario'); }
+    const success = await applyWithSwap(s);
+    if (success) {
+      const onChain = isOnChainScenario(s.type);
+      if (!onChain) {
+        setShowModal(false);
+        reset();
+        Alert.alert('Scenario Applied! 🎉', 'Your financial plan has been updated.', [{ text: 'OK' }]);
+      }
+      // On-chain: modal stays open showing success + tx signature
+      // User taps "Done — Close" to dismiss
+    }
   };
 
   const monthlySurplus = cashFlow.totalMonthlyNet;
@@ -179,7 +201,14 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <WhatIfModal visible={showModal} scenario={selectedScenario} onClose={() => setShowModal(false)} onApply={handleApplyScenario} />
+      {/* <WhatIfModal visible={showModal} scenario={selectedScenario} onClose={() => setShowModal(false)} onApply={handleApplyScenario} /> */}
+      <WhatIfModal
+        visible={showModal}
+        scenario={selectedScenario}
+        onClose={() => { setShowModal(false); setSelectedScenario(null); reset(); }}
+        onApply={handleApplyScenario}
+        swapState={swapState}
+      />  
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
       <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => setInfoModal(null)}>
