@@ -1,9 +1,15 @@
-// src/providers/WalletProvider.tsx - Full MWA + Web support
+// src/providers/wallet-provider.tsx - Full MWA + Web + iOS support
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Platform } from 'react-native';
-import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 import { PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
+declare const window: any;
+
+// MWA is Android-only — conditionally require to avoid iOS crash
+let transact: any = null;
+if (Platform.OS === 'android') {
+  transact = require('@solana-mobile/mobile-wallet-adapter-protocol-web3js').transact;
+}
 
 interface WalletContextType {
   connected: boolean;
@@ -80,50 +86,54 @@ export function WalletProvider({ children }: WalletProviderProps) {
         } else {
           throw new Error('Phantom extension not found');
         }
-      } else {
-        // Mobile: Use Mobile Wallet Adapter
+      } else if (Platform.OS === 'android') {
+        // Android: Use Mobile Wallet Adapter
+        if (!transact) throw new Error('MWA not available');
+        
         console.log('🔌 Connecting to mobile wallet...');
-        await transact(async (wallet) => {
-        const authorization = await wallet.authorize({
-          cluster: 'mainnet-beta',
-          identity: {
-            name: 'KingMe',
-            uri: 'https://kingme.app',
-            icon: 'favicon.ico',
-          },
-        });
-        
-        console.log('✅ Authorized');
-        
-        const addressData = authorization.accounts[0].address;
-        
-        // Address is base64 encoded - decode it first
-        let addressBytes: Uint8Array;
-        
-        if (typeof addressData === 'string') {
-          // Decode base64 to bytes
-          const binaryString = atob(addressData);
-          addressBytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            addressBytes[i] = binaryString.charCodeAt(i);
+        await transact(async (wallet: any) => {
+          const authorization = await wallet.authorize({
+            cluster: 'mainnet-beta',
+            identity: {
+              name: 'KingMe',
+              uri: 'https://kingme.app',
+              icon: 'favicon.ico',
+            },
+          });
+          
+          console.log('✅ Authorized');
+          
+          const addressData = authorization.accounts[0].address;
+          
+          // Address is base64 encoded - decode it first
+          let addressBytes: Uint8Array;
+          
+          if (typeof addressData === 'string') {
+            // Decode base64 to bytes
+            const binaryString = atob(addressData);
+            addressBytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              addressBytes[i] = binaryString.charCodeAt(i);
+            }
+          } else {
+            addressBytes = addressData;
           }
-        } else {
-          addressBytes = addressData;
-        }
-        
-        // Now encode bytes to base58
-        const addressString = bs58.encode(addressBytes);
-        console.log('Address:', addressString);
-        
-        const pubKey = new PublicKey(addressString);
-        setPublicKey(pubKey);
-        setAuthToken(authorization.auth_token);
-        setConnected(true);
-        
-        console.log('✅ Connected:', pubKey.toBase58());
-      });
-        
-       
+          
+          // Now encode bytes to base58
+          const addressString = bs58.encode(addressBytes);
+          console.log('Address:', addressString);
+          
+          const pubKey = new PublicKey(addressString);
+          setPublicKey(pubKey);
+          setAuthToken(authorization.auth_token);
+          setConnected(true);
+          
+          console.log('✅ Connected:', pubKey.toBase58());
+        });
+      } else {
+        // iOS: Use Phantom deep link
+        // TODO: Implement Phantom universal links for iOS
+        throw new Error('iOS wallet connection coming soon. Use web version for now.');
       }
     } catch (error: any) {
       console.error('Connection failed:', error);
@@ -159,16 +169,15 @@ export function WalletProvider({ children }: WalletProviderProps) {
           return signedMessage.signature;
         }
         throw new Error('Phantom not found');
-      } else {
-        // Mobile: Use MWA
-        if (!authToken) {
+      } else if (Platform.OS === 'android') {
+        // Android: Use MWA
+        if (!transact || !authToken) {
           throw new Error('Not authorized');
         }
         
         let signature: Uint8Array | null = null;
         
-        await transact(async (wallet) => {
-          // Reauthorize with token
+        await transact(async (wallet: any) => {
           await wallet.reauthorize({
             auth_token: authToken,
             identity: {
@@ -178,7 +187,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             },
           });
           
-          // Sign message
           const result = await wallet.signMessages({
             addresses: [publicKey.toBase58()],
             payloads: [message],
@@ -193,6 +201,8 @@ export function WalletProvider({ children }: WalletProviderProps) {
         
         console.log('✅ Message signed');
         return signature;
+      } else {
+        throw new Error('Message signing not yet supported on iOS');
       }
     } catch (error: any) {
       console.error('Signing failed:', error);
@@ -213,16 +223,15 @@ export function WalletProvider({ children }: WalletProviderProps) {
           return await (window as any).solana.signTransaction(transaction);
         }
         throw new Error('Phantom not found');
-      } else {
-        // Mobile: Use MWA
-        if (!authToken) {
+      } else if (Platform.OS === 'android') {
+        // Android: Use MWA
+        if (!transact || !authToken) {
           throw new Error('Not authorized');
         }
         
         let signedTx: any = null;
         
-        await transact(async (wallet) => {
-          // Reauthorize
+        await transact(async (wallet: any) => {
           await wallet.reauthorize({
             auth_token: authToken,
             identity: {
@@ -232,7 +241,6 @@ export function WalletProvider({ children }: WalletProviderProps) {
             },
           });
           
-          // Sign transaction
           const result = await wallet.signTransactions({
             transactions: [transaction],
           });
@@ -242,6 +250,8 @@ export function WalletProvider({ children }: WalletProviderProps) {
         
         console.log('✅ Transaction signed');
         return signedTx;
+      } else {
+        throw new Error('Transaction signing not yet supported on iOS');
       }
     } catch (error: any) {
       console.error('Transaction signing failed:', error);

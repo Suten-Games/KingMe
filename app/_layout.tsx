@@ -1,4 +1,5 @@
 // app/_layout.tsx
+import '../src/polyfills';
 import { useEffect, useState } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Stack } from 'expo-router';
@@ -11,9 +12,6 @@ import {
   Inter_700Bold,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
-
-// CRITICAL: Import polyfills FIRST
-import '../src/polyfills';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({

@@ -45,6 +45,7 @@ coverage/
 *.ipa
 android/app/build/
 ios/build/
+/ios
 
 # Backups
 backups/
