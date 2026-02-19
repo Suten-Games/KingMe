@@ -5,13 +5,14 @@ import type {
   UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource,
   AvatarType, PaycheckDeduction, DriftTrade, DailyExpense,
   PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
-  WhatIfScenario, ThesisAlert, InvestmentThesis
+  WhatIfScenario, ThesisAlert, InvestmentThesis, EarnedBadge
 } from '../types';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
 import { generateSmartScenarios } from '../utils/scenarioGenerator';
 import { BankTransaction } from '@/types/bankTransactionTypes';
+import { getISODate, getISOWeek } from '../services/badgeEngine';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -105,6 +106,18 @@ interface AppState extends UserProfile {
   markThesisReviewed: (thesisId: string) => void;
   dismissThesisAlert: (alertId: string) => void;
 
+  earnedBadges: EarnedBadge[];
+  trimCount: number;
+  importWeeks: string[];
+  appOpenDays: string[];
+
+  // Badge actions
+  awardBadge: (badgeId: string) => void;
+  markBadgeSeen: (badgeId: string) => void;
+  recordTrim: () => void;
+  recordImportWeek: () => void;
+  recordAppOpen: () => void;
+
   resetStore: () => void;
 }
 
@@ -142,6 +155,10 @@ const initialState: UserProfile = {
   whatIfScenarios: [],
   investmentTheses: [],
   thesisAlerts: [],
+  earnedBadges: [],
+  trimCount: 0,
+  importWeeks: [],
+  appOpenDays: [],
 };
 
 // Helper: Map API category to app asset type
@@ -779,6 +796,50 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
+  awardBadge: (badgeId) =>
+    set((state) => {
+      // Don't award duplicates
+      if ((state.earnedBadges || []).some(b => b.badgeId === badgeId)) return state;
+      return {
+        earnedBadges: [
+          ...(state.earnedBadges || []),
+          { badgeId, earnedAt: Date.now(), seen: false },
+        ],
+      };
+    }),
+
+  markBadgeSeen: (badgeId) =>
+    set((state) => ({
+      earnedBadges: (state.earnedBadges || []).map(b =>
+        b.badgeId === badgeId ? { ...b, seen: true } : b
+      ),
+    })),
+
+  recordTrim: () =>
+    set((state) => ({
+      trimCount: (state.trimCount || 0) + 1,
+    })),
+
+  recordImportWeek: () =>
+    set((state) => {
+      const week = getISOWeek();
+      const existing = state.importWeeks || [];
+      if (existing.includes(week)) return state;
+      // Keep last 16 weeks
+      const updated = [...existing, week].slice(-16);
+      return { importWeeks: updated };
+    }),
+
+  recordAppOpen: () =>
+    set((state) => {
+      const today = getISODate();
+      const existing = state.appOpenDays || [];
+      if (existing.includes(today)) return state;
+      // Keep last 30 days
+      const updated = [...existing, today].slice(-30);
+      return { appOpenDays: updated };
+    }),
+
   removeBankTransaction: (transactionId) =>
     set((state) => {
       const transaction = (state.bankTransactions || []).find(t => t.id === transactionId);
@@ -825,8 +886,16 @@ export const useStore = create<AppState>((set, get) => ({
 
       console.log(`[IMPORT] ${transactions.length} parsed, ${newOnly.length} new (${transactions.length - newOnly.length} duplicates skipped)`);
 
+      // Record this week for streak tracking
+      const week = getISOWeek();
+      const existingWeeks = state.importWeeks || [];
+      const updatedWeeks = existingWeeks.includes(week)
+        ? existingWeeks
+        : [...existingWeeks, week].slice(-16);
+
       return {
         bankTransactions: [...existing, ...newOnly],
+        importWeeks: updatedWeeks,
       };
     }),
 
@@ -914,6 +983,11 @@ export const useStore = create<AppState>((set, get) => ({
           freedomHistory: saved.freedomHistory ?? initialState.freedomHistory,
           // Ensure expenseTrackingMode defaults if missing
           expenseTrackingMode: saved.expenseTrackingMode ?? initialState.expenseTrackingMode,
+          // Badge system
+          earnedBadges: saved.earnedBadges ?? initialState.earnedBadges,
+          trimCount: saved.trimCount ?? 0,
+          importWeeks: saved.importWeeks ?? [],
+          appOpenDays: saved.appOpenDays ?? [],
         };
         set(merged);
         console.log('Profile loaded successfully');
@@ -952,6 +1026,11 @@ export const useStore = create<AppState>((set, get) => ({
         settings: state.settings,
         onboardingComplete: state.onboardingComplete,
         lastSynced: new Date().toISOString(),
+        // Badge system
+        earnedBadges: state.earnedBadges || [],
+        trimCount: state.trimCount || 0,
+        importWeeks: state.importWeeks || [],
+        appOpenDays: state.appOpenDays || [],
       };
 
       // For now, save unencrypted until we add wallet
@@ -992,6 +1071,11 @@ export const useStore = create<AppState>((set, get) => ({
         cryptoCardBalance: imported.cryptoCardBalance ?? initialState.cryptoCardBalance,
         freedomHistory: imported.freedomHistory ?? initialState.freedomHistory,
         expenseTrackingMode: imported.expenseTrackingMode ?? initialState.expenseTrackingMode,
+        // Badge system
+        earnedBadges: imported.earnedBadges ?? initialState.earnedBadges,
+        trimCount: imported.trimCount ?? 0,
+        importWeeks: imported.importWeeks ?? [],
+        appOpenDays: imported.appOpenDays ?? [],
       };
       set(merged);
       // Save immediately after import

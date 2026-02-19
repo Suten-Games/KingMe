@@ -13,6 +13,8 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import { PrivyWrapper } from '@/providers/PrivyWrapper';
+import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
+import BadgeToast from '../src/components/BadgeToast';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -22,6 +24,8 @@ export default function RootLayout() {
     Inter_700Bold,
     Inter_800ExtraBold,
   });
+
+  useBadgeChecker();
 
   // Show splash while fonts load
   if (!fontsLoaded) {
@@ -38,6 +42,7 @@ export default function RootLayout() {
 
   return (
     <PrivyWrapper>
+      <BadgeToast />
       <WalletProvider>
         <Stack
           screenOptions={{
@@ -62,6 +67,7 @@ export default function RootLayout() {
           <Stack.Screen name="profile" options={{ title: 'Profile' }} />
           <Stack.Screen name="trading" options={{ title: 'Trading' }} />
           <Stack.Screen name="expenses" options={{ title: 'Daily Expenses' }} />
+          <Stack.Screen name="badges" options={{ title: 'Badges' }} />
         </Stack>
       </WalletProvider>
     </PrivyWrapper>

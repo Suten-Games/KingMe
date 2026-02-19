@@ -1,8 +1,12 @@
 // src/components/TradingIncomeWarning.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../store/useStore';
 import { analyzeAllAccounts } from '../services/cashflow';
+
+const DISMISS_KEY = 'trading_warning_dismissed';
+const DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function toMonthly(amount: number, freq: string): number {
   switch (freq) {
@@ -150,8 +154,24 @@ interface Props {
 
 export default function TradingIncomeWarning({ onDismiss, onPerenaAction }: Props) {
   const risk = useTradingIncomeRisk();
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!risk.show) return null;
+  // Check if previously dismissed (within 7 days)
+  useEffect(() => {
+    AsyncStorage.getItem(DISMISS_KEY).then(val => {
+      if (val && Date.now() - parseInt(val) < DISMISS_DURATION) {
+        setDismissed(true);
+      }
+    });
+  }, []);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    AsyncStorage.setItem(DISMISS_KEY, Date.now().toString());
+    onDismiss?.();
+  };
+
+  if (!risk.show || dismissed) return null;
 
   const pct = Math.round(risk.tradingPercent * 100);
   const hasUsdStar = risk.currentUsdStar > 0;
@@ -163,11 +183,9 @@ export default function TradingIncomeWarning({ onDismiss, onPerenaAction }: Prop
       <View style={s.header}>
         <Text style={s.icon}>⚠️</Text>
         <Text style={s.title}>Trading Income Risk</Text>
-        {onDismiss && (
-          <TouchableOpacity onPress={onDismiss} style={s.dismissBtn}>
-            <Text style={s.dismissText}>✕</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={handleDismiss} style={s.dismissBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={s.dismissText}>✕</Text>
+        </TouchableOpacity>
       </View>
 
       {/* The problem */}
@@ -302,6 +320,9 @@ export default function TradingIncomeWarning({ onDismiss, onPerenaAction }: Prop
           <Text style={s.ctaSub}>Earn {USD_STAR_APY}% APY on your safety net</Text>
         </TouchableOpacity>
       )}
+
+      {/* Dismiss hint */}
+      <Text style={s.dismissHint}>Tap ✕ to dismiss for 7 days</Text>
     </View>
   );
 }
@@ -324,8 +345,8 @@ const s = StyleSheet.create({
   },
   icon: { fontSize: 20, marginRight: 8 },
   title: { fontSize: 16, fontWeight: 'bold', color: '#ff6b6b', flex: 1 },
-  dismissBtn: { padding: 4 },
-  dismissText: { fontSize: 16, color: '#666' },
+  dismissBtn: { padding: 6, backgroundColor: '#ffffff10', borderRadius: 12 },
+  dismissText: { fontSize: 14, color: '#888' },
 
   body: {
     fontSize: 14,
@@ -431,4 +452,7 @@ const s = StyleSheet.create({
   },
   ctaText: { fontSize: 15, fontWeight: 'bold', color: '#0a0e1a' },
   ctaSub: { fontSize: 12, color: '#0a0e1a88', marginTop: 2 },
+
+  // Dismiss hint
+  dismissHint: { fontSize: 11, color: '#555', textAlign: 'center', marginTop: 8 },
 });

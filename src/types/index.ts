@@ -475,6 +475,13 @@ export interface UserSettings {
   defaultExpandAssetSections: boolean;
 }
 
+// Badge system (full definitions in types/badges.ts)
+export interface EarnedBadge {
+  badgeId: string;
+  earnedAt: number;
+  seen: boolean;
+}
+
 export interface UserProfile {
   wallets: string[]; // Solana pubkeys
   bankAccounts: BankAccount[]; // NEW - core financial tracking
@@ -499,6 +506,11 @@ export interface UserProfile {
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp
   onboardingComplete: boolean;
+  // Badge system
+  earnedBadges: EarnedBadge[];
+  trimCount: number;
+  importWeeks: string[];
+  appOpenDays: string[];
 }
 
 // Helius ORB API response types (simplified)
