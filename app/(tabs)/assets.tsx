@@ -34,11 +34,14 @@ function buildSkrFromAsset(asset: Asset): { holding: SKRHolding; income: SKRInco
       stakedBalance: totalBalance, // assume all staked for manual entry
       liquidBalance: 0,
       apy,
+      priceUsd: 0
     },
     income: {
       totalValueUsd: totalValue,
       annualYieldUsd: asset.annualIncome,
       monthlyYieldUsd: asset.annualIncome / 12,
+      monthlyYieldSkr: 0,
+      apyUsed: 0
     },
   };
 }

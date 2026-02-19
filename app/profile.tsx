@@ -9,9 +9,9 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import type { BankAccount } from '../src/types';
 import { loadBackup, saveBackup } from '@/services/encryptedBackup';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+//import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
-const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
+//const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 
 export default function ProfileScreen() {
