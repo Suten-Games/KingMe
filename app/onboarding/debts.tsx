@@ -69,7 +69,7 @@ export default function DebtsScreen() {
   return (
     <View style={styles.container}>
       <ResponsiveContainer>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={styles.progress}>Step 4 of 4</Text>
         
         <Text style={styles.title}>Your Debts</Text>
@@ -172,7 +172,7 @@ export default function DebtsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <ScrollView>
+            <ScrollView keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
               <Text style={styles.modalTitle}>Add Debt</Text>
 
               <Text style={styles.label}>Name</Text>
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 20,
-    marginTop: 40,
+    // marginTop: 40,
   },
   title: {
     fontSize: 32,

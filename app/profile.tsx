@@ -15,6 +15,7 @@ const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 
 export default function ProfileScreen() {
+  const wallets         = useStore((state) => state.wallets);
   const income            = useStore((state) => state.income);
   const avatarType        = useStore((state) => state.settings.avatarType);
   const assets            = useStore((state) => state.assets);
@@ -219,7 +220,7 @@ export default function ProfileScreen() {
     }
 
     Alert.alert(
-      'Restore from Arweave?',
+      'Restore from Cloud Backup?',
       'This will replace all current data with your backed-up profile. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -445,7 +446,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[styles.syncButton, styles.backupButton]}
               onPress={handleArweaveBackup}
-              disabled={isSyncing || !connected}
+              disabled={isSyncing}
             >
               {isSyncing ? (
                 <ActivityIndicator color="#fff" />
@@ -457,7 +458,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[styles.syncButton, styles.restoreButton]}
               onPress={handleArweaveRestore}
-              disabled={isSyncing || !connected}
+              disabled={isSyncing}
             >
               {isSyncing ? (
                 <ActivityIndicator color="#fff" />
@@ -467,8 +468,11 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           
-          {!connected && (
-            <Text style={styles.warningText}>⚠️ Connect a wallet above to enable Arweave sync</Text>
+          {!connected && wallets.length > 0 && (
+            <Text style={styles.warningText}>💡 Tap "Connect Wallet" above to unlock backup & restore for this session</Text>
+          )}
+          {!connected && wallets.length === 0 && (
+            <Text style={styles.warningText}>⚠️ Connect a wallet above to enable encrypted cloud backup</Text>
           )}
         </View>
 

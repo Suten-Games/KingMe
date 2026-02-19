@@ -16,6 +16,8 @@ import { generateSmartScenarios } from '@/utils/scenarioGenerator';
 import ThesisAlerts from '@/components/ThesisAlerts';
 import { useSwapScenario } from '@/hooks/useSwapScenario';
 import { isOnChainScenario } from '@/services/jupiterSwap';
+import TradingIncomeWarning from '../../src/components/TradingIncomeWarning';
+import PositionAlertCards from '@/components/PositionAlertCards';
 
 const HEALTH_COLORS: Record<string, { bg: string[]; text: string; border: string }> = {
   critical:   { bg: ['#7a2020', '#3a0e0e', '#1a0808'], text: '#ff8a8a', border: '#ff6b6b80' },
@@ -117,6 +119,8 @@ export default function HomeScreen() {
   const dashboardBody = (
     <View style={styles.content}>
       <CashFlowSummary cashFlow={cashFlow} />
+      <PositionAlertCards  />
+
       <ThesisAlerts alerts={thesisAlerts} onDismiss={dismissThesisAlert} onReview={(id) => router.push(`/asset/${id}`)} />
 
       {/* ── Health Badge ──────────────────────────────────────────── */}
@@ -167,6 +171,8 @@ export default function HomeScreen() {
           <Text style={styles.insightBody}>{insight.body}</Text>
         </View>
       </LinearGradient>
+
+      <TradingIncomeWarning />
 
       {/* ── Recommendations ───────────────────────────────────────── */}
       {cashFlow.recommendations.length > 0 && (

@@ -10,7 +10,8 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-secure-store"
     ],
     "scheme": "kingme",
     "extra": {

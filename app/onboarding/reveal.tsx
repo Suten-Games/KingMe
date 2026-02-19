@@ -134,14 +134,14 @@ export default function RevealScreen() {
               isKinged={freedom.isKinged}
               layout="sidebar"
             >
-              <ScrollView style={styles.webScrollContent} showsVerticalScrollIndicator={false}>
+              <ScrollView style={styles.webScrollContent} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
                 {contentBody}
               </ScrollView>
             </FreedomScore>
           </>
         ) : (
           // ── Mobile layout: Scroll with hero on top ──
-          <ScrollView style={styles.mobileScroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.mobileScroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>Your Freedom Score</Text>
             <FreedomScore
               days={freedom.days}
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#f4c430',
     textAlign: 'center',
-    marginTop: 40,
+    // marginTop: 40,
     marginBottom: 20,
   },
 

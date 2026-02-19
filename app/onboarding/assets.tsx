@@ -46,7 +46,7 @@ export default function AssetsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={styles.progress}>Step 2 of 4</Text>
         <Text style={styles.title}>Your Assets</Text>
         <Text style={styles.subtitle}>What generates income for you?</Text>
@@ -185,7 +185,10 @@ export default function AssetsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
   scrollView: { flex: 1, padding: 20 },
-  progress: { fontSize: 14, color: '#666', marginBottom: 20, marginTop: 40 },
+  progress: {
+    fontSize: 14, color: '#666', marginBottom: 20,
+    // marginTop: 40
+  },
   title: { fontSize: 32, fontWeight: 'bold', color: '#f4c430', marginBottom: 10 },
   subtitle: { fontSize: 16, color: '#a0a0a0', marginBottom: 20 },
   infoBox: { backgroundColor: '#1a1f2e', padding: 16, borderRadius: 12, marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#f4c430' },

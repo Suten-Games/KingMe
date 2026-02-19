@@ -88,7 +88,7 @@ export default function IncomeSourcesScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={styles.progress}>Step 2 of 5</Text>
         
         <Text style={styles.title}>Your Income</Text>
@@ -195,7 +195,7 @@ export default function IncomeSourcesScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <ScrollView>
+            <ScrollView keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
               <Text style={styles.modalTitle}>Add Income Source</Text>
 
               <Text style={styles.label}>Income Type</Text>
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 20,
-    marginTop: 40,
+    // marginTop: 40,
   },
   title: {
     fontSize: 32,

@@ -1,18 +1,16 @@
 // api/swap/quote.ts - Jupiter Swap Quote & Transaction Builder
 // ==============================================================
-// Vercel edge function that proxies Jupiter's Quote + Swap APIs.
+// Vercel edge function that proxies Jupiter's Ultra + Swap APIs.
 // Keeps referral fee config server-side so it can't be stripped client-side.
 
 export const config = {
   runtime: 'edge',
 };
 
-// ── Your Jupiter Referral Account ────────────────────────────
-// Sign up at https://referral.jup.ag/ to get your fee account.
-// You earn a % of each swap routed through your app.
-// Set this in Vercel env vars once you have it.
+// ── Config ───────────────────────────────────────────────────
 const JUPITER_REFERRAL_ACCOUNT = process.env.JUPITER_REFERRAL_ACCOUNT || '';
 const PLATFORM_FEE_BPS = parseInt(process.env.JUPITER_FEE_BPS || '50'); // 0.5% default
+const JUPITER_API_KEY = process.env.JUPITER_API_KEY || '';
 
 // ── Well-known Solana token mints ────────────────────────────
 const KNOWN_MINTS: Record<string, string> = {
@@ -26,7 +24,7 @@ const KNOWN_MINTS: Record<string, string> = {
   JUP:  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
   DRIFT: 'DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7',
   SKR:  'SKRy4ABKZ3dFJEmb47aNqWoMnajpVnFozTPCiZD3eHv',
-  'USD*': 'BenJy1n3WTx9mTjEvy63e8Q1j4RqUc6E4VBMz3ir4Wo6', // Perena yield-bearing stablecoin
+  'USD*': 'BenJy1n3WTx9mTjEvy63e8Q1j4RqUc6E4VBMz3ir4Wo6',
 };
 
 export default async function handler(request: Request) {
@@ -50,10 +48,10 @@ export default async function handler(request: Request) {
     const {
       inputMint,
       outputMint,
-      amount,           // In lamports / smallest unit
+      amount,
       userPublicKey,
-      slippageBps = 100, // 1% default
-      action = 'quote',  // 'quote' | 'swap'
+      slippageBps = 100,
+      action = 'quote',
     } = body;
 
     if (!inputMint || !outputMint || !amount || !userPublicKey) {
@@ -62,54 +60,56 @@ export default async function handler(request: Request) {
       }, 400);
     }
 
-    // Resolve symbol shortcuts (e.g., "SOL" → full mint address)
     const resolvedInput = KNOWN_MINTS[inputMint.toUpperCase()] || inputMint;
     const resolvedOutput = KNOWN_MINTS[outputMint.toUpperCase()] || outputMint;
 
     console.log(`[SWAP] ${action}: ${inputMint} → ${outputMint}, amount=${amount}, user=${userPublicKey}`);
 
-    // ── Step 1: Get Quote ──────────────────────────────────────
-    const quoteParams = new URLSearchParams({
-      inputMint: resolvedInput,
-      outputMint: resolvedOutput,
-      amount: amount.toString(),
-      slippageBps: slippageBps.toString(),
-      ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
-        ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
-        : {}),
-    });
-
-    const quoteController = new AbortController();
-    const quoteTimeout = setTimeout(() => quoteController.abort(), 8000);
-
-    let quoteResponse: Response;
-    try {
-      quoteResponse = await fetch(
-        `https://quote-api.jup.ag/v6/quote?${quoteParams.toString()}`,
-        {
-          signal: quoteController.signal,
-          headers: { 'Accept': 'application/json' },
-        }
-      );
-      clearTimeout(quoteTimeout);
-    } catch (err: any) {
-      clearTimeout(quoteTimeout);
-      console.error('[SWAP] Quote timeout/error:', err.message);
-      return jsonResponse({ error: 'Jupiter quote API timeout' }, 504);
+    const apiHeaders: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    if (JUPITER_API_KEY) {
+      apiHeaders['x-api-key'] = JUPITER_API_KEY;
     }
 
-    if (!quoteResponse.ok) {
-      const errorText = await quoteResponse.text();
-      console.error('[SWAP] Quote error:', errorText);
-      return jsonResponse({ error: 'Jupiter quote failed', details: errorText }, 502);
-    }
-
-    const quoteData = await quoteResponse.json();
-
-    console.log(`[SWAP] Quote: ${quoteData.inAmount} → ${quoteData.outAmount}, price impact: ${quoteData.priceImpactPct}%`);
-
-    // If only quote requested, return it
+    // ── Quote only ────────────────────────────────────────────
     if (action === 'quote') {
+      const quoteParams = new URLSearchParams({
+        inputMint: resolvedInput,
+        outputMint: resolvedOutput,
+        amount: amount.toString(),
+        slippageBps: slippageBps.toString(),
+        ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
+          ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
+          : {}),
+      });
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+
+      let quoteResponse: Response;
+      try {
+        quoteResponse = await fetch(
+          `https://api.jup.ag/swap/v1/quote?${quoteParams.toString()}`,
+          { signal: controller.signal, headers: apiHeaders }
+        );
+        clearTimeout(timeout);
+      } catch (err: any) {
+        clearTimeout(timeout);
+        console.error('[SWAP] Quote timeout:', err.message);
+        return jsonResponse({ error: 'Jupiter quote API timeout' }, 504);
+      }
+
+      if (!quoteResponse.ok) {
+        const errorText = await quoteResponse.text();
+        console.error('[SWAP] Quote error:', quoteResponse.status, errorText);
+        return jsonResponse({ error: 'Jupiter quote failed', details: errorText }, 502);
+      }
+
+      const quoteData = await quoteResponse.json();
+      console.log(`[SWAP] Quote: ${quoteData.inAmount} → ${quoteData.outAmount}, impact: ${quoteData.priceImpactPct}%`);
+
       return jsonResponse({
         quote: quoteData,
         inputMint: resolvedInput,
@@ -125,7 +125,44 @@ export default async function handler(request: Request) {
       });
     }
 
-    // ── Step 2: Get Serialized Swap Transaction ─────────────────
+    // ── Full swap — quote then build transaction ────────────────
+    // Step 1: Get quote
+    const quoteParams = new URLSearchParams({
+      inputMint: resolvedInput,
+      outputMint: resolvedOutput,
+      amount: amount.toString(),
+      slippageBps: slippageBps.toString(),
+      ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
+        ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
+        : {}),
+    });
+
+    const quoteController = new AbortController();
+    const quoteTimeout = setTimeout(() => quoteController.abort(), 12000);
+
+    let quoteResponse: Response;
+    try {
+      quoteResponse = await fetch(
+        `https://api.jup.ag/swap/v1/quote?${quoteParams.toString()}`,
+        { signal: quoteController.signal, headers: apiHeaders }
+      );
+      clearTimeout(quoteTimeout);
+    } catch (err: any) {
+      clearTimeout(quoteTimeout);
+      console.error('[SWAP] Quote timeout:', err.message);
+      return jsonResponse({ error: 'Jupiter quote API timeout' }, 504);
+    }
+
+    if (!quoteResponse.ok) {
+      const errorText = await quoteResponse.text();
+      console.error('[SWAP] Quote error:', quoteResponse.status, errorText);
+      return jsonResponse({ error: 'Jupiter quote failed', details: errorText }, 502);
+    }
+
+    const quoteData = await quoteResponse.json();
+    console.log(`[SWAP] Quote: ${quoteData.inAmount} → ${quoteData.outAmount}`);
+
+    // Step 2: Build swap transaction
     const swapBody: Record<string, any> = {
       quoteResponse: quoteData,
       userPublicKey,
@@ -134,46 +171,39 @@ export default async function handler(request: Request) {
       prioritizationFeeLamports: 'auto',
     };
 
-    // Add referral fee account if configured
     if (JUPITER_REFERRAL_ACCOUNT) {
       swapBody.feeAccount = JUPITER_REFERRAL_ACCOUNT;
     }
 
     const swapController = new AbortController();
-    const swapTimeout = setTimeout(() => swapController.abort(), 10000);
+    const swapTimeout = setTimeout(() => swapController.abort(), 12000);
 
     let swapResponse: Response;
     try {
-      swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
+      swapResponse = await fetch('https://api.jup.ag/swap/v1/swap', {
         method: 'POST',
         signal: swapController.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: apiHeaders,
         body: JSON.stringify(swapBody),
       });
       clearTimeout(swapTimeout);
     } catch (err: any) {
       clearTimeout(swapTimeout);
-      console.error('[SWAP] Swap API timeout/error:', err.message);
+      console.error('[SWAP] Swap timeout:', err.message);
       return jsonResponse({ error: 'Jupiter swap API timeout' }, 504);
     }
 
     if (!swapResponse.ok) {
       const errorText = await swapResponse.text();
-      console.error('[SWAP] Swap error:', errorText);
+      console.error('[SWAP] Swap error:', swapResponse.status, errorText);
       return jsonResponse({ error: 'Jupiter swap failed', details: errorText }, 502);
     }
 
     const swapData = await swapResponse.json();
-
     console.log('[SWAP] Transaction built successfully');
 
     return jsonResponse({
-      // The serialized transaction (base64 encoded VersionedTransaction)
       swapTransaction: swapData.swapTransaction,
-      // Quote details for UI display
       quote: {
         inputMint: resolvedInput,
         outputMint: resolvedOutput,
@@ -185,7 +215,6 @@ export default async function handler(request: Request) {
           pct: (PLATFORM_FEE_BPS / 100).toFixed(2),
         } : null,
       },
-      // Last valid block height for transaction expiry
       lastValidBlockHeight: swapData.lastValidBlockHeight,
     });
 

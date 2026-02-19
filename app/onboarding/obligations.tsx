@@ -134,7 +134,7 @@ export default function ObligationsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={styles.progress}>Step 3 of 4</Text>
         
         <Text style={styles.title}>Your Obligations</Text>
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 20,
-    marginTop: 40,
+    // marginTop: 40,
   },
   title: {
     fontSize: 32,

@@ -2,7 +2,7 @@
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import * as Crypto from 'expo-crypto';
-import { decode as atob, encode as btoa } from 'base-64';
+import { Buffer } from 'buffer';
 
 const ENCRYPTION_MESSAGE = 'Sign this message to prove you own this wallet';
 
@@ -29,7 +29,6 @@ export async function getEncryptionKeyFromWallet(
   publicKey: string
 ): Promise<Uint8Array> {
   try {
-    // Require signature to prove ownership
     const message = encodeText(ENCRYPTION_MESSAGE);
     await signMessage(message);
 
@@ -61,7 +60,6 @@ export async function encryptProfileWithWallet(
 ): Promise<string> {
   try {
     console.log('🔐 Encrypting with wallet signature...');
-
     const key = await getEncryptionKeyFromWallet(signMessage, publicKey);
 
     const jsonString = JSON.stringify(profileData);
@@ -74,10 +72,12 @@ export async function encryptProfileWithWallet(
     combined.set(nonce);
     combined.set(encrypted, nonce.length);
 
-    const base58String = bs58.encode(combined);
+    // Use base64 instead of bs58 — bs58 is O(n²) and freezes Hermes on large data
+    // Prefix with "b64:" so we know the encoding on decrypt
+    const base64String = 'b64:' + Buffer.from(combined).toString('base64');
 
-    console.log('✅ Encrypted with wallet:', base58String.length, 'chars');
-    return base58String;
+    console.log('✅ Encrypted with wallet:', base64String.length, 'chars (base64)');
+    return base64String;
   } catch (error) {
     console.error('Encryption failed:', error);
     throw error;
@@ -91,13 +91,27 @@ export async function decryptProfileWithWallet(
 ): Promise<any> {
   try {
     console.log('🔓 Decrypting with wallet signature...');
-
     const key = await getEncryptionKeyFromWallet(signMessage, publicKey);
 
-    const combined = bs58.decode(encryptedData);
+    console.log('🔓 Decoding encrypted data:', encryptedData.length, 'chars');
+    const startDecode = Date.now();
+
+    let combined: Uint8Array;
+    if (encryptedData.startsWith('b64:')) {
+      // New format: base64 (fast)
+      combined = new Uint8Array(Buffer.from(encryptedData.slice(4), 'base64'));
+    } else {
+      // Legacy format: bs58 (slow but needed for old backups)
+      console.log('⚠️ Legacy bs58 backup detected — decoding may take a while...');
+      combined = new Uint8Array(bs58.decode(encryptedData));
+    }
+
+    console.log('🔓 Decoded in', Date.now() - startDecode, 'ms →', combined.length, 'bytes');
+
     const nonce = combined.slice(0, 24);
     const encrypted = combined.slice(24);
 
+    console.log('🔓 Decrypting', encrypted.length, 'bytes...');
     const decrypted = nacl.secretbox.open(encrypted, nonce, key);
 
     if (!decrypted) {

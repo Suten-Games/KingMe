@@ -1,5 +1,5 @@
 // app/onboarding/income.tsx
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -25,6 +25,7 @@ export default function IncomeScreen() {
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <View style={styles.container}>
       <Text style={styles.progress}>Step 1 of 3</Text>
       
@@ -75,7 +76,8 @@ export default function IncomeScreen() {
           <Text style={styles.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+      </TouchableWithoutFeedback>
   );
 }
 
@@ -89,7 +91,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 20,
-    marginTop: 40,
+    // marginTop: 40,
   },
   title: {
     fontSize: 32,

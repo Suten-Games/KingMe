@@ -47,7 +47,7 @@ export default function CashFlowCheckScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={styles.progress}>Step 4 of 7</Text>
 
         <Text style={styles.title}>Cash Flow Check</Text>
@@ -199,7 +199,10 @@ export default function CashFlowCheckScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
   scrollView: { flex: 1, padding: 20 },
-  progress: { fontSize: 14, color: '#666', marginBottom: 20, marginTop: 40 },
+  progress: {
+    fontSize: 14, color: '#666', marginBottom: 20,
+    // marginTop: 40
+  },
   title: { fontSize: 32, fontWeight: 'bold', color: '#f4c430', marginBottom: 10 },
   subtitle: { fontSize: 16, color: '#a0a0a0', marginBottom: 20 },
 
