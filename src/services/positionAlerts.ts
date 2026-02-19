@@ -321,3 +321,185 @@ export function getAlertColor(priority: AlertPriority): { bg: string; border: st
     case 'low':    return { bg: '#1a2a1a', border: '#4ade8040', text: '#80c0a0' };
   }
 }
+
+// ─── Cash Transfer Alerts ────────────────────────────────────────────────────
+// Checks bank balances against upcoming obligations and suggests USDC transfers
+
+interface BankAccountInfo {
+  id: string;
+  name: string;
+  institution: string;
+  currentBalance: number;
+  type: 'checking' | 'savings' | 'investment';
+}
+
+interface ObligationInfo {
+  name: string;
+  amount: number;
+  dueDate?: number;
+  bankAccountId?: string;
+}
+
+interface DebtInfo {
+  name: string;
+  monthlyPayment: number;
+  dueDate?: number;
+  bankAccountId?: string;
+}
+
+const TRANSFER_LEAD_DAYS = 1; // Fuse takes 1 day
+const LOOKAHEAD_DAYS = 7;     // Warn about bills in the next 7 days
+const BUFFER_MULTIPLIER = 1.1; // Keep 10% buffer above bills
+
+// ─── Stale Import Alerts ─────────────────────────────────────────────────────
+// Nudge user to import bank statements when data is getting old
+
+interface TransactionDate {
+  date: string; // ISO date string
+  bankAccountId: string;
+}
+
+const IMPORT_STALE_DAYS = 7;   // Nudge after 7 days
+const IMPORT_URGENT_DAYS = 14; // Stronger nudge after 14 days
+
+export function generateImportReminders(
+  bankAccounts: BankAccountInfo[],
+  transactionDates: TransactionDate[], // Just need dates + account IDs
+): PositionAlert[] {
+  const alerts: PositionAlert[] = [];
+  const now = Date.now();
+
+  for (const account of bankAccounts) {
+    // Find most recent transaction for this account
+    const accountTxDates = transactionDates
+      .filter(t => t.bankAccountId === account.id)
+      .map(t => new Date(t.date).getTime())
+      .filter(t => !isNaN(t));
+
+    const mostRecent = accountTxDates.length > 0 ? Math.max(...accountTxDates) : 0;
+    const daysSince = mostRecent > 0
+      ? Math.floor((now - mostRecent) / (24 * 60 * 60 * 1000))
+      : Infinity;
+
+    if (daysSince < IMPORT_STALE_DAYS) continue;
+
+    const isUrgent = daysSince >= IMPORT_URGENT_DAYS;
+    const neverImported = mostRecent === 0;
+
+    alerts.push({
+      id: `import-reminder-${account.id}-${now}`,
+      assetId: account.id,
+      assetName: account.name,
+      symbol: '',
+      mint: '',
+      priority: isUrgent ? 'high' : 'low',
+      action: 'watch',
+      title: neverImported
+        ? `Import ${account.name} transactions`
+        : `${account.name} data is ${daysSince} days old`,
+      message: neverImported
+        ? `No transactions imported yet. Import a CSV to enable bill tracking and balance warnings.`
+        : `Import your latest statement to keep balance and bill tracking accurate.`,
+      detail: neverImported
+        ? `Tap to go to ${account.name} and import your first CSV.`
+        : `Last transaction: ${new Date(mostRecent).toLocaleDateString()}. KingMe works best with fresh data.`,
+      emoji: neverImported ? '📄' : '🔄',
+      actionLabel: 'Import Now',
+      actionParams: { type: 'navigate_bank', bankAccountId: account.id },
+      value: 0,
+      change: null,
+      timestamp: now,
+    });
+  }
+
+  return alerts;
+}
+
+// ─── Cash Transfer Alerts ────────────────────────────────────────────────────
+export function generateCashTransferAlerts(
+  bankAccounts: BankAccountInfo[],
+  obligations: ObligationInfo[],
+  debts: DebtInfo[],
+  usdcBalance: number, // Available USDC to transfer
+): PositionAlert[] {
+  const alerts: PositionAlert[] = [];
+  const now = new Date();
+  const currentDay = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  for (const account of bankAccounts) {
+    if (account.type === 'investment') continue;
+
+    // Find bills coming due for this account within lookahead window
+    const upcomingBills: Array<{ name: string; amount: number; daysUntil: number }> = [];
+
+    const allBills = [
+      ...obligations.filter(o => o.bankAccountId === account.id).map(o => ({
+        name: o.name, amount: o.amount, dueDate: o.dueDate || 1,
+      })),
+      ...debts.filter(d => d.bankAccountId === account.id).map(d => ({
+        name: d.name, amount: d.monthlyPayment, dueDate: d.dueDate || 1,
+      })),
+    ];
+
+    for (const bill of allBills) {
+      let daysUntil = bill.dueDate - currentDay;
+      if (daysUntil < 0) daysUntil += daysInMonth; // wraps to next month
+      // Only count bills within our lookahead window
+      if (daysUntil <= LOOKAHEAD_DAYS) {
+        upcomingBills.push({ name: bill.name, amount: bill.amount, daysUntil });
+      }
+    }
+
+    if (upcomingBills.length === 0) continue;
+
+    const totalUpcoming = upcomingBills.reduce((sum, b) => sum + b.amount, 0);
+    const neededWithBuffer = totalUpcoming * BUFFER_MULTIPLIER;
+    const shortfall = neededWithBuffer - account.currentBalance;
+
+    if (shortfall <= 0) continue; // Balance covers upcoming bills
+
+    // Need to transfer — is there enough time?
+    const soonestBill = upcomingBills.sort((a, b) => a.daysUntil - b.daysUntil)[0];
+    const isUrgent = soonestBill.daysUntil <= TRANSFER_LEAD_DAYS + 1; // Tomorrow or today
+    const isTight = soonestBill.daysUntil <= TRANSFER_LEAD_DAYS + 3;
+
+    // Build bill list for detail
+    const billList = upcomingBills
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .map(b => `${b.name}: $${b.amount.toFixed(0)} in ${b.daysUntil}d`)
+      .join(', ');
+
+    const transferAmount = Math.ceil(shortfall);
+    const canCoverFromUSDC = usdcBalance >= transferAmount;
+
+    alerts.push({
+      id: `cash-transfer-${account.id}-${Date.now()}`,
+      assetId: account.id,
+      assetName: account.name,
+      symbol: 'USDC',
+      mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      priority: isUrgent ? 'urgent' : isTight ? 'high' : 'medium',
+      action: 'rebalance',
+      title: isUrgent
+        ? `Transfer $${transferAmount} to ${account.name} NOW`
+        : `Transfer $${transferAmount} to ${account.name}`,
+      message: isUrgent
+        ? `Bills hit ${soonestBill.daysUntil === 0 ? 'today' : 'tomorrow'} and balance is $${account.currentBalance.toFixed(0)}. Transfer takes 1 day.`
+        : `$${totalUpcoming.toFixed(0)} in bills coming within ${LOOKAHEAD_DAYS} days. Balance: $${account.currentBalance.toFixed(0)}.`,
+      detail: canCoverFromUSDC
+        ? `Send $${transferAmount} USDC via Fuse → ${account.institution}. Bills: ${billList}`
+        : `Need $${transferAmount} but only $${usdcBalance.toFixed(0)} USDC available. Bills: ${billList}`,
+      emoji: isUrgent ? '🚨' : '🏦',
+      actionLabel: canCoverFromUSDC ? `Transfer $${transferAmount}` : 'View Account',
+      actionParams: canCoverFromUSDC
+        ? { type: 'fuse_transfer', amount: transferAmount, toAccount: account.name, toInstitution: account.institution }
+        : undefined,
+      value: transferAmount,
+      change: null,
+      timestamp: Date.now(),
+    });
+  }
+
+  return alerts;
+}

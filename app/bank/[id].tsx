@@ -96,6 +96,7 @@ export default function BankAccountDetailScreen() {
   const obligations = useStore(s => s.obligations);
   const debts = useStore(s => s.debts);
   const addDebt = useStore(s => s.addDebt);
+  const updateBankAccount = useStore(s => s.updateBankAccount);
 
   const account = bankAccounts.find(a => a.id === id);
   const accountTransactions = useMemo(
@@ -126,6 +127,83 @@ export default function BankAccountDetailScreen() {
   // Import state
   const [csvText, setCsvText] = useState('');
   const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; summary: string; errors: string[] } | null>(null);
+
+  // Balance edit state
+  const [showBalanceEdit, setShowBalanceEdit] = useState(false);
+  const [balanceInput, setBalanceInput] = useState('');
+
+  // ── Upcoming bills for this account ──
+  const upcomingBills = useMemo(() => {
+    if (!account) return [];
+    const accountObligations = obligations.filter(
+      o => o.bankAccountId === id
+    );
+    const accountDebts = debts.filter(
+      d => d.bankAccountId === id
+    );
+
+    const now = new Date();
+    const currentDay = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+    const bills: Array<{ name: string; amount: number; dueDay: number; daysUntil: number; isPast: boolean }> = [];
+
+    for (const ob of accountObligations) {
+      const dueDay = ob.dueDate || 1;
+      let daysUntil = dueDay - currentDay;
+      if (daysUntil < 0) daysUntil += daysInMonth; // next month
+      bills.push({
+        name: ob.name,
+        amount: ob.amount,
+        dueDay,
+        daysUntil,
+        isPast: dueDay < currentDay,
+      });
+    }
+
+    for (const d of accountDebts) {
+      const dueDay = d.dueDate || 1;
+      let daysUntil = dueDay - currentDay;
+      if (daysUntil < 0) daysUntil += daysInMonth;
+      bills.push({
+        name: d.name,
+        amount: d.monthlyPayment,
+        dueDay,
+        daysUntil,
+        isPast: dueDay < currentDay,
+      });
+    }
+
+    return bills.sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [obligations, debts, id, account]);
+
+  // ── Low balance warning ──
+  const balanceWarning = useMemo(() => {
+    if (!account) return null;
+    const balance = account.currentBalance ?? 0;
+    const upcomingTotal = upcomingBills
+      .filter(b => !b.isPast && b.daysUntil <= 14)
+      .reduce((sum, b) => sum + b.amount, 0);
+
+    if (upcomingTotal > 0 && balance < upcomingTotal) {
+      const shortfall = upcomingTotal - balance;
+      return {
+        type: 'danger' as const,
+        message: `⚠️ $${shortfall.toFixed(0)} short for upcoming bills in the next 14 days`,
+        upcomingTotal,
+        shortfall,
+      };
+    }
+    if (upcomingTotal > 0 && balance < upcomingTotal * 1.2) {
+      return {
+        type: 'warning' as const,
+        message: `💡 Balance is tight — $${upcomingTotal.toFixed(0)} in bills coming within 14 days`,
+        upcomingTotal,
+        shortfall: 0,
+      };
+    }
+    return null;
+  }, [account, upcomingBills]);
 
   // ── Filtered transactions ──
   const filteredTransactions = useMemo(() => {
@@ -466,10 +544,35 @@ export default function BankAccountDetailScreen() {
   const handleConfirmImport = () => {
     if (!importPreview) return;
     importBankTransactions(importPreview.transactions);
-    Alert.alert('Import Complete', importPreview.summary, [{ text: 'OK' }]);
     setCsvText('');
     setImportPreview(null);
     setShowImportModal(false);
+
+    // Prompt to update balance after import
+    if (Platform.OS === 'web') {
+      const newBal = window.prompt(
+        `Import complete! ${importPreview.summary}\n\nWhat's the current balance for this account? (Leave blank to skip)`,
+        (account?.currentBalance ?? 0).toFixed(2)
+      );
+      if (newBal && !isNaN(parseFloat(newBal))) {
+        updateBankAccount(id!, { currentBalance: parseFloat(newBal) });
+      }
+    } else {
+      Alert.alert(
+        'Import Complete',
+        `${importPreview.summary}\n\nUpdate current balance?`,
+        [
+          { text: 'Skip', style: 'cancel' },
+          {
+            text: 'Update Balance',
+            onPress: () => {
+              setBalanceInput((account?.currentBalance ?? 0).toFixed(2));
+              setShowBalanceEdit(true);
+            },
+          },
+        ]
+      );
+    }
   };
 
   // ── Add as Obligation ──
@@ -538,15 +641,39 @@ export default function BankAccountDetailScreen() {
               <Text style={s.accountName}>{account.name}</Text>
               <Text style={s.accountInstitution}>{account.institution} · {account.type}</Text>
             </View>
-            <View style={s.balanceBox}>
-              <Text style={s.balanceLabel}>Balance</Text>
-              <Text style={s.balanceValue}>{formatCurrency(account.currentBalance ?? 0)}</Text>
-            </View>
+            <TouchableOpacity style={s.balanceBox} onPress={() => {
+              setBalanceInput((account.currentBalance ?? 0).toFixed(2));
+              setShowBalanceEdit(true);
+            }}>
+              <Text style={s.balanceLabel}>Balance ✏️</Text>
+              <Text style={s.balanceValue}>${(account.currentBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            </TouchableOpacity>
           </View>
           <Text style={s.transactionCount}>
             {accountTransactions.length} total transactions · {filteredTransactions.length} this month
           </Text>
         </LinearGradient>
+
+        {/* ── Balance Warning ────────────────────────────────────── */}
+        {balanceWarning && (
+          <View style={[s.warningCard, balanceWarning.type === 'danger' ? s.warningDanger : s.warningCaution]}>
+            <Text style={s.warningText}>{balanceWarning.message}</Text>
+            {balanceWarning.shortfall > 0 && (
+              <Text style={s.warningDetail}>
+                Transfer ${balanceWarning.shortfall.toFixed(0)}+ to avoid overdraft
+              </Text>
+            )}
+            {upcomingBills.filter(b => !b.isPast && b.daysUntil <= 14).length > 0 && (
+              <View style={s.warningBills}>
+                {upcomingBills.filter(b => !b.isPast && b.daysUntil <= 14).map((bill, i) => (
+                  <Text key={i} style={s.warningBillItem}>
+                    • {bill.name}: ${bill.amount.toFixed(0)} — {bill.daysUntil === 0 ? 'today' : `in ${bill.daysUntil}d`}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Monthly Stats ──────────────────────────────────────── */}
         <View style={s.statsRow}>
@@ -1204,6 +1331,46 @@ export default function BankAccountDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Balance Edit Modal ────────────────────────────────── */}
+      <Modal visible={showBalanceEdit} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Update Balance</Text>
+            <Text style={s.modalSubtitle}>Enter the current balance for {account?.name}</Text>
+            <TextInput
+              style={s.modalInput}
+              value={balanceInput}
+              onChangeText={setBalanceInput}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor="#555"
+              autoFocus
+              selectTextOnFocus
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.cancelBtn}
+                onPress={() => setShowBalanceEdit(false)}
+              >
+                <Text style={s.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.saveBtn}
+                onPress={() => {
+                  const val = parseFloat(balanceInput);
+                  if (!isNaN(val)) {
+                    updateBankAccount(id!, { currentBalance: val });
+                    setShowBalanceEdit(false);
+                  }
+                }}
+              >
+                <Text style={s.saveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1427,4 +1594,17 @@ const s = StyleSheet.create({
   previewDate: { fontSize: 12, color: '#666', width: 80, fontFamily: 'Inter_400Regular' },
   previewDesc: { fontSize: 13, color: '#fff', flex: 1, fontFamily: 'Inter_400Regular' },
   previewAmount: { fontSize: 13, fontFamily: 'Inter_600SemiBold', minWidth: 70, textAlign: 'right' },
+
+  // Balance warning
+  warningCard: { borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1.5 },
+  warningDanger: { backgroundColor: '#3a0e0e', borderColor: '#ff6b6b60' },
+  warningCaution: { backgroundColor: '#3a2a0e', borderColor: '#ffa04060' },
+  warningText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#ffb060', marginBottom: 6 },
+  warningDetail: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#ff8a8a', marginBottom: 8 },
+  warningBills: { marginTop: 4 },
+  warningBillItem: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#c0a080', lineHeight: 20 },
+
+  // Balance edit modal
+  modalSubtitle: { fontSize: 14, color: '#888', fontFamily: 'Inter_400Regular', marginBottom: 16 },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
 });

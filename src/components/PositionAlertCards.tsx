@@ -10,7 +10,7 @@ import type { Asset, CryptoAsset } from '../types';
 import { recordPriceSnapshot, getTokenPriceData, TokenPriceData } from '../services/priceTracker';
 import { getSwapQuote, executeSwap } from '../services/jupiterSwap';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generatePositionAlerts, getAlertColor, PositionAlert } from '@/services/positionAlerts';
+import { generatePositionAlerts, generateCashTransferAlerts, generateImportReminders, getAlertColor, PositionAlert } from '../services/positionAlerts';
 
 const DISMISSED_KEY = 'dismissed_position_alerts';
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -18,6 +18,10 @@ const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 export default function PositionAlertCards() {
   const router = useRouter();
   const assets = useStore((state) => state.assets);
+  const bankAccounts = useStore((state) => state.bankAccounts);
+  const obligations = useStore((state) => state.obligations);
+  const debts = useStore((state) => state.debts);
+  const bankTransactions = useStore((state) => state.bankTransactions || []);
   const { publicKey, signTransaction, connected } = useWallet();
   const [alerts, setAlerts] = useState<PositionAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -80,9 +84,33 @@ export default function PositionAlertCards() {
         }
       }
 
-      // Generate alerts
+      // Generate position alerts
       const newAlerts = generatePositionAlerts(assets, priceData);
-      console.log(`🔔 Generated ${newAlerts.length} position alerts`);
+
+      // Generate cash transfer alerts
+      const usdcBalance = assets
+        .filter(a => {
+          const meta = a.metadata as CryptoAsset;
+          const mint = meta?.tokenMint || meta?.mint || '';
+          return mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
+        })
+        .reduce((sum, a) => sum + a.value, 0);
+
+      const cashAlerts = generateCashTransferAlerts(
+        bankAccounts, obligations, debts, usdcBalance
+      );
+      newAlerts.push(...cashAlerts);
+
+      // Generate import reminder alerts
+      const txDates = bankTransactions.map(t => ({ date: t.date, bankAccountId: t.bankAccountId }));
+      const importAlerts = generateImportReminders(bankAccounts, txDates);
+      newAlerts.push(...importAlerts);
+
+      // Re-sort all alerts by priority
+      const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+      newAlerts.sort((a, b) => (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3));
+
+      console.log(`🔔 Generated ${newAlerts.length} alerts (${cashAlerts.length} cash transfer)`);
       setAlerts(newAlerts);
       setLastRefresh(Date.now());
     } catch (error) {
@@ -90,7 +118,7 @@ export default function PositionAlertCards() {
     } finally {
       setLoading(false);
     }
-  }, [assets, cryptoMints]);
+  }, [assets, cryptoMints, bankAccounts, obligations, debts, bankTransactions]);
 
   // Initial load + periodic refresh
   useEffect(() => {
@@ -153,14 +181,8 @@ export default function PositionAlertCards() {
 
       const meta = asset.metadata as CryptoAsset;
       const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
-
-      const storedDecimals = (meta as any)?.decimals;
-      const decimals = storedDecimals != null ? storedDecimals : 6;
+      const decimals = (meta as any)?.decimals || 9;
       const lamports = Math.floor(quantity * Math.pow(10, decimals));
-      console.log(`📐 Decimals: ${decimals} (stored: ${storedDecimals}), quantity: ${quantity}, lamports: ${lamports}`);
-
-      // const decimals = (meta as any)?.decimals || 9;
-      // const lamports = Math.floor(quantity * Math.pow(10, decimals));
       const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
       try {
@@ -182,6 +204,16 @@ export default function PositionAlertCards() {
       } catch (e: any) {
         Alert.alert('Error', e.message);
       }
+    } else if (alert.actionParams?.type === 'fuse_transfer') {
+      const { amount, toAccount, toInstitution } = alert.actionParams;
+      const msg = `Transfer $${amount} USDC → ${toInstitution} (${toAccount})\n\nOpen Fuse to initiate the transfer. It takes ~1 business day to arrive.`;
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Transfer via Fuse', msg, [{ text: 'OK' }]);
+      }
+    } else if (alert.actionParams?.type === 'navigate_bank') {
+      router.push(`/bank/${alert.actionParams.bankAccountId}`);
     } else if (alert.actionParams?.type === 'deposit') {
       router.push('/(tabs)/desires');
     } else {
