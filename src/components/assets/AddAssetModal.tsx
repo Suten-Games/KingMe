@@ -80,6 +80,13 @@ export default function AddAssetModal({
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
   const [mintAddress, setMintAddress] = useState('');
 
+  // ── DeFi leverage fields ───────────────────────────────────
+  const [positionType, setPositionType] = useState<'token' | 'staking' | 'lending' | 'loop' | 'lp' | 'vault'>('token');
+  const [supplied, setSupplied] = useState('');
+  const [borrowed, setBorrowed] = useState('');
+  const [leverage, setLeverage] = useState('');
+  const [healthFactor, setHealthFactor] = useState('');
+
   // ── Stock vesting fields ─────────────────────────────────
   const [hasUnvestedShares, setHasUnvestedShares] = useState(false);
   const [vestedShares, setVestedShares] = useState('');
@@ -138,6 +145,12 @@ export default function AddAssetModal({
       setLogoUri(meta?.logoURI || '');
       setProtocol(meta?.protocol || '');
       setMintAddress(meta?.mint || '');
+      // DeFi leverage fields
+      setPositionType(meta?.positionType || 'token');
+      setSupplied(meta?.supplied?.toString() || '');
+      setBorrowed(meta?.borrowed?.toString() || '');
+      setLeverage(meta?.leverage?.toString() || '');
+      setHealthFactor(meta?.healthFactor?.toString() || '');
 
       const qty = meta?.quantity || meta?.balance || meta?.shares;
       setTokenAmount(qty?.toString() || '');
@@ -224,6 +237,14 @@ export default function AddAssetModal({
           apy: apyNum,
           isStaked: type === 'defi' || (apyNum !== undefined && apyNum > 0),
           description: name,
+          // DeFi leverage fields (only for defi)
+          ...(type === 'defi' ? {
+            positionType: positionType || 'token',
+            supplied: parseFloat(supplied) || undefined,
+            borrowed: parseFloat(borrowed) || undefined,
+            leverage: parseFloat(leverage) || undefined,
+            healthFactor: parseFloat(healthFactor) || undefined,
+          } : {}),
         };
         return meta;
       }
@@ -357,6 +378,7 @@ export default function AddAssetModal({
     setType('crypto'); setName(''); setValue(''); setApy(''); setAnnualIncome('');
     setSymbol(''); setTokenAmount(''); setTokenPrice(''); setLogoUri(''); setProtocol('');
     setSearchResults([]); setShowSearchResults(false); setSelectedToken(null); setMintAddress('');
+    setPositionType('token'); setSupplied(''); setBorrowed(''); setLeverage(''); setHealthFactor('');
     setHasUnvestedShares(false); setVestedShares(''); setUnvestedShares('');
     setSharesPerVest(''); setVestingFrequency('quarterly'); setNextVestDate('');
     setIsPrimaryResidence(false);
@@ -551,6 +573,95 @@ export default function AddAssetModal({
                   </>
                 )}
 
+                {/* DeFi Position Type + Leverage Fields */}
+                {type === 'defi' && (
+                  <>
+                    <Text style={styles.label}>Position Type</Text>
+                    <View style={styles.typeContainer}>
+                      {([
+                        { key: 'staking', label: '📌 Staking' },
+                        { key: 'lending', label: '🏦 Lending' },
+                        { key: 'loop', label: '🔄 Loop/Multiply' },
+                        { key: 'lp', label: '💧 LP' },
+                        { key: 'vault', label: '🏰 Vault' },
+                      ] as const).map((t) => (
+                        <TouchableOpacity
+                          key={t.key}
+                          style={[styles.typeBtn, positionType === t.key && styles.typeBtnActive]}
+                          onPress={() => setPositionType(t.key)}
+                        >
+                          <Text style={[styles.typeBtnText, positionType === t.key && styles.typeBtnTextActive]}>
+                            {t.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Leverage details — shown for loop/lending/vault */}
+                    {(positionType === 'loop' || positionType === 'lending' || positionType === 'vault') && (
+                      <>
+                        <View style={styles.helperBox}>
+                          <Text style={styles.helperBoxText}>
+                            💡 Enter supplied & borrowed values. Net equity (value used for freedom score) = Supplied - Borrowed.
+                          </Text>
+                        </View>
+
+                        <Text style={styles.label}>Supplied (Collateral)</Text>
+                        <Text style={styles.helper}>Total value of assets you deposited as collateral</Text>
+                        <View style={styles.inputRow}>
+                          <Text style={styles.dollar}>$</Text>
+                          <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
+                            keyboardType="numeric" value={supplied}
+                            onChangeText={(t) => {
+                              setSupplied(t);
+                              const s = parseFloat(t) || 0;
+                              const b = parseFloat(borrowed) || 0;
+                              if (s > 0) setValue(Math.max(0, s - b).toFixed(2));
+                            }} />
+                        </View>
+
+                        <Text style={styles.label}>Borrowed</Text>
+                        <Text style={styles.helper}>Total value of your debt/borrow</Text>
+                        <View style={styles.inputRow}>
+                          <Text style={styles.dollar}>$</Text>
+                          <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
+                            keyboardType="numeric" value={borrowed}
+                            onChangeText={(t) => {
+                              setBorrowed(t);
+                              const s = parseFloat(supplied) || 0;
+                              const b = parseFloat(t) || 0;
+                              if (s > 0) setValue(Math.max(0, s - b).toFixed(2));
+                              if (s > 0 && b > 0) setLeverage((s / (s - b)).toFixed(1));
+                            }} />
+                        </View>
+
+                        {parseFloat(supplied) > 0 && parseFloat(borrowed) > 0 && (
+                          <View style={[styles.helperBox, { borderLeftColor: '#ff9f43' }]}>
+                            <Text style={[styles.helperBoxText, { color: '#ff9f43' }]}>
+                              Net Equity: ${(parseFloat(supplied) - parseFloat(borrowed)).toFixed(2)} · Leverage: {(parseFloat(supplied) / (parseFloat(supplied) - parseFloat(borrowed))).toFixed(1)}x
+                            </Text>
+                          </View>
+                        )}
+
+                        <Text style={styles.label}>Leverage (auto-calculated or manual)</Text>
+                        <View style={styles.inputRow}>
+                          <TextInput style={styles.inputInRow} placeholder="e.g. 3.9" placeholderTextColor="#666"
+                            keyboardType="numeric" value={leverage} onChangeText={setLeverage} />
+                          <Text style={styles.suffix}>x</Text>
+                        </View>
+
+                        <Text style={styles.label}>Health Factor (%)</Text>
+                        <Text style={styles.helper}>From the protocol dashboard (e.g. 22 means 22%)</Text>
+                        <View style={styles.inputRow}>
+                          <TextInput style={styles.inputInRow} placeholder="e.g. 22" placeholderTextColor="#666"
+                            keyboardType="numeric" value={healthFactor} onChangeText={setHealthFactor} />
+                          <Text style={styles.suffix}>%</Text>
+                        </View>
+                      </>
+                    )}
+                  </>
+                )}
+
                 {/* Mint Address — for price sync */}
                 {showTokenFields && (
                   <>
@@ -577,7 +688,12 @@ export default function AddAssetModal({
                   style={styles.modalInput}
                   placeholder={
                     type === 'crypto' ? 'e.g., SOL holdings' :
-                    type === 'defi' ? 'e.g., dSOL on Drift' :
+                    type === 'defi' ? (
+                      positionType === 'loop' ? 'e.g., INF/wSOL Multiply 3.9x' :
+                      positionType === 'lp' ? 'e.g., SOL-USDC LP' :
+                      positionType === 'vault' ? 'e.g., JLP Vault' :
+                      'e.g., dSOL on Drift'
+                    ) :
                     type === 'stocks' ? 'e.g., VOO ETF' :
                     type === 'real_estate' ? 'e.g., Rental Property' :
                     type === 'business' ? 'e.g., LLC Distributions' :
