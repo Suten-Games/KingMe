@@ -105,6 +105,7 @@ export default function AddAssetModal({
   const [retContribution, setRetContribution] = useState('');
   const [retFrequency, setRetFrequency] = useState<'weekly' | 'biweekly' | 'twice_monthly' | 'monthly'>('biweekly');
   const [retMatchPercent, setRetMatchPercent] = useState('');
+  const [retGrowthRate, setRetGrowthRate] = useState(''); // Historical APY e.g. 20%
 
   // ── Computed ─────────────────────────────────────────────
   const retMonthlyContribution = (parseFloat(retContribution) || 0) * getFrequencyMultiplier(retFrequency);
@@ -135,6 +136,7 @@ export default function AddAssetModal({
       setRetContribution(m.contributionAmount?.toString() || '0');
       setRetFrequency(m.contributionFrequency || 'biweekly');
       setRetMatchPercent(m.employerMatchPercent?.toString() || '0');
+      setRetGrowthRate(m.apy?.toString() || '');
     } else {
       setName(a.name);
       setValue(a.value.toString());
@@ -287,13 +289,19 @@ export default function AddAssetModal({
         return meta;
       }
       case 'retirement': {
+        const contribAmount = parseFloat(retContribution) || 0;
+        const matchPct = parseFloat(retMatchPercent) || 0;
+        const matchDollars = matchPct > 0 && contribAmount > 0
+          ? (contribAmount * matchPct / 100) : 0;
         const meta: RetirementAsset = {
           type: 'retirement',
           accountType: retAccountType,
           institution: retInstitution,
-          contributionAmount: parseFloat(retContribution) || 0,
+          contributionAmount: contribAmount,
           contributionFrequency: retFrequency,
-          employerMatchPercent: retMatchPct || undefined,
+          employerMatchPercent: matchPct || undefined,
+          employerMatchDollars: matchDollars || undefined,
+          apy: parseFloat(retGrowthRate) || undefined,
         };
         return meta;
       }
@@ -315,12 +323,16 @@ export default function AddAssetModal({
       const retLabel = retAccountType === '401k' ? '401(k)'
         : retAccountType === 'roth_401k' ? 'Roth 401(k)'
         : retAccountType === 'ira' ? 'IRA' : 'Roth IRA';
+      const balance = parseFloat(retBalance);
+      const growthRate = parseFloat(retGrowthRate) || 0;
+      // Annual income = expected growth on current balance
+      const growthIncome = growthRate > 0 ? (balance * growthRate / 100) : 0;
       const newAsset: Asset = {
         id: 'ret_' + Date.now().toString(),
         type: 'retirement',
         name: `${retLabel} — ${retInstitution}`,
-        value: parseFloat(retBalance),
-        annualIncome: 0,
+        value: balance,
+        annualIncome: growthIncome,
         metadata: buildMetadata(),
       };
       onAddAsset(newAsset);
@@ -350,8 +362,12 @@ export default function AddAssetModal({
     if (!editingAsset || !onUpdateAsset) return;
     if (type === 'retirement') {
       if (!retInstitution || !retBalance) return;
+      const balance = parseFloat(retBalance);
+      const growthRate = parseFloat(retGrowthRate) || 0;
+      const growthIncome = growthRate > 0 ? (balance * growthRate / 100) : 0;
       onUpdateAsset(editingAsset.id, {
-        value: parseFloat(retBalance),
+        value: balance,
+        annualIncome: growthIncome,
         metadata: buildMetadata(),
       });
     } else {
@@ -383,7 +399,7 @@ export default function AddAssetModal({
     setSharesPerVest(''); setVestingFrequency('quarterly'); setNextVestDate('');
     setIsPrimaryResidence(false);
     setRetAccountType('401k'); setRetInstitution(''); setRetBalance('');
-    setRetContribution(''); setRetFrequency('biweekly'); setRetMatchPercent('');
+    setRetContribution(''); setRetFrequency('biweekly'); setRetMatchPercent(''); setRetGrowthRate('');
     onClose();
   };
 
@@ -494,6 +510,23 @@ export default function AddAssetModal({
                     keyboardType="numeric" value={retMatchPercent} onChangeText={setRetMatchPercent} />
                   <Text style={styles.suffix}>%</Text>
                 </View>
+
+                <Text style={styles.label}>Historical Growth Rate / APY</Text>
+                <Text style={styles.helper}>Last year's return — e.g. "20" for 20%. Used to estimate annual growth income.</Text>
+                <View style={styles.inputRow}>
+                  <TextInput style={styles.inputInRow} placeholder="e.g. 10" placeholderTextColor="#666"
+                    keyboardType="numeric" value={retGrowthRate} onChangeText={setRetGrowthRate} />
+                  <Text style={styles.suffix}>%</Text>
+                </View>
+
+                {(parseFloat(retBalance) > 0 && parseFloat(retGrowthRate) > 0) && (
+                  <View style={[styles.helperBox, { borderLeftColor: '#4ade80' }]}>
+                    <Text style={[styles.helperBoxText, { color: '#4ade80' }]}>
+                      Estimated growth: ${((parseFloat(retBalance) * parseFloat(retGrowthRate)) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
+                      {parseFloat(retContribution) > 0 && ` · Contributions: $${(retMonthlyContribution * 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr`}
+                    </Text>
+                  </View>
+                )}
               </>
             ) : (
               <>

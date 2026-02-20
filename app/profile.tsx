@@ -2,16 +2,14 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useState } from 'react';
 import { useStore, useFreedomScore } from '../src/store/useStore';
-import { WalletConnect } from '../src/components/WalletConnect';
 import { useWallet } from '../src/providers/wallet-provider';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
-import type { BankAccount } from '../src/types';
 import { loadBackup, saveBackup } from '@/services/encryptedBackup';
-//import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
-//const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
+const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 
 export default function ProfileScreen() {
@@ -21,9 +19,6 @@ export default function ProfileScreen() {
   const assets            = useStore((state) => state.assets);
   const obligations       = useStore((state) => state.obligations);
   const bankAccounts      = useStore((state) => state.bankAccounts);
-  const addBankAccount    = useStore((state) => state.addBankAccount);
-  const removeBankAccount = useStore((state) => state.removeBankAccount);
-  const updateBankAccount = useStore((state) => state.updateBankAccount);
   const exportBackup      = useStore((state) => state.exportBackup);
   const importBackup      = useStore((state) => state.importBackup);
   const resetStore        = useStore((state) => state.resetStore);
@@ -34,65 +29,16 @@ export default function ProfileScreen() {
   const { signMessage, publicKey, connected } = useWallet();
 
   // ── Add-account modal state ──────────────────────────────────────────────
-  const [showAddModal, setShowAddModal]   = useState(false);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [backupJson, setBackupJson]       = useState('');
   const [importJson, setImportJson]       = useState('');
-  const [accountName, setAccountName]   = useState('');
-  const [institution, setInstitution]   = useState('');
-  const [accountType, setAccountType]   = useState<'checking' | 'savings' | 'investment'>('checking');
-  const [currentBalance, setCurrentBalance] = useState('');
-  const [isPrimary, setIsPrimary]       = useState(false);
   
   // Arweave sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   // ── Confirmation state (for delete) ──────────────────────────────────────
-  const [deleteId, setDeleteId]         = useState<string | null>(null);
-
-  const handleAddAccount = () => {
-    if (!accountName || !currentBalance) return;
-
-    // If marking as primary, clear the flag on everyone else first
-    if (isPrimary) {
-      bankAccounts.forEach((acct) => {
-        if (acct.isPrimaryIncome) updateBankAccount(acct.id, { isPrimaryIncome: false });
-      });
-    }
-
-    const newAccount: BankAccount = {
-      id: Date.now().toString(),
-      name: accountName,
-      institution: institution || 'Unknown',
-      type: accountType,
-      currentBalance: isNaN(parseFloat(currentBalance)) ? 0 : parseFloat(currentBalance),
-      isPrimaryIncome: isPrimary || bankAccounts.length === 0,
-    };
-
-    addBankAccount(newAccount);
-    resetForm();
-  };
-
-  const resetForm = () => {
-    setAccountName('');
-    setInstitution('');
-    setAccountType('checking');
-    setCurrentBalance('');
-    setIsPrimary(false);
-    setShowAddModal(false);
-  };
-
-  const handleSetPrimary = (id: string) => {
-    const acct = bankAccounts.find((a) => a.id === id);
-    if (acct?.isPrimaryIncome) return;
-    bankAccounts.forEach((a) => {
-      if (a.isPrimaryIncome) updateBankAccount(a.id, { isPrimaryIncome: false });
-    });
-    updateBankAccount(id, { isPrimaryIncome: true });
-  };
-
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0);
 
   const handleResetOnboarding = () => {
@@ -278,74 +224,50 @@ export default function ProfileScreen() {
     );
   };
 
-  const typeIcon = { checking: '🏦', savings: '💰', investment: '📈' };
+
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <Text style={styles.title}>Profile</Text>
 
-        {/* ── Wallet ── */}
+        {/* ── Wallets (connect/disconnect via header button) ── */}
         <View style={styles.section}>
-          <WalletConnect />
+          <Text style={styles.sectionTitle}>Solana Wallets</Text>
+          <View style={styles.card}>
+            {wallets.length === 0 ? (
+              <>
+                <Text style={styles.emptyText}>No wallets connected</Text>
+                <Text style={styles.emptySubtext}>Tap the wallet button in the top right to connect</Text>
+              </>
+            ) : (
+              <>
+                {wallets.map((addr, i) => (
+                  <View key={addr} style={[styles.row, i > 0 && { marginTop: 8 }]}>
+                    <Text style={styles.label}>{addr.slice(0, 4)}...{addr.slice(-4)}</Text>
+                    <Text style={[styles.value, { color: connected && publicKey?.toBase58() === addr ? '#4ade80' : '#888' }]}>
+                      {connected && publicKey?.toBase58() === addr ? '🟢 Active' : '🔴 Session expired'}
+                    </Text>
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
         </View>
 
-        {/* ── Bank Accounts ─────────────────────────────────────────────── */}
+        {/* ── Bank Accounts (managed in Assets tab) ─────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Bank Accounts</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-              <Text style={styles.addButtonText}>+ Add</Text>
-            </TouchableOpacity>
           </View>
-
-          {bankAccounts.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.emptyText}>No accounts added yet.</Text>
-              <Text style={styles.emptySubtext}>Tap "+ Add" to connect your first bank account.</Text>
-            </View>
-          ) : (
-            <>
-              {bankAccounts.map((acct) => (
-                <View key={acct.id} style={styles.accountCard}>
-                  <View style={styles.accountRow}>
-                    <View style={styles.accountLeft}>
-                      <Text style={styles.accountIcon}>{typeIcon[acct.type]}</Text>
-                      <View>
-                        <Text style={styles.accountName}>{acct.name}</Text>
-                        <Text style={styles.accountInstitution}>
-                          {acct.institution} · {acct.type.charAt(0).toUpperCase() + acct.type.slice(1)}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.accountRight}>
-                      <Text style={styles.accountBalance}>${(acct.currentBalance ?? 0).toLocaleString()}</Text>
-                      <TouchableOpacity onPress={() => setDeleteId(acct.id)}>
-                        <Text style={styles.deleteButton}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.primaryRow}
-                    onPress={() => handleSetPrimary(acct.id)}
-                  >
-                    <Text style={[styles.primaryDot, acct.isPrimaryIncome && styles.primaryDotActive]}>
-                      {acct.isPrimaryIncome ? '●' : '○'}
-                    </Text>
-                    <Text style={[styles.primaryLabel, acct.isPrimaryIncome && styles.primaryLabelActive]}>
-                      {acct.isPrimaryIncome ? 'Primary (Paycheck)' : 'Set as primary'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Balance</Text>
-                <Text style={styles.totalValue}>${totalBalance.toLocaleString()}</Text>
-              </View>
-            </>
-          )}
+          <View style={styles.card}>
+            <Text style={styles.emptyText}>
+              {bankAccounts.length > 0
+                ? `${bankAccounts.length} account${bankAccounts.length > 1 ? 's' : ''} · $${totalBalance.toLocaleString()} total`
+                : 'No accounts added yet'}
+            </Text>
+            <Text style={styles.emptySubtext}>Manage bank accounts in the Assets tab</Text>
+          </View>
         </View>
 
         {/* ── Income ── */}
@@ -485,112 +407,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* ═══════════════ ADD ACCOUNT MODAL ═══════════════ */}
-      <Modal visible={showAddModal} animationType="slide" transparent={true} onRequestClose={resetForm}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <ScrollView>
-              <Text style={styles.modalTitle}>Add Bank Account</Text>
-
-              <Text style={styles.modalLabel}>Account Nickname</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., Chase Checking, Ally Savings"
-                placeholderTextColor="#666"
-                value={accountName}
-                onChangeText={setAccountName}
-              />
-
-              <Text style={styles.modalLabel}>Bank / Institution</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., Chase, Bank of America"
-                placeholderTextColor="#666"
-                value={institution}
-                onChangeText={setInstitution}
-              />
-
-              <Text style={styles.modalLabel}>Account Type</Text>
-              <View style={styles.typeButtons}>
-                {(['checking', 'savings', 'investment'] as const).map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.typeButton, accountType === t && styles.typeButtonActive]}
-                    onPress={() => setAccountType(t)}
-                  >
-                    <Text style={[styles.typeButtonText, accountType === t && styles.typeButtonTextActive]}>
-                      {t.charAt(0).toUpperCase() + t.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.modalLabel}>Current Balance</Text>
-              <View style={styles.inputRow}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.inputRowField}
-                  placeholder="0"
-                  placeholderTextColor="#666"
-                  keyboardType="decimal-pad"
-                  value={currentBalance}
-                  onChangeText={(text) => {
-                    const cleaned = text.replace(/[^0-9.\-]/g, '');
-                    const parts = cleaned.split('-');
-                    const safe = parts.length > 2
-                      ? '-' + parts.slice(1).join('')
-                      : cleaned;
-                    setCurrentBalance(safe);
-                  }}
-                />
-              </View>
-
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setIsPrimary(!isPrimary)}>
-                <View style={[styles.checkbox, isPrimary && styles.checkboxChecked]}>
-                  {isPrimary && <Text style={styles.checkmark}>✓</Text>}
-                </View>
-                <Text style={styles.checkboxLabel}>This is where I get my paycheck</Text>
-              </TouchableOpacity>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancelButton} onPress={resetForm}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalAddButton, (!accountName || !currentBalance) && styles.modalAddButtonDisabled]}
-                  onPress={handleAddAccount}
-                  disabled={!accountName || !currentBalance}
-                >
-                  <Text style={styles.modalAddText}>Add</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ═══════════════ DELETE CONFIRM MODAL ═══════════════ */}
-      <Modal visible={deleteId !== null} animationType="fade" transparent={true} onRequestClose={() => setDeleteId(null)}>
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmBox}>
-            <Text style={styles.confirmTitle}>Delete Account?</Text>
-            <Text style={styles.confirmBody}>
-              This will remove the account. Income sources or obligations linked to it will lose their account reference.
-            </Text>
-            <View style={styles.confirmButtons}>
-              <TouchableOpacity style={styles.confirmCancel} onPress={() => setDeleteId(null)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmDelete}
-                onPress={() => { if (deleteId) removeBankAccount(deleteId); setDeleteId(null); }}
-              >
-                <Text style={styles.confirmDeleteText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Bank account modals removed — accounts managed in Assets tab */}
 
       {/* ═══════════════ BACKUP MODAL ═══════════════ */}
       <Modal visible={showBackupModal} animationType="slide" transparent={true} onRequestClose={() => setShowBackupModal(false)}>

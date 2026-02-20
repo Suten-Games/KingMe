@@ -2,6 +2,7 @@
 import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import WalletHeaderButton from '../../src/components/WalletHeaderButton';
 
 function TabBarHeader() {
   return (
@@ -18,6 +19,8 @@ function TabBarHeader() {
           resizeMode="contain"
         />
         <Text style={styles.headerTitle}>KingMe</Text>
+        <View style={{ flex: 1 }} />
+        <WalletHeaderButton />
       </View>
       <LinearGradient
         colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']}
