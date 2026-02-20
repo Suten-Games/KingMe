@@ -1,6 +1,8 @@
 // app/(tabs)/profile.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../src/store/useStore';
 import { useWallet } from '../src/providers/wallet-provider';
 import * as Clipboard from 'expo-clipboard';
@@ -11,8 +13,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
 const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
+import PaidAddOns from '@/components/PaidAddOns';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const wallets         = useStore((state) => state.wallets);
   const income            = useStore((state) => state.income);
   const avatarType        = useStore((state) => state.settings.avatarType);
@@ -321,6 +325,26 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Business ── */}
+        <View style={styles.section}>
+          <TouchableOpacity onPress={() => router.push('/business' as any)} style={styles.businessLink}>
+            <LinearGradient colors={['#1a2a40', '#101828', '#0a0e1a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.businessLinkInner}>
+              <Text style={styles.businessEmoji}>🏢</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.businessTitle}>Suten LLC</Text>
+                <Text style={styles.businessSub}>Business dashboard, revenue & expenses</Text>
+              </View>
+              <Text style={styles.businessArrow}>→</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Premium Tools ── */}
+        <View style={styles.section}>
+          <PaidAddOns />
+        </View>
+
         {/* ── Settings ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settings</Text>
@@ -585,4 +609,12 @@ const styles = StyleSheet.create({
   confirmCancelText: { color: '#a0a0a0', fontSize: 16 },
   confirmDelete: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: '#ff4444', alignItems: 'center' },
   confirmDeleteText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+
+  // Business link
+  businessLink: { marginBottom: 0 },
+  businessLinkInner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2f3e', gap: 12 },
+  businessEmoji: { fontSize: 28 },
+  businessTitle: { fontSize: 16, fontWeight: '700', color: '#f4c430' },
+  businessSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  businessArrow: { fontSize: 18, color: '#555', fontWeight: '700' },
 });

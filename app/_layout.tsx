@@ -67,6 +67,8 @@ export default function RootLayout() {
           <Stack.Screen name="profile" options={{ title: 'Profile' }} />
           <Stack.Screen name="trading" options={{ title: 'Trading' }} />
           <Stack.Screen name="expenses" options={{ title: 'Daily Expenses' }} />
+          <Stack.Screen name="business" options={{ headerShown: false }} />
+          <Stack.Screen name="divorce-simulator" options={{ headerShown: false }} />
           <Stack.Screen name="badges" options={{ title: 'Badges' }} />
         </Stack>
       </WalletProvider>
@@ -84,5 +86,6 @@ const splash = StyleSheet.create({
   logo: {
     width: 120,
     height: 120,
+    borderRadius: 20,
   },
 });
