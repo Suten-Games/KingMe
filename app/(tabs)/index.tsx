@@ -19,6 +19,8 @@ import { isOnChainScenario } from '@/services/jupiterSwap';
 import TradingIncomeWarning from '../../src/components/TradingIncomeWarning';
 import PositionAlertCards from '@/components/PositionAlertCards';
 import BadgeStrip from '@/components/BadgeStrip';
+import SurplusCashPlan from '@/components/SurplusCashPlan';
+import ObligationsAuditReminder from '@/components/ObligationsAuditReminder';
 
 const HEALTH_COLORS: Record<string, { bg: string[]; text: string; border: string }> = {
   critical:   { bg: ['#7a2020', '#3a0e0e', '#1a0808'], text: '#ff8a8a', border: '#ff6b6b80' },
@@ -175,6 +177,8 @@ export default function HomeScreen() {
       </LinearGradient>
 
       <TradingIncomeWarning />
+      <SurplusCashPlan />
+      <ObligationsAuditReminder />
 
       {/* ── Recommendations ───────────────────────────────────────── */}
       {cashFlow.recommendations.length > 0 && (

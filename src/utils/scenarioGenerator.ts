@@ -62,15 +62,8 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (brokerageScenario) scenarios.push(brokerageScenario);
 
-  // 5. REDUCE EXPENSES (with real transaction data)
-  const expenseScenario = generateReduceExpensesScenario(
-    obligations,
-    currentMonthlyIncome,
-    currentFreedom,
-    currentMonthlyNeeds,
-    bankTransactions || []
-  );
-  if (expenseScenario) scenarios.push(expenseScenario);
+  // 5. (Removed — expense cuts aren't actionable from the app.
+  //     Spending data is surfaced in bank detail screens instead.)
 
   // 6. DEBT PAYOFF (Avalanche)
   const debtPayoffScenario = generateDebtPayoffScenario(
@@ -523,6 +516,10 @@ function generateReduceExpensesScenario(
   const reduction = totalDiscretionary * 0.2;
   const newMonthlyNeeds = monthlyNeeds - reduction;
   const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+  // If savings deployed to USD*
+  const savedToYield = (reduction * 12 * 9.34 / 100) / 12;
+  const effectiveIncome = currentMonthlyIncome + savedToYield;
+  const effectiveFreedom = newMonthlyNeeds > 0 ? (effectiveIncome / newMonthlyNeeds) : 0;
 
   return {
     id: 'reduce_expenses',
@@ -540,12 +537,12 @@ function generateReduceExpensesScenario(
     },
     impact: {
       freedomBefore: currentFreedom,
-      freedomAfter: newFreedom,
-      freedomDelta: newFreedom - currentFreedom,
+      freedomAfter: effectiveFreedom,
+      freedomDelta: effectiveFreedom - currentFreedom,
       monthlyIncomeBefore: currentMonthlyIncome,
-      monthlyIncomeAfter: currentMonthlyIncome,
-      monthlyIncomeDelta: 0,
-      annualIncomeDelta: 0,
+      monthlyIncomeAfter: effectiveIncome,
+      monthlyIncomeDelta: savedToYield,
+      annualIncomeDelta: savedToYield * 12,
       investmentRequired: 0,
     },
     reasoning: `You have $${totalDiscretionary.toFixed(0)}/mo in discretionary obligations. Import your bank and credit card statements for specific, data-driven cut recommendations.`,
@@ -595,10 +592,13 @@ function generateDataDrivenExpenseScenario(
   );
 
   // ── Group by spending group ──
+  // Exclude non-discretionary groups: financial (CC payments), transfers, income
+  const EXCLUDED_GROUPS = new Set(['financial', 'income', 'housing']);
   const groupSpending: Record<string, { total: number; txns: BankTransaction[] }> = {};
   for (const t of recentTransactions) {
     const meta = TRANSACTION_CATEGORY_META[t.category];
     const group = meta?.group || 'other';
+    if (EXCLUDED_GROUPS.has(group)) continue; // Skip non-discretionary
     if (!groupSpending[group]) groupSpending[group] = { total: 0, txns: [] };
     groupSpending[group].total += t.amount;
     groupSpending[group].txns.push(t);
@@ -621,9 +621,11 @@ function generateDataDrivenExpenseScenario(
 
   // ── Analyze each group for cut potential ──
   const insights: SpendingInsight[] = [];
-  const totalMonthlySpending = recentTransactions.reduce((s, t) => s + t.amount, 0) / monthsSpanned;
+  // Only count discretionary spending (excludes financial, housing, income, transfers)
+  const totalMonthlySpending = Object.values(groupSpending).reduce((s, g) => s + g.total, 0) / monthsSpanned;
 
   // CUT RULES per category group
+  // NOTE: financial, housing, income, transfer are excluded — not discretionary
   const cutRules: Record<string, { percentage: number; difficulty: 'easy' | 'medium' | 'hard'; action: string }> = {
     food: { percentage: 30, difficulty: 'medium', action: 'Meal prep, reduce delivery orders, cook at home more' },
     subscription: { percentage: 50, difficulty: 'easy', action: 'Audit and cancel unused subscriptions' },
@@ -632,9 +634,8 @@ function generateDataDrivenExpenseScenario(
     personal: { percentage: 25, difficulty: 'medium', action: 'Find cheaper alternatives for personal care' },
     transport: { percentage: 20, difficulty: 'medium', action: 'Carpool, reduce rideshare usage, optimize fuel' },
     medical: { percentage: 10, difficulty: 'hard', action: 'Shop around for prescriptions, use generic brands' },
-    financial: { percentage: 15, difficulty: 'medium', action: 'Negotiate fees, avoid late payments, refinance' },
     utilities: { percentage: 10, difficulty: 'hard', action: 'Reduce usage, switch to cheaper plans' },
-    // housing and other are generally non-discretionary
+    // Excluded: financial (CC payments, fees), housing (rent/mortgage), income, transfer
   };
 
   for (const [group, data] of Object.entries(groupSpending)) {
@@ -690,6 +691,16 @@ function generateDataDrivenExpenseScenario(
   const newMonthlyNeeds = monthlyNeeds - totalSuggestedCut;
   const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
 
+  // Show impact as days when delta is < 1 month, and include deployed savings income
+  const freedomDelta = newFreedom - currentFreedom;
+  const USD_STAR_APY = 9.34;
+  // If savings deployed to USD* → how much new monthly income
+  const deployedIncomeMonthly = (totalSuggestedCut * 12 * USD_STAR_APY / 100) / 12;
+  // Total effective impact: income increase if savings are deployed
+  const effectiveNewIncome = currentMonthlyIncome + deployedIncomeMonthly;
+  const effectiveFreedom = newMonthlyNeeds > 0 ? (effectiveNewIncome / newMonthlyNeeds) : 0;
+  const effectiveDelta = effectiveFreedom - currentFreedom;
+
   // ── Build specific steps ──
   const steps: string[] = [];
   for (const insight of topInsights) {
@@ -714,7 +725,7 @@ function generateDataDrivenExpenseScenario(
   // ── Build reasoning with real numbers ──
   const reasoningParts: string[] = [
     `Based on ${recentTransactions.length} transactions over ${monthsSpanned} month${monthsSpanned > 1 ? 's' : ''},`,
-    `you're spending ${formatCurrencyShort(totalMonthlySpending)}/mo across ${Object.keys(groupSpending).length} categories.`,
+    `you're spending ${formatCurrencyShort(totalMonthlySpending)}/mo on discretionary categories.`,
   ];
 
   if (easyCuts.length > 0) {
@@ -727,6 +738,16 @@ function generateDataDrivenExpenseScenario(
     reasoningParts.push(
       `Your biggest cut opportunity is ${biggestCategory.label.toLowerCase()} at ${formatCurrencyShort(biggestCategory.monthlyAvg)}/mo` +
       (topM ? ` — ${topM.name} alone is ${formatCurrencyShort(topM.total / monthsSpanned)}/mo (${topM.count} charges).` : '.')
+    );
+  }
+
+  // Show the real value: obligations reduction + deployed savings
+  reasoningParts.push(
+    `Cutting ${formatCurrencyShort(totalSuggestedCut)}/mo drops your obligations from ${formatCurrencyShort(monthlyNeeds)} → ${formatCurrencyShort(newMonthlyNeeds)}/mo.`
+  );
+  if (deployedIncomeMonthly >= 1) {
+    reasoningParts.push(
+      `If you deploy the ${formatCurrencyShort(totalSuggestedCut)}/mo savings into USD* at 9.34% APY, that's +${formatCurrencyShort(deployedIncomeMonthly)}/mo in passive income.`
     );
   }
 
@@ -751,7 +772,7 @@ function generateDataDrivenExpenseScenario(
   return {
     id: 'reduce_expenses',
     type: 'reduce_expenses',
-    title: `Cut ${formatCurrencyShort(totalSuggestedCut)}/mo based on your real spending`,
+    title: `Cut ${formatCurrencyShort(totalSuggestedCut)}/mo in discretionary spending`,
     description: descParts.join('\n'),
     emoji: '✂️',
     difficulty: easyTotal > totalSuggestedCut * 0.4 ? 'easy' : 'medium',
@@ -763,12 +784,12 @@ function generateDataDrivenExpenseScenario(
 
     impact: {
       freedomBefore: currentFreedom,
-      freedomAfter: newFreedom,
-      freedomDelta: newFreedom - currentFreedom,
+      freedomAfter: effectiveFreedom,
+      freedomDelta: effectiveDelta,
       monthlyIncomeBefore: currentMonthlyIncome,
-      monthlyIncomeAfter: currentMonthlyIncome,
-      monthlyIncomeDelta: 0,
-      annualIncomeDelta: 0,
+      monthlyIncomeAfter: currentMonthlyIncome + deployedIncomeMonthly,
+      monthlyIncomeDelta: deployedIncomeMonthly,
+      annualIncomeDelta: deployedIncomeMonthly * 12,
       investmentRequired: 0,
     },
 
