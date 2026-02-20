@@ -1247,13 +1247,16 @@ export const useStore = create<AppState>((set, get) => ({
       // Build lookup of existing auto-synced assets to preserve user-set data
       const existingAutoMap = new Map<string, typeof currentAssets[0]>();
       currentAssets.filter(a => a.isAutoSynced).forEach(a => {
-        existingAutoMap.set(a.id, a);
+        const meta = a.metadata as any;
+        const mint = meta?.mint;
+        if (mint) existingAutoMap.set(mint, a);       // index by mint
+        existingAutoMap.set(a.id, a);                  // also index by id
       });
 
       // Commodity token symbols — these should be categorized as commodities, not crypto
       const COMMODITY_SYMBOLS = ['GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM', 'OIL', 'COPPER'];
 
-      // Convert API assets to app format
+      // Convert API assets to app format, PRESERVING user edits
       const newAutoAssets = syncedAssets.map((sa: any) => {
         // Safe handling of null prices
         const safePrice = sa.priceUSD || 0;
@@ -1267,15 +1270,18 @@ export const useStore = create<AppState>((set, get) => ({
           sa.category === 'commodities';
         const effectiveCategory = isCommodity ? 'commodities' : (sa.category || 'crypto');
 
-        // Preserve existing APY and annualIncome if API returns 0
-        const existing = existingAutoMap.get(assetId);
-        const preservedApy = safeApy > 0 ? safeApy : (existing?.metadata?.apy || 0);
+        // Find existing asset by mint OR id
+        const existing = existingAutoMap.get(sa.mint) || existingAutoMap.get(assetId);
+        const existingMeta = (existing?.metadata || {}) as any;
+
+        // Preserve user-set fields from existing asset
+        const preservedApy = existingMeta.apy > 0 ? existingMeta.apy : (safeApy > 0 ? safeApy : 0);
 
         // Preserve value if API returns $0 but we had a real value (price feed outage)
         const preservedValue = safeValue > 0 ? safeValue :
           (existing?.value && existing.value > 0 ? existing.value : 0);
         const preservedPrice = safePrice > 0 ? safePrice :
-          (existing?.metadata?.priceUSD && existing.metadata.priceUSD > 0 ? existing.metadata.priceUSD : 0);
+          (existingMeta.priceUSD > 0 ? existingMeta.priceUSD : 0);
 
         const preservedAnnualIncome = preservedApy > 0
           ? (preservedValue * preservedApy) / 100
@@ -1285,27 +1291,46 @@ export const useStore = create<AppState>((set, get) => ({
           console.log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${existing.value.toFixed(2)} — preserving`);
         }
 
-        console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apiApy=${safeApy} | preservedApy=${preservedApy} | category=${effectiveCategory}`);
+        // USER-PRESERVED FIELDS: type, name, protocol, positionType, leverage, etc.
+        // Only use sync values for NEW tokens; preserve user edits on existing ones
+        const preservedType = existing
+          ? existing.type                                  // keep user's type (e.g. 'defi')
+          : mapCategoryToAssetType(effectiveCategory);     // new token: use Helius category
+        const preservedSubtype = existing
+          ? (existing as any).subtype
+          : (effectiveCategory === 'crypto' ? undefined : effectiveCategory);
+        const preservedName = existing
+          ? existing.name                                  // keep user's rename
+          : sa.name;                                       // new token: use Helius name
+
+        console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apy=${preservedApy} | type=${preservedType} | ${existing ? 'EXISTING' : 'NEW'}`);
 
         return {
-          id: assetId,
-          type: mapCategoryToAssetType(effectiveCategory),
-          subtype: effectiveCategory === 'crypto' ? undefined : effectiveCategory,
-          name: sa.name,
+          id: existing?.id || assetId,
+          type: preservedType,
+          subtype: preservedSubtype,
+          name: preservedName,
           value: preservedValue,
           annualIncome: preservedAnnualIncome,
           isLiquid: true,
           isAutoSynced: true,
           lastSynced: new Date().toISOString(),
           metadata: {
-            type: 'other' as const,
-            description: sa.name,
+            // Start with existing metadata to preserve ALL user-set fields
+            ...(existing ? existingMeta : {}),
+            // Always update from sync: balance, price, logo, symbol, mint
+            type: existingMeta.type || ('other' as const),
+            description: existingMeta.description || sa.name,
             apy: preservedApy,
             balance: sa.balance || 0,
+            quantity: sa.balance || 0,
             priceUSD: preservedPrice,
             mint: sa.mint,
             symbol: sa.symbol,
-            logoURI: sa.logoURI,
+            logoURI: existingMeta.logoURI || sa.logoURI,
+            // These are PRESERVED from existing (spread above handles it,
+            // but listed here for clarity of what we protect):
+            // protocol, positionType, supplied, borrowed, leverage, healthFactor
           },
         };
       });

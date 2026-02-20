@@ -36,15 +36,19 @@ export default function WalletSyncSection({
         {isLoading ? (
           <>
             <ActivityIndicator color="#0a0e1a" size="small" />
-            <Text style={styles.buttonText}>Syncing...</Text>
+            <Text style={styles.buttonText}>Scanning...</Text>
           </>
         ) : (
           <>
-            <Text style={styles.icon}>🔄</Text>
-            <Text style={styles.buttonText}>Sync Wallet Assets</Text>
+            <Text style={styles.icon}>🔍</Text>
+            <Text style={styles.buttonText}>Scan for New Tokens</Text>
           </>
         )}
       </TouchableOpacity>
+      
+      <Text style={styles.hintText}>
+        Prices update automatically · Scan finds new tokens only
+      </Text>
       
       {lastSyncTime && (
         <Text style={styles.lastSyncText}>
@@ -84,5 +88,11 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 8,
+  },
+  hintText: {
+    fontSize: 11,
+    color: '#555',
+    textAlign: 'center',
+    marginTop: 6,
   },
 });

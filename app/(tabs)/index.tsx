@@ -21,6 +21,7 @@ import PositionAlertCards from '@/components/PositionAlertCards';
 import BadgeStrip from '@/components/BadgeStrip';
 import SurplusCashPlan from '@/components/SurplusCashPlan';
 import ObligationsAuditReminder from '@/components/ObligationsAuditReminder';
+import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 
 const HEALTH_COLORS: Record<string, { bg: string[]; text: string; border: string }> = {
   critical:   { bg: ['#7a2020', '#3a0e0e', '#1a0808'], text: '#ff8a8a', border: '#ff6b6b80' },
@@ -163,6 +164,8 @@ export default function HomeScreen() {
           gradientColors={monthlySurplus >= 0 ? ['#184830', '#0e2818', '#08180c'] : ['#581818', '#300c0c', '#1a0606']}
           borderColor={monthlySurplus >= 0 ? '#4ade8080' : '#f8717180'} />
       </View>
+
+      <PortfolioTrendCard />
 
       {/* ── Insight Card ──────────────────────────────────────────── */}
       <LinearGradient colors={['#222a48', '#161c34', '#0e1224']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
