@@ -1327,6 +1327,7 @@ export const useStore = create<AppState>((set, get) => ({
             priceUSD: preservedPrice,
             mint: sa.mint,
             symbol: sa.symbol,
+            decimals: sa.decimals ?? existingMeta.decimals,  // store token decimals for accurate swaps
             logoURI: existingMeta.logoURI || sa.logoURI,
             // These are PRESERVED from existing (spread above handles it,
             // but listed here for clarity of what we protect):

@@ -6,6 +6,7 @@ import { useStore } from '../../src/store/useStore';
 import ThesisModal from '../../src/components/ThesisModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import type { Asset, RealEstateAsset, StockAsset } from '../../src/types';
+import AssetTargetSection from '@/components/assets/AssetTargetSection';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -402,6 +403,11 @@ export default function AssetDetailScreen() {
             )}
           </View>
         ) : null}
+
+        {/* Accumulation Target — crypto only */}
+        {asset.type === 'crypto' && (
+          <AssetTargetSection asset={asset} />
+        )}
 
         {/* Thesis Modal */}
         {isAppreciationAsset && (

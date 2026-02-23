@@ -74,6 +74,13 @@ export default function GoalsScreen() {
   const [formUnit, setFormUnit] = useState('tokens');
   const [formNotes, setFormNotes] = useState('');
 
+  // Linked asset state
+  const [formLinkedAssetId, setFormLinkedAssetId] = useState<string | null>(null);
+  const [formLinkedMint, setFormLinkedMint] = useState<string | null>(null);
+  const [formLinkedDebtId, setFormLinkedDebtId] = useState<string | null>(null);
+  const [formLinkedBankId, setFormLinkedBankId] = useState<string | null>(null);
+  const [assetSearch, setAssetSearch] = useState('');
+
   // Quick add
   const [quickDebtId, setQuickDebtId] = useState('');
   const [quickBankId, setQuickBankId] = useState('');
@@ -118,6 +125,11 @@ export default function GoalsScreen() {
     setFormCurrent('');
     setFormUnit('tokens');
     setFormNotes('');
+    setFormLinkedAssetId(null);
+    setFormLinkedMint(null);
+    setFormLinkedDebtId(null);
+    setFormLinkedBankId(null);
+    setAssetSearch('');
     setEditingGoal(null);
   };
 
@@ -126,6 +138,16 @@ export default function GoalsScreen() {
     const target = parseFloat(formTarget);
     if (!target || target <= 0) return xAlert('Set a target amount');
     const current = parseFloat(formCurrent) || 0;
+
+    // Build autoSource if linked
+    let autoSource = undefined;
+    if (formLinkedMint) {
+      autoSource = { type: 'asset_tokens' as const, sourceId: formLinkedAssetId || formLinkedMint };
+    } else if (formLinkedDebtId) {
+      autoSource = { type: 'debt_balance' as const, sourceId: formLinkedDebtId };
+    } else if (formLinkedBankId) {
+      autoSource = { type: 'bank_balance' as const, sourceId: formLinkedBankId };
+    }
 
     if (editingGoal) {
       await updateGoal(editingGoal.id, {
@@ -137,6 +159,11 @@ export default function GoalsScreen() {
         targetUnit: formUnit,
         notes: formNotes || undefined,
         type: formType,
+        mint: formLinkedMint || undefined,
+        assetId: formLinkedAssetId || undefined,
+        debtId: formLinkedDebtId || undefined,
+        bankAccountId: formLinkedBankId || undefined,
+        autoSource,
       });
     } else {
       await addGoal({
@@ -148,6 +175,12 @@ export default function GoalsScreen() {
         targetUnit: formUnit,
         currentAmount: current,
         notes: formNotes || undefined,
+        mint: formLinkedMint || undefined,
+        symbol: formLinkedMint ? formUnit : undefined,
+        assetId: formLinkedAssetId || undefined,
+        debtId: formLinkedDebtId || undefined,
+        bankAccountId: formLinkedBankId || undefined,
+        autoSource,
       });
     }
 
@@ -380,6 +413,146 @@ export default function GoalsScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* ── Link to existing asset/debt/account ─────────── */}
+              <View style={st.linkSection}>
+                <Text style={st.linkSectionTitle}>🔗 Link to an asset, debt, or account</Text>
+                <Text style={st.linkSectionHint}>Tap to auto-fill and sync progress automatically</Text>
+
+                {/* Show linked badge if selected */}
+                {(formLinkedAssetId || formLinkedDebtId || formLinkedBankId) ? (
+                  <View style={st.linkedBadge}>
+                    <Text style={st.linkedBadgeText}>
+                      ✓ Linked: {formName || '(selected)'}
+                    </Text>
+                    <TouchableOpacity onPress={() => { setFormLinkedAssetId(null); setFormLinkedMint(null); setFormLinkedDebtId(null); setFormLinkedBankId(null); }}>
+                      <Text style={{ color: '#f87171', fontSize: 14, marginLeft: 8 }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    {/* Search bar */}
+                    <TextInput
+                      style={st.linkSearchInput}
+                      placeholder="🔍  Search by name..."
+                      placeholderTextColor="#555"
+                      value={assetSearch}
+                      onChangeText={setAssetSearch}
+                    />
+
+                    {/* Quick-pick chips: show all items, filtered by search */}
+                    <ScrollView style={st.linkResults} nestedScrollEnabled>
+                      {/* Crypto assets */}
+                      {assets
+                        .filter(a => a.type === 'crypto' && (!assetSearch || 
+                          a.name.toLowerCase().includes(assetSearch.toLowerCase()) ||
+                          ((a.metadata as any)?.symbol || '').toLowerCase().includes(assetSearch.toLowerCase())
+                        ))
+                        .slice(0, assetSearch ? 6 : 4)
+                        .map(a => {
+                          const meta = a.metadata as any;
+                          const sym = meta?.symbol || a.name;
+                          const bal = meta?.balance || 0;
+                          const mint = meta?.tokenMint || meta?.mint || '';
+                          return (
+                            <TouchableOpacity
+                              key={a.id}
+                              style={st.linkChip}
+                              onPress={() => {
+                                setFormLinkedAssetId(a.id);
+                                setFormLinkedMint(mint);
+                                setFormLinkedDebtId(null);
+                                setFormLinkedBankId(null);
+                                setFormName(formName || `${sym} Target`);
+                                setFormUnit(sym);
+                                setFormCurrent(bal.toString());
+                                setFormEmoji('🎯');
+                                setFormStrategy('accumulate');
+                                setFormType('accumulate');
+                                setAssetSearch('');
+                              }}
+                            >
+                              <Text style={st.linkChipEmoji}>🪙</Text>
+                              <Text style={st.linkChipName} numberOfLines={1}>{sym}</Text>
+                              <Text style={st.linkChipSub}>{bal > 0 ? `${formatNum(bal)}` : ''} · ${a.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {/* Debts */}
+                      {debts
+                        .filter(d => !assetSearch || d.name.toLowerCase().includes(assetSearch.toLowerCase()))
+                        .slice(0, assetSearch ? 4 : 3)
+                        .map(d => {
+                          const bal = d.balance ?? d.principal;
+                          return (
+                            <TouchableOpacity
+                              key={d.id}
+                              style={st.linkChip}
+                              onPress={() => {
+                                setFormLinkedDebtId(d.id);
+                                setFormLinkedAssetId(null);
+                                setFormLinkedMint(null);
+                                setFormLinkedBankId(null);
+                                setFormName(formName || `Pay off ${d.name}`);
+                                setFormUnit('$');
+                                setFormTarget(bal.toString());
+                                setFormCurrent(bal.toString());
+                                setFormEmoji('💳');
+                                setFormStrategy('extract');
+                                setFormType('debt_payoff');
+                                setAssetSearch('');
+                              }}
+                            >
+                              <Text style={st.linkChipEmoji}>💳</Text>
+                              <Text style={st.linkChipName} numberOfLines={1}>{d.name}</Text>
+                              <Text style={[st.linkChipSub, { color: '#f87171' }]}>${bal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {/* Bank accounts */}
+                      {bankAccounts
+                        .filter(a => !assetSearch || a.name.toLowerCase().includes(assetSearch.toLowerCase()) || a.institution.toLowerCase().includes(assetSearch.toLowerCase()))
+                        .slice(0, assetSearch ? 4 : 3)
+                        .map(a => (
+                          <TouchableOpacity
+                            key={a.id}
+                            style={st.linkChip}
+                            onPress={() => {
+                              setFormLinkedBankId(a.id);
+                              setFormLinkedAssetId(null);
+                              setFormLinkedMint(null);
+                              setFormLinkedDebtId(null);
+                              setFormName(formName || `${a.name} Target`);
+                              setFormUnit('$');
+                              setFormCurrent(a.currentBalance.toString());
+                              setFormEmoji('🏦');
+                              setFormStrategy('accumulate');
+                              setFormType('savings_target');
+                              setAssetSearch('');
+                            }}
+                          >
+                            <Text style={st.linkChipEmoji}>🏦</Text>
+                            <Text style={st.linkChipName} numberOfLines={1}>{a.name}</Text>
+                            <Text style={[st.linkChipSub, { color: '#4ade80' }]}>${a.currentBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                          </TouchableOpacity>
+                        ))}
+
+                      {assets.filter(a => a.type === 'crypto').length === 0 && debts.length === 0 && bankAccounts.length === 0 && (
+                        <Text style={{ color: '#555', textAlign: 'center', paddingVertical: 12, fontSize: 13 }}>No assets, debts, or accounts found. Add some first, or create a manual goal below.</Text>
+                      )}
+                    </ScrollView>
+                  </>
+                )}
+              </View>
+
+              {/* Divider */}
+              <View style={st.orDivider}>
+                <View style={st.orLine} />
+                <Text style={st.orText}>or set up manually</Text>
+                <View style={st.orLine} />
+              </View>
+
               {/* Emoji picker (quick) */}
               <Text style={st.fieldLabel}>Icon</Text>
               <View style={st.emojiRow}>
@@ -393,7 +566,6 @@ export default function GoalsScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-
               {/* Name */}
               <Text style={st.fieldLabel}>Goal name</Text>
               <TextInput
@@ -680,6 +852,22 @@ const st = StyleSheet.create({
   emojiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   emojiBtn: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#1a204040' },
   emojiBtnActive: { borderColor: '#f4c430', backgroundColor: '#f4c43015' },
+
+  // Link section
+  linkSection: { backgroundColor: '#080c18', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#f4c43020', marginTop: 12 },
+  linkSectionTitle: { fontSize: 14, fontWeight: '700', color: '#f4c430', marginBottom: 2 },
+  linkSectionHint: { fontSize: 11, color: '#666', marginBottom: 10 },
+  linkSearchInput: { backgroundColor: '#0c1020', borderRadius: 10, padding: 12, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: '#2a3050', marginBottom: 8 },
+  linkResults: { maxHeight: 220 },
+  linkChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0c1020', borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#1a204030', gap: 8 },
+  linkChipEmoji: { fontSize: 18 },
+  linkChipName: { fontSize: 14, fontWeight: '700', color: '#fff', flex: 1 },
+  linkChipSub: { fontSize: 12, color: '#888' },
+  linkedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#4ade8010', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#4ade8030' },
+  linkedBadgeText: { fontSize: 13, color: '#4ade80', fontWeight: '600', flex: 1 },
+  orDivider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
+  orLine: { flex: 1, height: 1, backgroundColor: '#1a204040' },
+  orText: { fontSize: 12, color: '#555', marginHorizontal: 12 },
 
   unitRow: { flexDirection: 'row', alignItems: 'center' },
   unitBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#2a3050', marginRight: 6 },

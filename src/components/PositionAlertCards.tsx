@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import type { Asset, CryptoAsset } from '../types';
 import { recordPriceSnapshot, getTokenPriceData, TokenPriceData } from '../services/priceTracker';
-import { getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics } from '../services/jupiterSwap';
+import { getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics, fetchMintDecimals } from '../services/jupiterSwap';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generatePositionAlerts, getAlertColor, PositionAlert, AccPlanContext } from '@/services/positionAlerts';
 import { loadAllPlans, computePlanStats } from '@/services/accumulationPlan';
@@ -210,15 +210,19 @@ export default function PositionAlertCards() {
 
               const meta = asset.metadata as CryptoAsset;
               const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
-              const decimals = (meta as any)?.decimals || 9;
-              const lamports = Math.floor(quantity * Math.pow(10, decimals));
               const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
+
+              // Fetch real decimals from RPC — don't guess
+              const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
+              console.log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
 
               try {
                 const result = await executeSwap(
                   {
-                    inputMint: fromMint, outputMint: toMint, amount: lamports, userPublicKey: publicKey.toBase58(),
-                    inputDecimals: 0
+                    inputMint: fromMint, outputMint: toMint,
+                    amount: quantity,           // human-readable token amount
+                    userPublicKey: publicKey.toBase58(),
+                    inputDecimals: decimals,    // fetched from chain
                   },
                   signTransaction
                 );

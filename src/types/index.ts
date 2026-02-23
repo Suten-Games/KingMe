@@ -430,9 +430,20 @@ export interface DriftTrade {
 // Tracks the waterfall: USDC profit → crypto.com card, bank, crypto buys, or stays in Drift.
 export interface DriftProfitAllocation {
   toCryptoComCard: number;          // usually $175/day
-  toBankAccounts: number;           // USDC → bank transfer
-  toCryptoBuys: number;             // bought other tokens with the profit
+  toBankAccounts: number;           // USDC → bank transfer (legacy — use goalAllocations)
+  toCryptoBuys: number;             // bought other tokens (legacy — use goalAllocations)
   leftInDrift: number;              // stayed as collateral, grows the account
+  goalAllocations?: GoalAllocation[];  // goal-based profit routing
+}
+
+export interface GoalAllocation {
+  goalId: string;
+  goalName: string;
+  emoji: string;
+  amount: number;
+  mint?: string;                    // if crypto goal, the token mint for swapping
+  symbol?: string;                  // e.g. 'WHALE', 'dSOL'
+  type: 'crypto' | 'bank' | 'other';
 }
 
 // ─── Daily Expense Tracker ───────────────────────────────────────────────────

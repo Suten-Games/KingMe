@@ -1,8 +1,10 @@
 // app/(tabs)/trading.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
-import { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert } from 'react-native';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import { useStore } from '../src/store/useStore';
-import type { DriftTrade, DriftTradeDirection, DriftTradeAsset } from '../src/types';
+import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
+import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function formatDate(isoDate: string): string {
@@ -39,10 +41,25 @@ export default function TradingScreen() {
   const [actualPnL, setActualPnL] = useState('');
   const [notes, setNotes] = useState('');
 
-  const [allocCryptoComCard, setAllocCryptoComCard] = useState('175');
+  const [allocCryptoComCard, setAllocCryptoComCard] = useState('');
   const [allocBank, setAllocBank] = useState('');
   const [allocCryptoBuys, setAllocCryptoBuys] = useState('');
   const [allocLeftInDrift, setAllocLeftInDrift] = useState('');
+
+  // ── goal allocations ─────────────────────────────────────────────────────
+  const router = useRouter();
+  const assets = useStore((s) => s.assets);
+  const [goals, setGoals] = useState<GoalWithProgress[]>([]);
+  const [goalAmounts, setGoalAmounts] = useState<Record<string, string>>({});  // goalId → amount string
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    loadGoals().then(raw => {
+      const withProgress = raw.map(g => calcGoalProgress(g));
+      setGoals(sortByReachability(withProgress).filter(g => !g.isComplete));
+    }).catch(() => {});
+  }, [showModal]);
 
   // ── derived ────────────────────────────────────────────────────────────────
   const tokens = parseFloat(sizeInTokens) || 0;
@@ -60,11 +77,13 @@ export default function TradingScreen() {
   const fees = theoreticalPnL - realPnL;
   const isProfitable = realPnL > 0;
 
+  const goalAllocTotal = Object.values(goalAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
   const totalAllocated =
     (parseFloat(allocCryptoComCard) || 0) +
     (parseFloat(allocBank) || 0) +
     (parseFloat(allocCryptoBuys) || 0) +
-    (parseFloat(allocLeftInDrift) || 0);
+    (parseFloat(allocLeftInDrift) || 0) +
+    goalAllocTotal;
 
   const allocationGap = isProfitable ? realPnL - totalAllocated : 0;
 
@@ -82,12 +101,14 @@ export default function TradingScreen() {
     const losses = monthTrades.filter((t) => t.pnlUsdc < 0).length;
     const totalAlloc = monthTrades.reduce((sum, t) => {
       if (!t.allocation) return sum;
+      const goalTotal = (t.allocation.goalAllocations || []).reduce((gs, ga) => gs + ga.amount, 0);
       return (
         sum +
         t.allocation.toCryptoComCard +
         t.allocation.toBankAccounts +
         t.allocation.toCryptoBuys +
-        t.allocation.leftInDrift
+        t.allocation.leftInDrift +
+        goalTotal
       );
     }, 0);
     const totalFees = monthTrades.reduce((sum, t) => sum + (t.fees || 0), 0);
@@ -112,10 +133,13 @@ export default function TradingScreen() {
     setExitPrice('');
     setActualPnL('');
     setNotes('');
-    setAllocCryptoComCard('175');
+    setAllocCryptoComCard('');
     setAllocBank('');
     setAllocCryptoBuys('');
     setAllocLeftInDrift('');
+    setGoalAmounts({});
+    setSelectedGoalIds(new Set());
+    setShowGoalPicker(false);
     setEditingTradeId(null);
     setShowModal(false);
   };
@@ -141,15 +165,83 @@ export default function TradingScreen() {
       setAllocBank(trade.allocation.toBankAccounts.toString());
       setAllocCryptoBuys(trade.allocation.toCryptoBuys.toString());
       setAllocLeftInDrift(trade.allocation.leftInDrift.toString());
+      // Restore goal allocations
+      if (trade.allocation.goalAllocations?.length) {
+        const amounts: Record<string, string> = {};
+        const ids = new Set<string>();
+        trade.allocation.goalAllocations.forEach(ga => {
+          amounts[ga.goalId] = ga.amount.toString();
+          ids.add(ga.goalId);
+        });
+        setGoalAmounts(amounts);
+        setSelectedGoalIds(ids);
+      } else {
+        setGoalAmounts({});
+        setSelectedGoalIds(new Set());
+      }
     } else {
-      setAllocCryptoComCard('175');
+      setAllocCryptoComCard('');
       setAllocBank('');
       setAllocCryptoBuys('');
       setAllocLeftInDrift('');
+      setGoalAmounts({});
+      setSelectedGoalIds(new Set());
     }
 
     setEditingTradeId(trade.id);
     setShowModal(true);
+  };
+
+  // ── goal allocation helpers ──────────────────────────────────────────────
+  const getGoalType = (g: GoalWithProgress): 'crypto' | 'bank' | 'other' => {
+    if (g.mint) return 'crypto';
+    if (g.bankAccountId || g.type === 'savings_target') return 'bank';
+    if (g.debtId || g.type === 'debt_payoff') return 'bank';
+    return 'other';
+  };
+
+  const buildGoalAllocations = (): GoalAllocation[] => {
+    const allocs: GoalAllocation[] = [];
+    for (const [goalId, amtStr] of Object.entries(goalAmounts)) {
+      const amt = parseFloat(amtStr) || 0;
+      if (amt <= 0) continue;
+      const goal = goals.find(g => g.id === goalId);
+      if (!goal) continue;
+      allocs.push({
+        goalId,
+        goalName: goal.name,
+        emoji: goal.emoji,
+        amount: amt,
+        mint: goal.mint,
+        symbol: goal.targetUnit !== '$' && goal.targetUnit !== 'tokens' ? goal.targetUnit : undefined,
+        type: getGoalType(goal),
+      });
+    }
+    return allocs;
+  };
+
+  const toggleGoal = (goalId: string) => {
+    setSelectedGoalIds(prev => {
+      const next = new Set(prev);
+      if (next.has(goalId)) {
+        next.delete(goalId);
+        setGoalAmounts(prev => { const n = { ...prev }; delete n[goalId]; return n; });
+      } else {
+        next.add(goalId);
+      }
+      return next;
+    });
+  };
+
+  const setGoalAmount = (goalId: string, val: string) => {
+    setGoalAmounts(prev => ({ ...prev, [goalId]: val }));
+  };
+
+  // ── auto-fill remaining to drift ───────────────────────────────────────
+  const autoFillDrift = () => {
+    const used = (parseFloat(allocCryptoComCard) || 0) + (parseFloat(allocBank) || 0) + (parseFloat(allocCryptoBuys) || 0) + goalAllocTotal;
+    const remaining = Math.max(0, realPnL - used);
+    setAllocLeftInDrift(remaining > 0 ? remaining.toFixed(2) : '');
   };
 
   const handleSaveTrade = () => {
@@ -181,6 +273,7 @@ export default function TradingScreen() {
             toBankAccounts: parseFloat(allocBank) || 0,
             toCryptoBuys: parseFloat(allocCryptoBuys) || 0,
             leftInDrift: parseFloat(allocLeftInDrift) || 0,
+            goalAllocations: buildGoalAllocations(),
           }
         : undefined,
     };
@@ -348,6 +441,33 @@ export default function TradingScreen() {
                       </Text>
                     )}
                   </View>
+
+                  {/* Goal allocations with action buttons */}
+                  {trade.allocation.goalAllocations && trade.allocation.goalAllocations.length > 0 && (
+                    <View style={ga.tradeGoals}>
+                      {trade.allocation.goalAllocations.map((alloc, i) => (
+                        <View key={i} style={ga.tradeGoalRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={ga.tradeGoalName}>{alloc.emoji} {alloc.goalName}</Text>
+                            <Text style={ga.tradeGoalAmount}>{formatCurrency(alloc.amount)}</Text>
+                          </View>
+                          {alloc.type === 'crypto' && alloc.mint && (
+                            <TouchableOpacity
+                              style={ga.swapBtn}
+                              onPress={() => router.push(`/goals` as any)}
+                            >
+                              <Text style={ga.swapBtnText}>Swap → {alloc.symbol || 'Token'}</Text>
+                            </TouchableOpacity>
+                          )}
+                          {alloc.type === 'bank' && (
+                            <View style={ga.transferBadge}>
+                              <Text style={ga.transferBadgeText}>→ Bank</Text>
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -493,14 +613,16 @@ export default function TradingScreen() {
               {isProfitable && (
                 <>
                   <Text style={[styles.label, { marginTop: 20 }]}>Profit Allocation</Text>
-                  <Text style={styles.helperText}>Where did the USDC profit go?</Text>
+                  <Text style={styles.helperText}>Withdraw USDC from Drift, then route it:</Text>
+
+                  {/* Cash card / daily spending */}
                   <View style={styles.allocRow}>
-                    <Text style={styles.allocLabel}>💳 crypto.com Card</Text>
+                    <Text style={styles.allocLabel}>💳 Cash Card</Text>
                     <View style={[styles.inputRow, { flex: 1 }]}>
                       <Text style={styles.currencySymbol}>$</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="175"
+                        placeholder={realPnL > 175 ? '175' : '0'}
                         placeholderTextColor="#666"
                         keyboardType="numeric"
                         value={allocCryptoComCard}
@@ -508,6 +630,81 @@ export default function TradingScreen() {
                       />
                     </View>
                   </View>
+
+                  {/* ── Goal Allocations ──────────────────────────────── */}
+                  {goals.length > 0 && (
+                    <View style={ga.section}>
+                      <Text style={ga.sectionTitle}>🎯 Assign to Goals</Text>
+
+                      {/* Selected goals with amount inputs */}
+                      {goals.filter(g => selectedGoalIds.has(g.id)).map(g => {
+                        const gType = getGoalType(g);
+                        return (
+                          <View key={g.id} style={ga.goalRow}>
+                            <TouchableOpacity style={ga.goalRemove} onPress={() => toggleGoal(g.id)}>
+                              <Text style={{ color: '#f87171', fontSize: 12 }}>✕</Text>
+                            </TouchableOpacity>
+                            <View style={ga.goalInfo}>
+                              <Text style={ga.goalName}>{g.emoji} {g.name}</Text>
+                              <Text style={ga.goalHint}>
+                                {gType === 'crypto' ? `Swap USDC → ${g.targetUnit || g.mint?.slice(0, 6)}` : gType === 'bank' ? 'Transfer to bank' : 'Manual'}
+                              </Text>
+                            </View>
+                            <View style={[styles.inputRow, { flex: 0, width: 100 }]}>
+                              <Text style={styles.currencySymbol}>$</Text>
+                              <TextInput
+                                style={[styles.input, { fontSize: 16 }]}
+                                placeholder="0"
+                                placeholderTextColor="#666"
+                                keyboardType="numeric"
+                                value={goalAmounts[g.id] || ''}
+                                onChangeText={v => setGoalAmount(g.id, v)}
+                              />
+                            </View>
+                          </View>
+                        );
+                      })}
+
+                      {/* Add goal button - shows unselected goals */}
+                      {goals.filter(g => !selectedGoalIds.has(g.id)).length > 0 && (
+                        <>
+                          <TouchableOpacity
+                            style={ga.addGoalBtn}
+                            onPress={() => setShowGoalPicker(!showGoalPicker)}
+                          >
+                            <Text style={ga.addGoalText}>{showGoalPicker ? '▲ Hide goals' : '+ Add a goal'}</Text>
+                          </TouchableOpacity>
+
+                          {showGoalPicker && (
+                            <View style={ga.picker}>
+                              {goals.filter(g => !selectedGoalIds.has(g.id)).map(g => (
+                                <TouchableOpacity
+                                  key={g.id}
+                                  style={ga.pickerItem}
+                                  onPress={() => { toggleGoal(g.id); setShowGoalPicker(false); }}
+                                >
+                                  <Text style={ga.pickerEmoji}>{g.emoji}</Text>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={ga.pickerName}>{g.name}</Text>
+                                    <Text style={ga.pickerSub}>{g.progressPct.toFixed(0)}% done · {getGoalType(g) === 'crypto' ? 'Swap' : getGoalType(g) === 'bank' ? 'Bank transfer' : 'Manual'}</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  )}
+
+                  {/* No goals prompt */}
+                  {goals.length === 0 && (
+                    <TouchableOpacity style={ga.noGoals} onPress={() => { resetForm(); router.push('/goals' as any); }}>
+                      <Text style={ga.noGoalsText}>🎯 Set up goals to route trading profits → Go to Goals</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Legacy fields (collapsed) */}
                   <View style={styles.allocRow}>
                     <Text style={styles.allocLabel}>🏦 Bank Transfer</Text>
                     <View style={[styles.inputRow, { flex: 1 }]}>
@@ -536,6 +733,8 @@ export default function TradingScreen() {
                       />
                     </View>
                   </View>
+
+                  {/* Left in Drift with auto-fill */}
                   <View style={styles.allocRow}>
                     <Text style={styles.allocLabel}>🎯 Left in Drift</Text>
                     <View style={[styles.inputRow, { flex: 1 }]}>
@@ -549,7 +748,11 @@ export default function TradingScreen() {
                         onChangeText={setAllocLeftInDrift}
                       />
                     </View>
+                    <TouchableOpacity onPress={autoFillDrift} style={ga.autoBtn}>
+                      <Text style={ga.autoBtnText}>Rest</Text>
+                    </TouchableOpacity>
                   </View>
+
                   {allocationGap !== 0 && (
                     <Text style={[styles.allocationGap, { color: allocationGap > 0 ? '#ff9f43' : '#ff6b6b' }]}>
                       ⚠️ {allocationGap > 0 ? `${formatCurrency(allocationGap)} unallocated` : `Over by ${formatCurrency(Math.abs(allocationGap))}`}
@@ -690,4 +893,41 @@ const styles = StyleSheet.create({
   modalAddBtn: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
   modalBtnDisabled: { opacity: 0.4 },
   modalAddText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
+});
+
+// ── Goal allocation styles ──────────────────────────────────────────────────
+const ga = StyleSheet.create({
+  section: { marginTop: 12, backgroundColor: '#0f1420', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#f4c43015' },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#f4c430', marginBottom: 10 },
+
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  goalRemove: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#f8717115', alignItems: 'center', justifyContent: 'center' },
+  goalInfo: { flex: 1 },
+  goalName: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  goalHint: { fontSize: 10, color: '#666' },
+
+  addGoalBtn: { paddingVertical: 8, alignItems: 'center' },
+  addGoalText: { fontSize: 13, color: '#f4c430', fontWeight: '600' },
+
+  picker: { borderTopWidth: 1, borderTopColor: '#1a204020', paddingTop: 8 },
+  pickerItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4 },
+  pickerEmoji: { fontSize: 20 },
+  pickerName: { fontSize: 13, fontWeight: '600', color: '#fff' },
+  pickerSub: { fontSize: 11, color: '#666' },
+
+  autoBtn: { backgroundColor: '#4ade8020', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#4ade8030' },
+  autoBtnText: { fontSize: 12, fontWeight: '700', color: '#4ade80' },
+
+  noGoals: { backgroundColor: '#f4c43008', borderRadius: 10, padding: 12, marginTop: 8, borderWidth: 1, borderColor: '#f4c43015' },
+  noGoalsText: { fontSize: 12, color: '#f4c430', textAlign: 'center' },
+
+  // Trade card goal display
+  tradeGoals: { marginTop: 8, borderTopWidth: 1, borderTopColor: '#2a2f3e', paddingTop: 8 },
+  tradeGoalRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
+  tradeGoalName: { fontSize: 12, color: '#f4c430', fontWeight: '600' },
+  tradeGoalAmount: { fontSize: 11, color: '#4ade80' },
+  swapBtn: { backgroundColor: '#60a5fa18', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#60a5fa30' },
+  swapBtnText: { fontSize: 11, fontWeight: '700', color: '#60a5fa' },
+  transferBadge: { backgroundColor: '#4ade8010', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  transferBadgeText: { fontSize: 11, color: '#4ade80', fontWeight: '600' },
 });

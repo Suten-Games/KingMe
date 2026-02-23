@@ -93,12 +93,56 @@ const TOKEN_DECIMALS: Record<string, number> = {
   'USD*': 6,
 };
 
+// Runtime cache for mint decimals fetched from RPC
+const _decimalsCache: Record<string, number> = {};
+
 /**
- * Resolve input decimals — uses explicit param, falls back to lookup
+ * Resolve input decimals — uses explicit param, falls back to lookup, then cache
  */
 function resolveDecimals(mint: string, explicit?: number): number {
-  if (explicit !== undefined) return explicit;
-  return TOKEN_DECIMALS[mint] || TOKEN_DECIMALS[mint.toUpperCase()] || 9;
+  if (explicit !== undefined && explicit >= 0) return explicit;
+  if (TOKEN_DECIMALS[mint]) return TOKEN_DECIMALS[mint];
+  if (TOKEN_DECIMALS[mint.toUpperCase()]) return TOKEN_DECIMALS[mint.toUpperCase()];
+  if (_decimalsCache[mint] !== undefined) return _decimalsCache[mint];
+  console.warn(`[JUPITER] ⚠️ Unknown decimals for mint ${mint.slice(0, 8)}... defaulting to 9. Call fetchMintDecimals() first for accuracy.`);
+  return 9;
+}
+
+/**
+ * Fetch token decimals from Solana RPC for a given mint address.
+ * Caches result for future lookups. Call this BEFORE executing swaps for unknown tokens.
+ */
+export async function fetchMintDecimals(mint: string): Promise<number> {
+  // Check caches first
+  if (TOKEN_DECIMALS[mint]) return TOKEN_DECIMALS[mint];
+  if (_decimalsCache[mint] !== undefined) return _decimalsCache[mint];
+
+  try {
+    const response = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getAccountInfo',
+        params: [mint, { encoding: 'jsonParsed' }],
+      }),
+    });
+    const data = await response.json();
+    const parsed = data?.result?.value?.data?.parsed;
+    if (parsed?.type === 'mint' && parsed?.info?.decimals !== undefined) {
+      const decimals = parsed.info.decimals;
+      _decimalsCache[mint] = decimals;
+      console.log(`[JUPITER] Fetched decimals for ${mint.slice(0, 8)}...: ${decimals}`);
+      return decimals;
+    }
+  } catch (err) {
+    console.error(`[JUPITER] Failed to fetch decimals for ${mint}:`, err);
+  }
+
+  // Fallback: default to 9
+  console.warn(`[JUPITER] Could not determine decimals for ${mint.slice(0, 8)}..., defaulting to 9`);
+  return 9;
 }
 
 /**

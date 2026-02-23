@@ -23,6 +23,7 @@ import { FREEDOM_THRESHOLDS } from '@/utils/constants';
 import SetupChecklist from '@/components/SetupChecklist';
 import AccumulationAlerts from '@/components/AccumulationAlerts';
 import GoalsStrip from '@/components/GoalsStrip';
+import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -168,6 +169,7 @@ export default function HomeScreen() {
     <View style={styles.content}>
       <SetupChecklist />
       <CashFlowSummary cashFlow={cashFlow} />
+      <PortfolioTrendCard />
       <GoalsStrip />
       <PositionAlertCards  />
       <AccumulationAlerts />

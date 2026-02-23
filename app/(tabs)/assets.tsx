@@ -290,7 +290,7 @@ export default function AssetsScreen() {
     // Create accumulation plan
     const avgPrice = parseFloat(targetAvgPrice) || 0;
     const initialEntries = avgPrice > 0 && currentBalance > 0
-      ? [{ type: 'buy' as const, date: new Date().toISOString(), tokenAmount: currentBalance, pricePerToken: avgPrice, totalUSD: currentBalance * avgPrice, notes: 'Existing position' }]
+      ? [{ action: 'buy' as const, date: new Date().toISOString(), tokenAmount: currentBalance, pricePerToken: avgPrice, totalUSD: currentBalance * avgPrice, notes: 'Existing position' }]
       : [];
     await createPlan(mint, symbol, amount, initialEntries);
 
