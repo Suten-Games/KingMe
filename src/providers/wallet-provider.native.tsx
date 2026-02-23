@@ -14,6 +14,7 @@ interface WalletContextType {
   connected: boolean;
   connecting: boolean;
   publicKey: PublicKey | null;
+  walletName: string | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
@@ -89,6 +90,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [phantomConnected, phantomPubKey, embeddedWallet?.status, embeddedWallet?.publicKey]);
 
   const connected = !!publicKey;
+
+  // Derive display name
+  const walletName = walletType === 'privy-embedded' ? 'Privy Wallet'
+    : phantomConnected ? 'Phantom' : null;
 
   // Open picker
   const connect = useCallback(async () => {
@@ -196,6 +201,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connected,
       connecting,
       publicKey,
+      walletName,
       connect,
       disconnect,
       signMessage,

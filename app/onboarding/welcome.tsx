@@ -2,9 +2,11 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { AvatarType } from '../../src/types';
-import { AVATAR_PREVIEWS } from '../../src/utils/constants';
+import { AVATAR_IMAGES } from '../../src/utils/constants';
 import { useStore } from '../../src/store/useStore';
+import { T } from '../../src/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -18,136 +20,211 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>👑 Welcome to KingMe</Text>
-      <Text style={styles.subtitle}>Track your path to financial freedom</Text>
+    <View style={st.container}>
+      {/* Logo + Title */}
+      <View style={st.header}>
+        <Image
+          source={require('../../src/assets/images/kingmelogo.jpg')}
+          style={st.logo}
+          resizeMode="contain"
+        />
+        <Text style={st.title}>Choose Your Avatar</Text>
+        <Text style={st.subtitle}>
+          This is your future self — fully kinged.{'\n'}
+          Your avatar evolves as your freedom grows.
+        </Text>
+      </View>
 
-      <Text style={styles.sectionTitle}>Choose Your Avatar</Text>
-      
-      <View style={styles.avatarContainer}>
+      {/* Avatar Cards */}
+      <View style={st.avatarRow}>
+        {/* Male */}
         <TouchableOpacity
-          style={[
-            styles.avatarOption,
-            selectedAvatar === 'male-medium' && styles.avatarSelected,
-          ]}
+          style={[st.avatarCard, selectedAvatar === 'male-medium' && st.avatarCardSelected]}
           onPress={() => setSelectedAvatar('male-medium')}
+          activeOpacity={0.8}
         >
-          <Image
-            source={AVATAR_PREVIEWS['male-medium']}
-            style={styles.avatarPreview}
-            resizeMode="cover"
-          />
-          <Text style={styles.avatarLabel}>Male</Text>
+          <LinearGradient
+            colors={selectedAvatar === 'male-medium' ? T.gradients.gold : T.gradients.card}
+            style={st.avatarGradient}
+          >
+            <Image
+              source={AVATAR_IMAGES['male-medium'].enthroned}
+              style={st.avatarImage}
+              resizeMode="cover"
+            />
+            {selectedAvatar === 'male-medium' && (
+              <View style={st.selectedBadge}>
+                <Text style={st.selectedBadgeText}>👑</Text>
+              </View>
+            )}
+          </LinearGradient>
+          <View style={st.avatarLabelBox}>
+            <Text style={[st.avatarLabel, selectedAvatar === 'male-medium' && st.avatarLabelActive]}>
+              Male
+            </Text>
+          </View>
         </TouchableOpacity>
 
+        {/* Female */}
         <TouchableOpacity
-          style={[
-            styles.avatarOption,
-            selectedAvatar === 'female-medium' && styles.avatarSelected,
-          ]}
+          style={[st.avatarCard, selectedAvatar === 'female-medium' && st.avatarCardSelected]}
           onPress={() => setSelectedAvatar('female-medium')}
+          activeOpacity={0.8}
         >
-          <Image
-            source={AVATAR_PREVIEWS['female-medium']}
-            style={styles.avatarPreview}
-            resizeMode="cover"
-          />
-          <Text style={styles.avatarLabel}>Female</Text>
+          <LinearGradient
+            colors={selectedAvatar === 'female-medium' ? T.gradients.gold : T.gradients.card}
+            style={st.avatarGradient}
+          >
+            <Image
+              source={AVATAR_IMAGES['female-medium'].enthroned}
+              style={st.avatarImage}
+              resizeMode="cover"
+            />
+            {selectedAvatar === 'female-medium' && (
+              <View style={st.selectedBadge}>
+                <Text style={st.selectedBadgeText}>👑</Text>
+              </View>
+            )}
+          </LinearGradient>
+          <View style={st.avatarLabelBox}>
+            <Text style={[st.avatarLabel, selectedAvatar === 'female-medium' && st.avatarLabelActive]}>
+              Female
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.description}>
-        KingMe calculates your "days of freedom" - how long your assets can sustain your lifestyle.
-        {'\n\n'}
-        When your asset income covers all your needs, you're <Text style={styles.highlight}>KINGED 👑</Text>
-      </Text>
+      <Text style={st.hint}>You can change this anytime in Settings</Text>
 
-      <TouchableOpacity style={styles.button} onPress={handleContinue}>
-        <Text style={styles.buttonText}>Get Started</Text>
-      </TouchableOpacity>
+      {/* Continue */}
+      <View style={st.bottomArea}>
+        <TouchableOpacity style={st.button} onPress={handleContinue}>
+          <Text style={st.buttonText}>Continue</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const CARD_WIDTH = 160;
+const IMAGE_HEIGHT = 220;
+
+const st = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0e1a',
-    padding: 20,
+    backgroundColor: T.bg,
+    paddingHorizontal: 20,
     justifyContent: 'center',
   },
+
+  // Header
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logo: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${T.gold}40`,
+  },
   title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#f4c430',
+    fontSize: 28,
+    fontWeight: '900',
+    color: T.gold,
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#ffffff',
+    fontSize: 15,
+    color: T.textSecondary,
     textAlign: 'center',
-    marginBottom: 40,
+    lineHeight: 22,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#f4c430',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  avatarContainer: {
+
+  // Avatar row
+  avatarRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 20,
-    marginBottom: 30,
+    marginBottom: 12,
   },
-  avatarOption: {
-    width: 140,
-    height: 180,
-    borderRadius: 12,
+
+  // Avatar card
+  avatarCard: {
+    width: CARD_WIDTH,
+    borderRadius: T.radius.lg,
     overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: '#1a1f2e',
+    borderWidth: 2,
+    borderColor: T.border,
   },
-  avatarSelected: {
-    borderColor: '#f4c430',
-    shadowColor: '#f4c430',
+  avatarCardSelected: {
+    borderColor: T.gold,
+    shadowColor: T.gold,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  avatarPreview: {
-    width: '100%',
-    height: 140,
+  avatarGradient: {
+    position: 'relative',
+  },
+  avatarImage: {
+    width: CARD_WIDTH - 4,
+    height: IMAGE_HEIGHT,
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: `${T.bg}cc`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: `${T.gold}60`,
+  },
+  selectedBadgeText: {
+    fontSize: 14,
+  },
+  avatarLabelBox: {
+    backgroundColor: T.bgCard,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
   avatarLabel: {
-    fontSize: 16,
-    color: '#ffffff',
-    textAlign: 'center',
-    padding: 10,
-    backgroundColor: '#1a1f2e',
+    fontSize: 15,
+    fontWeight: '700',
+    color: T.textSecondary,
   },
-  description: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
+  avatarLabelActive: {
+    color: T.gold,
   },
-  highlight: {
-    color: '#f4c430',
-    fontWeight: 'bold',
+
+  hint: {
+    fontSize: 12,
+    color: T.textDim,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+
+  // Bottom
+  bottomArea: {
+    paddingBottom: 20,
   },
   button: {
-    backgroundColor: '#f4c430',
+    backgroundColor: T.gold,
     padding: 18,
-    borderRadius: 12,
+    borderRadius: T.radius.md,
     alignItems: 'center',
   },
   buttonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#0a0e1a',
+    color: T.bg,
   },
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { IncomeSource } from '../../src/types';
+import { S, T } from '../../src/styles/onboarding';
 
 export default function IncomeSourcesScreen() {
   const router = useRouter();
@@ -11,10 +12,8 @@ export default function IncomeSourcesScreen() {
   const bankAccounts = useStore((state) => state.bankAccounts);
   const addIncomeSource = useStore((state) => state.addIncomeSource);
   const removeIncomeSource = useStore((state) => state.removeIncomeSource);
-  
+
   const [showAddModal, setShowAddModal] = useState(false);
-  
-  // Form state
   const [sourceName, setSourceName] = useState('');
   const [sourceType, setSourceType] = useState<'salary' | 'freelance' | 'business' | 'other'>('salary');
   const [amount, setAmount] = useState('');
@@ -25,376 +24,217 @@ export default function IncomeSourcesScreen() {
 
   const handleAddSource = () => {
     if (!sourceName || !amount || !selectedAccountId) return;
-    
     const newSource: IncomeSource = {
-      id: Date.now().toString(),
-      source: sourceType,
-      name: sourceName,
-      amount: parseFloat(amount),
-      frequency,
-      bankAccountId: selectedAccountId,
-      ...(frequency === 'twice_monthly' && {
-        dayOfMonth1: parseInt(dayOfMonth1),
-        dayOfMonth2: parseInt(dayOfMonth2),
-      }),
+      id: Date.now().toString(), source: sourceType, name: sourceName,
+      amount: parseFloat(amount), frequency, bankAccountId: selectedAccountId,
+      ...(frequency === 'twice_monthly' && { dayOfMonth1: parseInt(dayOfMonth1), dayOfMonth2: parseInt(dayOfMonth2) }),
     };
-    
     addIncomeSource(newSource);
-    
-    // Reset form
-    setSourceName('');
-    setAmount('');
-    setSourceType('salary');
-    setFrequency('monthly');
-    setSelectedAccountId('');
-    setDayOfMonth1('1');
-    setDayOfMonth2('15');
-    setShowAddModal(false);
+    setSourceName(''); setAmount(''); setSourceType('salary'); setFrequency('monthly');
+    setSelectedAccountId(''); setDayOfMonth1('1'); setDayOfMonth2('15'); setShowAddModal(false);
   };
 
-  const handleContinue = () => {
-    router.push('/onboarding/obligations');
-  };
-
-  const handleSkip = () => {
-    router.push('/onboarding/obligations');
-  };
+  const handleContinue = () => router.push('/onboarding/obligations');
+  const handleSkip = () => router.push('/onboarding/obligations');
 
   const calculateMonthlyIncome = (source: IncomeSource) => {
     switch (source.frequency) {
-      case 'weekly':
-        return (source.amount * 52) / 12;
-      case 'biweekly':
-        return (source.amount * 26) / 12;
-      case 'twice_monthly':
-        return source.amount * 2; // Twice per month
-      case 'monthly':
-        return source.amount;
-      case 'quarterly':
-        return source.amount / 3;
-      default:
-        return source.amount;
+      case 'weekly': return (source.amount * 52) / 12;
+      case 'biweekly': return (source.amount * 26) / 12;
+      case 'twice_monthly': return source.amount * 2;
+      case 'monthly': return source.amount;
+      case 'quarterly': return source.amount / 3;
+      default: return source.amount;
     }
   };
 
-  const getTotalMonthlyIncome = () => {
-    return incomeSources.reduce((sum, source) => sum + calculateMonthlyIncome(source), 0);
-  };
+  const getTotalMonthlyIncome = () => incomeSources.reduce((sum, s) => sum + calculateMonthlyIncome(s), 0);
+  const getAccountName = (id: string) => bankAccounts.find(a => a.id === id)?.name || 'Unknown Account';
 
-  const getAccountName = (accountId: string) => {
-    const account = bankAccounts.find(a => a.id === accountId);
-    return account?.name || 'Unknown Account';
+  const resetForm = () => {
+    setSourceName(''); setAmount(''); setSourceType('salary'); setFrequency('monthly');
+    setSelectedAccountId(''); setDayOfMonth1('1'); setDayOfMonth2('15'); setShowAddModal(false);
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
-        <Text style={styles.progress}>Step 2 of 5</Text>
-        
-        <Text style={styles.title}>Your Income</Text>
-        <Text style={styles.subtitle}>How do you get paid?</Text>
+    <View style={S.container}>
+      <ScrollView style={S.scrollView} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+        <Text style={S.progress}>Step 2 of 5</Text>
+        <Text style={S.titleGreen}>Your Income</Text>
+        <Text style={S.subtitle}>How do you get paid?</Text>
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
+        <View style={S.infoBoxGreen}>
+          <Text style={S.infoText}>
             💡 Add all income sources: salary, freelance work, side hustles. We'll track which account each payment goes into.
           </Text>
         </View>
 
-        {/* Income Sources List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Income Sources</Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAddModal(true)}
-            >
-              <Text style={styles.addButtonText}>+ Add</Text>
+        <View style={S.section}>
+          <View style={S.sectionHeader}>
+            <Text style={S.sectionTitle}>Income Sources</Text>
+            <TouchableOpacity style={S.addButtonGreen} onPress={() => setShowAddModal(true)}>
+              <Text style={S.addButtonText}>+ Add</Text>
             </TouchableOpacity>
           </View>
 
           {incomeSources.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No income sources yet</Text>
-              <Text style={styles.emptySubtext}>
-                Add your salary or other income
-              </Text>
+            <View style={S.emptyState}>
+              <Text style={S.emptyText}>No income sources yet</Text>
+              <Text style={S.emptySubtext}>Add your salary or other income</Text>
             </View>
           ) : (
-            <>
-              {incomeSources.map((source) => (
-                <View key={source.id} style={styles.sourceCard}>
-                  <View style={styles.sourceHeader}>
-                    <View style={styles.sourceHeaderLeft}>
-                      <Text style={styles.sourceName}>{source.name}</Text>
-                      <Text style={styles.sourceAccount}>
-                        → {getAccountName(source.bankAccountId)}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => removeIncomeSource(source.id)}
-                    >
-                      <Text style={styles.deleteButton}>✕</Text>
-                    </TouchableOpacity>
+            incomeSources.map((source) => (
+              <View key={source.id} style={S.cardGreen}>
+                <View style={st.sourceHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.sourceName}>{source.name}</Text>
+                    <Text style={st.sourceAccount}>→ {getAccountName(source.bankAccountId)}</Text>
                   </View>
-                  <View style={styles.sourceDetails}>
-                    <View>
-                      <Text style={styles.sourceAmount}>
-                        ${source.amount.toLocaleString()}
-                      </Text>
-                      <Text style={styles.sourceFrequency}>
-                        per {source.frequency}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={styles.sourceMonthly}>
-                        ${calculateMonthlyIncome(source).toFixed(0)}/mo
-                      </Text>
-                    </View>
-                  </View>
+                  <TouchableOpacity onPress={() => removeIncomeSource(source.id)}>
+                    <Text style={S.deleteButton}>✕</Text>
+                  </TouchableOpacity>
                 </View>
-              ))}
-            </>
+                <View style={st.sourceDetails}>
+                  <View>
+                    <Text style={st.sourceAmount}>${source.amount.toLocaleString()}</Text>
+                    <Text style={st.sourceFrequency}>per {source.frequency}</Text>
+                  </View>
+                  <Text style={st.sourceMonthly}>${calculateMonthlyIncome(source).toFixed(0)}/mo</Text>
+                </View>
+              </View>
+            ))
           )}
         </View>
 
-        {/* Total */}
         {incomeSources.length > 0 && (
-          <View style={styles.totalBox}>
-            <Text style={styles.totalLabel}>Total Monthly Income</Text>
-            <Text style={styles.totalAmount}>
-              ${getTotalMonthlyIncome().toLocaleString()}/month
-            </Text>
-            <Text style={styles.totalYearly}>
-              ${(getTotalMonthlyIncome() * 12).toLocaleString()}/year
-            </Text>
+          <View style={S.totalBoxGreen}>
+            <Text style={S.totalLabel}>Total Monthly Income</Text>
+            <Text style={S.totalAmountGreen}>${getTotalMonthlyIncome().toLocaleString()}/month</Text>
+            <Text style={S.totalYearly}>${(getTotalMonthlyIncome() * 12).toLocaleString()}/year</Text>
           </View>
         )}
       </ScrollView>
 
-      <View style={styles.buttonContainer}>
+      <View style={S.buttonContainer}>
         {incomeSources.length === 0 && (
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
-            <Text style={styles.skipButtonText}>Skip</Text>
+          <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
+            <Text style={S.skipButtonText}>Skip</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity 
-          style={[styles.button, incomeSources.length === 0 && styles.buttonSecondary]} 
-          onPress={handleContinue}
-          disabled={incomeSources.length === 0}
+        <TouchableOpacity
+          style={[S.buttonGreen, incomeSources.length === 0 && S.buttonSecondary]}
+          onPress={handleContinue} disabled={incomeSources.length === 0}
         >
-          <Text style={styles.buttonText}>Continue</Text>
+          <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Add Income Source Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
+        <View style={S.modalOverlay}>
+          <View style={[S.modalContent, { maxHeight: '90%' }]}>
             <ScrollView keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
-              <Text style={styles.modalTitle}>Add Income Source</Text>
+              <Text style={S.modalTitleGreen}>Add Income Source</Text>
 
-              <Text style={styles.label}>Income Type</Text>
-              <View style={styles.typeButtons}>
-                <TouchableOpacity
-                  style={[styles.typeButton, sourceType === 'salary' && styles.typeButtonActive]}
-                  onPress={() => setSourceType('salary')}
-                >
-                  <Text style={[styles.typeButtonText, sourceType === 'salary' && styles.typeButtonTextActive]}>
-                    💼 Salary
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeButton, sourceType === 'freelance' && styles.typeButtonActive]}
-                  onPress={() => setSourceType('freelance')}
-                >
-                  <Text style={[styles.typeButtonText, sourceType === 'freelance' && styles.typeButtonTextActive]}>
-                    💻 Freelance
-                  </Text>
-                </TouchableOpacity>
+              <Text style={S.label}>Income Type</Text>
+              <View style={S.typeButtons}>
+                {([['salary', '💼 Salary'], ['freelance', '💻 Freelance']] as const).map(([k, label]) => (
+                  <TouchableOpacity key={k} style={[S.typeButton, sourceType === k && S.typeButtonActiveGreen]}
+                    onPress={() => setSourceType(k as any)}>
+                    <Text style={[S.typeButtonText, sourceType === k && S.typeButtonTextActiveGreen]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <View style={[styles.typeButtons, { marginTop: 8 }]}>
-                <TouchableOpacity
-                  style={[styles.typeButton, sourceType === 'business' && styles.typeButtonActive]}
-                  onPress={() => setSourceType('business')}
-                >
-                  <Text style={[styles.typeButtonText, sourceType === 'business' && styles.typeButtonTextActive]}>
-                    🏢 Business
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeButton, sourceType === 'other' && styles.typeButtonActive]}
-                  onPress={() => setSourceType('other')}
-                >
-                  <Text style={[styles.typeButtonText, sourceType === 'other' && styles.typeButtonTextActive]}>
-                    💰 Other
-                  </Text>
-                </TouchableOpacity>
+              <View style={[S.typeButtons, { marginTop: 8 }]}>
+                {([['business', '🏢 Business'], ['other', '💰 Other']] as const).map(([k, label]) => (
+                  <TouchableOpacity key={k} style={[S.typeButton, sourceType === k && S.typeButtonActiveGreen]}
+                    onPress={() => setSourceType(k as any)}>
+                    <Text style={[S.typeButtonText, sourceType === k && S.typeButtonTextActiveGreen]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              <Text style={styles.label}>Name/Description</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., Acme Corp Salary, Upwork"
-                placeholderTextColor="#666"
-                value={sourceName}
-                onChangeText={setSourceName}
-              />
+              <Text style={S.label}>Name/Description</Text>
+              <TextInput style={S.modalInput} placeholder="e.g., Acme Corp Salary, Upwork"
+                placeholderTextColor={T.textDim} value={sourceName} onChangeText={setSourceName} />
 
-              <Text style={styles.label}>Amount per Payment</Text>
-              <Text style={styles.helperText}>Enter what actually hits your bank — after taxes, 401k, and other pre-tax deductions.</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0"
-                  placeholderTextColor="#666"
-                  keyboardType="numeric"
-                  value={amount}
-                  onChangeText={setAmount}
-                />
+              <Text style={S.label}>Amount per Payment</Text>
+              <Text style={S.helperText}>Enter what actually hits your bank — after taxes, 401k, and other pre-tax deductions.</Text>
+              <View style={S.inputContainer}>
+                <Text style={S.currencySymbolGreen}>$</Text>
+                <TextInput style={S.input} placeholder="0" placeholderTextColor={T.textDim}
+                  keyboardType="numeric" value={amount} onChangeText={setAmount} />
               </View>
 
-              <Text style={styles.label}>How Often?</Text>
-              <View style={styles.typeButtons}>
-                <TouchableOpacity
-                  style={[styles.typeButton, frequency === 'weekly' && styles.typeButtonActive]}
-                  onPress={() => setFrequency('weekly')}
-                >
-                  <Text style={[styles.typeButtonText, frequency === 'weekly' && styles.typeButtonTextActive]}>
-                    Weekly
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeButton, frequency === 'biweekly' && styles.typeButtonActive]}
-                  onPress={() => setFrequency('biweekly')}
-                >
-                  <Text style={[styles.typeButtonText, frequency === 'biweekly' && styles.typeButtonTextActive]}>
-                    Biweekly
-                  </Text>
-                </TouchableOpacity>
+              <Text style={S.label}>How Often?</Text>
+              <View style={S.typeButtons}>
+                {(['weekly', 'biweekly'] as const).map((f) => (
+                  <TouchableOpacity key={f} style={[S.typeButton, frequency === f && S.typeButtonActiveGreen]}
+                    onPress={() => setFrequency(f)}>
+                    <Text style={[S.typeButtonText, frequency === f && S.typeButtonTextActiveGreen]}>
+                      {f === 'biweekly' ? 'Bi-weekly' : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              <View style={[styles.typeButtons, { marginTop: 8 }]}>
-                <TouchableOpacity
-                  style={[styles.typeButton, frequency === 'twice_monthly' && styles.typeButtonActive]}
-                  onPress={() => setFrequency('twice_monthly')}
-                >
-                  <Text style={[styles.typeButtonText, frequency === 'twice_monthly' && styles.typeButtonTextActive]}>
-                    2x/Month
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeButton, frequency === 'monthly' && styles.typeButtonActive]}
-                  onPress={() => setFrequency('monthly')}
-                >
-                  <Text style={[styles.typeButtonText, frequency === 'monthly' && styles.typeButtonTextActive]}>
-                    Monthly
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={[styles.typeButtons, { marginTop: 8 }]}>
-                <TouchableOpacity
-                  style={[styles.typeButton, frequency === 'quarterly' && styles.typeButtonActive]}
-                  onPress={() => setFrequency('quarterly')}
-                >
-                  <Text style={[styles.typeButtonText, frequency === 'quarterly' && styles.typeButtonTextActive]}>
-                    Quarterly
-                  </Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1 }} />
+              <View style={[S.typeButtons, { marginTop: 8 }]}>
+                {(['twice_monthly', 'monthly', 'quarterly'] as const).map((f) => (
+                  <TouchableOpacity key={f} style={[S.typeButton, frequency === f && S.typeButtonActiveGreen]}
+                    onPress={() => setFrequency(f)}>
+                    <Text style={[S.typeButtonText, frequency === f && S.typeButtonTextActiveGreen]}>
+                      {f === 'twice_monthly' ? '2x/mo' : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
               {frequency === 'twice_monthly' && (
-                <>
-                  <Text style={styles.label}>Payment Days (1-31)</Text>
-                  <View style={styles.daysRow}>
-                    <View style={[styles.inputContainer, { flex: 1 }]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="1"
-                        placeholderTextColor="#666"
-                        keyboardType="numeric"
-                        value={dayOfMonth1}
-                        onChangeText={setDayOfMonth1}
-                      />
-                    </View>
-                    <Text style={styles.andText}>and</Text>
-                    <View style={[styles.inputContainer, { flex: 1 }]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="15"
-                        placeholderTextColor="#666"
-                        keyboardType="numeric"
-                        value={dayOfMonth2}
-                        onChangeText={setDayOfMonth2}
-                      />
+                <View style={st.twiceMonthlyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.label}>1st Pay Day</Text>
+                    <View style={S.inputContainer}>
+                      <TextInput style={S.input} placeholder="1" placeholderTextColor={T.textDim}
+                        keyboardType="numeric" value={dayOfMonth1} onChangeText={setDayOfMonth1} />
                     </View>
                   </View>
-                  <Text style={styles.helperText}>e.g., 1st and 15th of each month</Text>
-                </>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.label}>2nd Pay Day</Text>
+                    <View style={S.inputContainer}>
+                      <TextInput style={S.input} placeholder="15" placeholderTextColor={T.textDim}
+                        keyboardType="numeric" value={dayOfMonth2} onChangeText={setDayOfMonth2} />
+                    </View>
+                  </View>
+                </View>
               )}
 
-              <Text style={styles.label}>Which Account Gets Paid?</Text>
+              <Text style={S.label}>Which account does this go into?</Text>
               {bankAccounts.length === 0 ? (
-                <Text style={styles.noAccountsText}>
-                  ⚠️ No bank accounts added yet. Go back and add one.
-                </Text>
+                <Text style={S.noAccountsText}>⚠️ No bank accounts added yet</Text>
               ) : (
-                <View style={styles.accountsList}>
+                <View style={S.accountsList}>
                   {bankAccounts.map((account) => (
-                    <TouchableOpacity
-                      key={account.id}
-                      style={[
-                        styles.accountOption,
-                        selectedAccountId === account.id && styles.accountOptionSelected
-                      ]}
-                      onPress={() => setSelectedAccountId(account.id)}
-                    >
-                      <View style={styles.accountOptionContent}>
-                        <Text style={[
-                          styles.accountOptionText,
-                          selectedAccountId === account.id && styles.accountOptionTextSelected
-                        ]}>
+                    <TouchableOpacity key={account.id}
+                      style={[S.accountOption, selectedAccountId === account.id && S.accountOptionSelectedGreen]}
+                      onPress={() => setSelectedAccountId(account.id)}>
+                      <View style={S.accountOptionContent}>
+                        <Text style={[S.accountOptionText, selectedAccountId === account.id && S.accountOptionTextSelectedGreen]}>
                           {account.name}
                         </Text>
-                        {account.isPrimaryIncome && (
-                          <Text style={styles.accountOptionBadge}>💰 Primary</Text>
-                        )}
+                        {account.isPrimaryIncome && <Text style={S.accountOptionBadge}>Primary</Text>}
                       </View>
-                      {selectedAccountId === account.id && (
-                        <Text style={styles.accountOptionCheck}>✓</Text>
-                      )}
+                      {selectedAccountId === account.id && <Text style={[S.accountOptionCheck, { color: T.green }]}>✓</Text>}
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.modalCancelButton}
-                  onPress={() => {
-                    setShowAddModal(false);
-                    setSourceName('');
-                    setAmount('');
-                    setSelectedAccountId('');
-                  }}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
+              <View style={S.modalButtons}>
+                <TouchableOpacity style={S.modalCancelButton} onPress={resetForm}>
+                  <Text style={S.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                
                 <TouchableOpacity
-                  style={[
-                    styles.modalAddButton,
-                    (!sourceName || !amount || !selectedAccountId) && styles.modalAddButtonDisabled
-                  ]}
-                  onPress={handleAddSource}
-                  disabled={!sourceName || !amount || !selectedAccountId}
-                >
-                  <Text style={styles.modalAddText}>Add</Text>
+                  style={[S.modalAddButtonGreen, (!sourceName || !amount || !selectedAccountId) && S.modalAddButtonDisabled]}
+                  onPress={handleAddSource} disabled={!sourceName || !amount || !selectedAccountId}>
+                  <Text style={S.modalAddText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -405,354 +245,13 @@ export default function IncomeSourcesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0e1a',
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  progress: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-    // marginTop: 40,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4ade80',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    marginBottom: 20,
-  },
-  infoBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4ade80',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    lineHeight: 20,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  addButton: {
-    backgroundColor: '#4ade80',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#0a0e1a',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'center',
-  },
-  sourceCard: {
-    backgroundColor: '#1a1f2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4ade80',
-  },
-  sourceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  sourceHeaderLeft: {
-    flex: 1,
-  },
-  sourceName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  sourceAccount: {
-    fontSize: 14,
-    color: '#4ade80',
-  },
-  deleteButton: {
-    fontSize: 20,
-    color: '#ff4444',
-    padding: 4,
-  },
-  sourceDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  sourceAmount: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  sourceFrequency: {
-    fontSize: 12,
-    color: '#666',
-  },
-  sourceMonthly: {
-    fontSize: 16,
-    color: '#4ade80',
-    fontWeight: '600',
-  },
-  totalBox: {
-    backgroundColor: '#1a1f2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#4ade80',
-  },
-  totalLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginBottom: 4,
-  },
-  totalAmount: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4ade80',
-  },
-  totalYearly: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginTop: 4,
-  },
-  buttonContainer: {
-    padding: 20,
-    backgroundColor: '#0a0e1a',
-    borderTopWidth: 1,
-    borderTopColor: '#1a1f2e',
-    flexDirection: 'row',
-    gap: 12,
-  },
-  skipButton: {
-    flex: 1,
-    padding: 18,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  skipButtonText: {
-    fontSize: 16,
-    color: '#a0a0a0',
-  },
-  button: {
-    flex: 1,
-    backgroundColor: '#4ade80',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buttonSecondary: {
-    flex: 2,
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0a0e1a',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0a0e1a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4ade80',
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  helperText: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-  },
-  modalInput: {
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1a1f2e',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-  },
-  currencySymbol: {
-    fontSize: 20,
-    color: '#4ade80',
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 20,
-    color: '#ffffff',
-    paddingVertical: 16,
-  },
-  typeButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  typeButtonActive: {
-    borderColor: '#4ade80',
-    backgroundColor: '#1a2f1e',
-  },
-  typeButtonText: {
-    fontSize: 13,
-    color: '#666',
-  },
-  typeButtonTextActive: {
-    color: '#4ade80',
-    fontWeight: 'bold',
-  },
-  noAccountsText: {
-    fontSize: 14,
-    color: '#ff6b6b',
-    padding: 16,
-    backgroundColor: '#2a1a1e',
-    borderRadius: 8,
-  },
-  accountsList: {
-    gap: 8,
-  },
-  accountOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    backgroundColor: '#1a1f2e',
-  },
-  accountOptionSelected: {
-    borderColor: '#4ade80',
-    backgroundColor: '#1a2f1e',
-  },
-  accountOptionContent: {
-    flex: 1,
-  },
-  accountOptionText: {
-    fontSize: 16,
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  accountOptionTextSelected: {
-    color: '#4ade80',
-    fontWeight: 'bold',
-  },
-  accountOptionBadge: {
-    fontSize: 12,
-    color: '#4ade80',
-  },
-  accountOptionCheck: {
-    fontSize: 20,
-    color: '#4ade80',
-    fontWeight: 'bold',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  modalCancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#2a2f3e',
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: '#a0a0a0',
-    fontSize: 16,
-  },
-  modalAddButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#4ade80',
-    alignItems: 'center',
-  },
-  modalAddButtonDisabled: {
-    opacity: 0.5,
-  },
-  modalAddText: {
-    color: '#0a0e1a',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+const st = StyleSheet.create({
+  sourceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  sourceName: { fontSize: 18, fontWeight: 'bold', color: T.textPrimary, marginBottom: 4 },
+  sourceAccount: { fontSize: 14, color: T.green },
+  sourceDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  sourceAmount: { fontSize: 20, fontWeight: 'bold', color: T.textPrimary },
+  sourceFrequency: { fontSize: 12, color: T.textMuted },
+  sourceMonthly: { fontSize: 16, color: T.green, fontWeight: '600' },
+  twiceMonthlyRow: { flexDirection: 'row', gap: 12 },
 });

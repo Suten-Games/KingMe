@@ -469,17 +469,11 @@ export interface CryptoCardBalance {
 
 export interface UserSettings {
   avatarType: AvatarType;
+  animatedAvatar?: boolean;
   notificationsEnabled: boolean;
   syncFrequency: 'realtime' | 'hourly' | 'daily';
   darkMode: boolean;
   defaultExpandAssetSections: boolean;
-}
-
-// Badge system (full definitions in types/badges.ts)
-export interface EarnedBadge {
-  badgeId: string;
-  earnedAt: number;
-  seen: boolean;
 }
 
 export interface UserProfile {
@@ -506,11 +500,6 @@ export interface UserProfile {
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp
   onboardingComplete: boolean;
-  // Badge system
-  earnedBadges: EarnedBadge[];
-  trimCount: number;
-  importWeeks: string[];
-  appOpenDays: string[];
 }
 
 // Helius ORB API response types (simplified)

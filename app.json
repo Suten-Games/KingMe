@@ -11,7 +11,8 @@
         }
       ],
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-asset"
     ],
     "scheme": "kingme",
     "extra": {

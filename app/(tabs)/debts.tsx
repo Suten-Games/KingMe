@@ -10,6 +10,7 @@ import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
 import { T } from '../../src/theme';
+import EmptyStateCard from '../../src/components/EmptyStateCard';
 import { BankTransaction, TRANSACTION_CATEGORY_META } from '@/types/bankTransactionTypes';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -320,10 +321,7 @@ export default function DebtsScreen() {
           </View>
 
           {normalizedDebts.length === 0 ? (
-            <View style={s.emptyState}>
-              <Text style={s.emptyText}>No debts — nice!</Text>
-              <Text style={s.emptySubtext}>Add debts to track payoff and see freedom impact</Text>
-            </View>
+            <EmptyStateCard category="debts" onAction={() => setShowAddModal(true)} />
           ) : (
             normalizedDebts.map((debt) => {
               const matchedTxns = debtTransactionMatches[debt.id] || [];

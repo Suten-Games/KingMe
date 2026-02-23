@@ -19,9 +19,52 @@ import { isOnChainScenario } from '@/services/jupiterSwap';
 import TradingIncomeWarning from '../../src/components/TradingIncomeWarning';
 import PositionAlertCards from '@/components/PositionAlertCards';
 import BadgeStrip from '@/components/BadgeStrip';
-import SurplusCashPlan from '@/components/SurplusCashPlan';
-import ObligationsAuditReminder from '@/components/ObligationsAuditReminder';
-import PortfolioTrendCard from '@/components/PortfolioTrendCard';
+import { FREEDOM_THRESHOLDS } from '@/utils/constants';
+import SetupChecklist from '@/components/SetupChecklist';
+import AccumulationAlerts from '@/components/AccumulationAlerts';
+import GoalsStrip from '@/components/GoalsStrip';
+
+// ── Next Level Helper ─────────────────────────────────────────────────────────
+const FREEDOM_LEVELS = [
+  { key: 'drowning',   label: 'Drowning',   emoji: '🌊', max: FREEDOM_THRESHOLDS.DROWNING },
+  { key: 'struggling', label: 'Struggling',  emoji: '🏊', max: FREEDOM_THRESHOLDS.STRUGGLING },
+  { key: 'breaking',   label: 'Breaking Free', emoji: '🔓', max: FREEDOM_THRESHOLDS.BREAKING },
+  { key: 'rising',     label: 'Rising',      emoji: '🚀', max: FREEDOM_THRESHOLDS.RISING },
+  { key: 'enthroned',  label: 'Enthroned',   emoji: '👑', max: Infinity },
+] as const;
+
+function getNextLevel(days: number) {
+  for (let i = 0; i < FREEDOM_LEVELS.length; i++) {
+    const level = FREEDOM_LEVELS[i];
+    if (days < level.max) {
+      const prevMax = i > 0 ? FREEDOM_LEVELS[i - 1].max : 0;
+      const nextLevel = i < FREEDOM_LEVELS.length - 1 ? FREEDOM_LEVELS[i + 1] : null;
+      const daysToNext = nextLevel ? level.max - days : 0;
+      const progressInLevel = (days - prevMax) / (level.max - prevMax);
+      return {
+        current: level,
+        next: nextLevel,
+        daysToNext,
+        progressInLevel: Math.min(1, Math.max(0, progressInLevel)),
+        currentIndex: i,
+      };
+    }
+  }
+  // Already at top
+  return {
+    current: FREEDOM_LEVELS[FREEDOM_LEVELS.length - 1],
+    next: null,
+    daysToNext: 0,
+    progressInLevel: 1,
+    currentIndex: FREEDOM_LEVELS.length - 1,
+  };
+}
+
+function formatDaysNice(days: number): string {
+  if (days >= 365) return `${(days / 365).toFixed(1)}y`;
+  if (days >= 30) return `${Math.round(days / 30)} months`;
+  return `${days} days`;
+}
 
 const HEALTH_COLORS: Record<string, { bg: string[]; text: string; border: string }> = {
   critical:   { bg: ['#7a2020', '#3a0e0e', '#1a0808'], text: '#ff8a8a', border: '#ff6b6b80' },
@@ -59,6 +102,7 @@ export default function HomeScreen() {
   const { swapState, previewScenario, applyWithSwap, reset } = useSwapScenario();
 
   const freedom = useFreedomScore();
+  const nextLevel = getNextLevel(freedom.days);
 
   const cashFlow = useMemo(
     () => analyzeAllAccounts(bankAccounts, incomeSources, obligations, debts, assets, paycheckDeductions),
@@ -80,7 +124,7 @@ export default function HomeScreen() {
   }, [wallets]);
 
   useEffect(() => { checkThesisAlerts(); const i = setInterval(() => checkThesisAlerts(), 86400000); return () => clearInterval(i); }, []);
-  useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/welcome'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
+  useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/intro'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
 
   if (!onboardingComplete) {
     return (<View style={styles.loadingContainer}><Text style={styles.loadingText}>Loading...</Text></View>);
@@ -122,8 +166,11 @@ export default function HomeScreen() {
 
   const dashboardBody = (
     <View style={styles.content}>
+      <SetupChecklist />
       <CashFlowSummary cashFlow={cashFlow} />
+      <GoalsStrip />
       <PositionAlertCards  />
+      <AccumulationAlerts />
       <BadgeStrip />
 
       <ThesisAlerts alerts={thesisAlerts} onDismiss={dismissThesisAlert} onReview={(id) => router.push(`/asset/${id}`)} />
@@ -145,7 +192,7 @@ export default function HomeScreen() {
       {/* ── Metrics Grid ──────────────────────────────────────────── */}
       <View style={styles.metricsGrid}>
         <GradientMetricCard label="Freedom" value={freedom.formatted}
-          sub={freedom.isKinged ? 'KINGED 👑' : freedom.state} color="#f4c430"
+          sub={freedom.isKinged ? 'KINGED 👑' : nextLevel.next ? `${formatDaysNice(nextLevel.daysToNext)} to ${nextLevel.next.label}` : freedom.state} color="#f4c430"
           gradientColors={['#504010', '#2a2008', '#151005']}
           borderColor="#f4c43080" onInfo={() => setInfoModal('freedom')} />
         <GradientMetricCard label="Runway" value={runwayLabel}
@@ -165,8 +212,6 @@ export default function HomeScreen() {
           borderColor={monthlySurplus >= 0 ? '#4ade8080' : '#f8717180'} />
       </View>
 
-      <PortfolioTrendCard />
-
       {/* ── Insight Card ──────────────────────────────────────────── */}
       <LinearGradient colors={['#222a48', '#161c34', '#0e1224']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={styles.insightCard}>
@@ -180,8 +225,6 @@ export default function HomeScreen() {
       </LinearGradient>
 
       <TradingIncomeWarning />
-      <SurplusCashPlan />
-      <ObligationsAuditReminder />
 
       {/* ── Recommendations ───────────────────────────────────────── */}
       {cashFlow.recommendations.length > 0 && (
@@ -266,6 +309,45 @@ export default function HomeScreen() {
                   <View style={styles.infoCurrentBox}>
                     <Text style={styles.infoCurrentLabel}>Your Freedom</Text>
                     <Text style={[styles.infoCurrentValue, { color: '#f4c430' }]}>{freedom.formatted}</Text>
+                  </View>
+
+                  {/* ── Next Level Progress ─── */}
+                  {nextLevel.next && (
+                    <View style={styles.nextLevelBox}>
+                      <View style={styles.nextLevelHeader}>
+                        <Text style={styles.nextLevelCurrent}>{nextLevel.current.emoji} {nextLevel.current.label}</Text>
+                        <Text style={styles.nextLevelArrow}>→</Text>
+                        <Text style={styles.nextLevelTarget}>{nextLevel.next.emoji} {nextLevel.next.label}</Text>
+                      </View>
+                      <View style={styles.nextLevelBarBg}>
+                        <View style={[styles.nextLevelBarFill, { width: `${(nextLevel.progressInLevel * 100).toFixed(0)}%` }]} />
+                      </View>
+                      <Text style={styles.nextLevelSub}>
+                        {formatDaysNice(nextLevel.daysToNext)} to go · {(nextLevel.progressInLevel * 100).toFixed(0)}% through {nextLevel.current.label.toLowerCase()}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* ── All Levels ─── */}
+                  <View style={styles.allLevelsBox}>
+                    <Text style={styles.infoModalQuestion}>Freedom Levels</Text>
+                    {FREEDOM_LEVELS.map((level, i) => {
+                      const isCurrent = i === nextLevel.currentIndex;
+                      const isPast = i < nextLevel.currentIndex;
+                      return (
+                        <View key={level.key} style={[styles.levelRow, isCurrent && styles.levelRowCurrent]}>
+                          <Text style={styles.levelEmoji}>{level.emoji}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.levelName, isCurrent && { color: '#f4c430' }, isPast && { color: '#4ade80' }]}>
+                              {level.label} {isCurrent ? '← You' : isPast ? '✓' : ''}
+                            </Text>
+                          </View>
+                          <Text style={styles.levelThreshold}>
+                            {level.max === Infinity ? '∞' : level.max >= 365 ? `${(level.max / 365).toFixed(0)}y` : `${level.max}d`}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
               ) : (
@@ -510,4 +592,60 @@ const styles = StyleSheet.create({
   },
   infoCurrentLabel: { fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6, fontFamily: 'Inter_700Bold' },
   infoCurrentValue: { fontSize: 32, fontFamily: 'Inter_800ExtraBold' },
+
+  // Next Level Progress
+  nextLevelBox: {
+    marginTop: 16,
+    backgroundColor: 'rgba(244, 196, 48, 0.08)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 196, 48, 0.2)',
+  },
+  nextLevelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  nextLevelCurrent: { fontSize: 14, color: '#888', fontFamily: 'Inter_600SemiBold' },
+  nextLevelArrow: { fontSize: 14, color: '#f4c430' },
+  nextLevelTarget: { fontSize: 14, color: '#f4c430', fontFamily: 'Inter_700Bold' },
+  nextLevelBarBg: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  nextLevelBarFill: {
+    height: '100%',
+    backgroundColor: '#f4c430',
+    borderRadius: 4,
+  },
+  nextLevelSub: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
+  },
+
+  // All Levels
+  allLevelsBox: { marginTop: 16 },
+  levelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 2,
+  },
+  levelRowCurrent: {
+    backgroundColor: 'rgba(244, 196, 48, 0.1)',
+  },
+  levelEmoji: { fontSize: 18, width: 28, textAlign: 'center' },
+  levelName: { fontSize: 13, color: '#666', fontFamily: 'Inter_600SemiBold' },
+  levelThreshold: { fontSize: 12, color: '#555', fontFamily: 'Inter_500Medium' },
 });

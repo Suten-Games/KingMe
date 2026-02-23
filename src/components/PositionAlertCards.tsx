@@ -1,16 +1,17 @@
 // src/components/PositionAlertCards.tsx
 // Displays smart position alerts on the home screen with action buttons
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import type { Asset, CryptoAsset } from '../types';
 import { recordPriceSnapshot, getTokenPriceData, TokenPriceData } from '../services/priceTracker';
-import { getSwapQuote, executeSwap } from '../services/jupiterSwap';
+import { getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics } from '../services/jupiterSwap';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generatePositionAlerts, generateCashTransferAlerts, generateImportReminders, getAlertColor, PositionAlert } from '../services/positionAlerts';
+import { generatePositionAlerts, getAlertColor, PositionAlert, AccPlanContext } from '@/services/positionAlerts';
+import { loadAllPlans, computePlanStats } from '@/services/accumulationPlan';
 
 const DISMISSED_KEY = 'dismissed_position_alerts';
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -18,10 +19,6 @@ const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 export default function PositionAlertCards() {
   const router = useRouter();
   const assets = useStore((state) => state.assets);
-  const bankAccounts = useStore((state) => state.bankAccounts);
-  const obligations = useStore((state) => state.obligations);
-  const debts = useStore((state) => state.debts);
-  const bankTransactions = useStore((state) => state.bankTransactions || []);
   const { publicKey, signTransaction, connected } = useWallet();
   const [alerts, setAlerts] = useState<PositionAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -84,33 +81,64 @@ export default function PositionAlertCards() {
         }
       }
 
-      // Generate position alerts
-      const newAlerts = generatePositionAlerts(assets, priceData);
+      // Generate alerts with accumulation plan awareness
+      let accPlans: AccPlanContext[] = [];
+      try {
+        const allPlans = await loadAllPlans();
+        const planMints = Object.keys(allPlans);
+        if (planMints.length > 0) {
+          const planPrices: Record<string, number> = {};
+          for (const mint of planMints) {
+            const pd = priceData[mint];
+            if (pd) planPrices[mint] = pd.currentPrice;
+          }
+          accPlans = Object.entries(allPlans)
+            .filter(([_, p]) => p.entries.length > 0)
+            .map(([mint, p]) => {
+              const stats = computePlanStats(p, planPrices[mint] || 0);
+              return {
+                mint,
+                symbol: p.symbol,
+                targetAmount: p.targetAmount,
+                currentHolding: stats.currentHolding,
+                avgEntry: stats.costBasis,
+                progressPct: stats.progressPct,
+                strategy: 'accumulate' as const,
+              };
+            });
+        }
+      } catch (err) {
+        console.warn('[ALERTS] Failed to load accumulation plans:', err);
+      }
 
-      // Generate cash transfer alerts
-      const usdcBalance = assets
-        .filter(a => {
-          const meta = a.metadata as CryptoAsset;
-          const mint = meta?.tokenMint || meta?.mint || '';
-          return mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
-        })
-        .reduce((sum, a) => sum + a.value, 0);
+      const newAlerts = generatePositionAlerts(assets, priceData, accPlans);
 
-      const cashAlerts = generateCashTransferAlerts(
-        bankAccounts, obligations, debts, usdcBalance
-      );
-      newAlerts.push(...cashAlerts);
+      // ── TEST ALERT — remove after testing ──
+      const bigTrout = assets.find(a => a.name?.toLowerCase().includes('trout'));
+      if (bigTrout) {
+        const meta = bigTrout.metadata as CryptoAsset;
+        newAlerts.unshift({
+          id: `test-pump-bigtrout-${Date.now()}`,
+          assetId: bigTrout.id,
+          assetName: bigTrout.name,
+          symbol: meta.symbol || 'BigTrout',
+          mint: meta.tokenMint || meta.mint || '',
+          priority: 'high',
+          action: 'take_profit',
+          title: `BigTrout up +58% today`,
+          message: `Strong pump. Lock in gains before a pullback.`,
+          detail: `Your $${bigTrout.value.toFixed(0)} position is running. Take some off the table.`,
+          emoji: '💰',
+          actionLabel: 'Trim 25%',
+          actionParams: { type: 'swap', fromMint: meta.tokenMint || meta.mint, fromSymbol: meta.symbol || 'BigTrout', percentage: 25 },
+          value: bigTrout.value,
+          change: 58,
+          timestamp: Date.now(),
+        });
+      }
+      // ── END TEST ──
 
-      // Generate import reminder alerts
-      const txDates = bankTransactions.map(t => ({ date: t.date, bankAccountId: t.bankAccountId }));
-      const importAlerts = generateImportReminders(bankAccounts, txDates);
-      newAlerts.push(...importAlerts);
-
-      // Re-sort all alerts by priority
-      const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-      newAlerts.sort((a, b) => (priorityOrder[a.priority] ?? 3) - (priorityOrder[b.priority] ?? 3));
-
-      console.log(`🔔 Generated ${newAlerts.length} alerts (${cashAlerts.length} cash transfer)`);
+      console.log(`🔔 Generated ${newAlerts.length} position alerts`);
       setAlerts(newAlerts);
       setLastRefresh(Date.now());
     } catch (error) {
@@ -118,7 +146,7 @@ export default function PositionAlertCards() {
     } finally {
       setLoading(false);
     }
-  }, [assets, cryptoMints, bankAccounts, obligations, debts, bankTransactions]);
+  }, [assets, cryptoMints]);
 
   // Initial load + periodic refresh
   useEffect(() => {
@@ -142,78 +170,72 @@ export default function PositionAlertCards() {
   }, [dismissed]);
 
   // Handle action button
-  const handleAction = useCallback(async (alert: PositionAlert) => {
+  const handleAction = useCallback((alert: PositionAlert) => {
     if (alert.actionParams?.type === 'swap') {
       console.log('🔴 TRIM CLICKED', alert.actionParams);
       const { fromMint, fromSymbol, percentage } = alert.actionParams;
       const toSymbol = 'USDC';
       const dollarValue = Math.round(alert.value * (percentage / 100));
 
+      // Find the asset to get quantity and decimals
       const asset = assets.find(a => {
         const meta = a.metadata as CryptoAsset;
         return meta?.tokenMint === fromMint || meta?.mint === fromMint;
       });
 
-      // Cross-platform confirm
-      const confirmed = Platform.OS === 'web'
-        ? window.confirm(`Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → ${toSymbol}?`)
-        : await new Promise<boolean>(resolve => {
-            Alert.alert(
-              `Trim ${fromSymbol}`,
-              `Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → ${toSymbol}?`,
-              [
-                { text: 'Cancel', onPress: () => resolve(false) },
-                { text: `Swap to ${toSymbol}`, onPress: () => resolve(true) },
-              ]
-            );
-          });
-
-      if (!confirmed) return;
-
-      if (!connected || !publicKey) {
-        Alert.alert('Connect Wallet', 'Connect your wallet first to execute swaps.');
-        return;
-      }
-      if (!asset) {
-        Alert.alert('Error', 'Could not find asset');
-        return;
-      }
-
-      const meta = asset.metadata as CryptoAsset;
-      const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
-      const decimals = (meta as any)?.decimals || 9;
-      const lamports = Math.floor(quantity * Math.pow(10, decimals));
-      const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-
-      try {
-        console.log(`🔄 Executing swap: ${quantity} ${fromSymbol} → ${toSymbol}`);
-        const result = await executeSwap(
+      Alert.alert(
+        `Trim ${fromSymbol}`,
+        `Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → ${toSymbol}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
           {
-            inputMint: fromMint, outputMint: toMint, amount: lamports, userPublicKey: publicKey.toBase58(),
-            inputDecimals: 0
-          },
-          signTransaction
-        );
+            text: `Swap to ${toSymbol}`,
+            onPress: async () => {
+              if (!isSwapConfigured()) {
+                const diag = getSwapDiagnostics();
+                Alert.alert(
+                  'Swap Not Available',
+                  `The swap service isn't configured in this build.\n\nAPI URL: ${diag.apiUrl}\n\nSet EXPO_PUBLIC_API_URL in EAS env vars and rebuild.`
+                );
+                return;
+              }
+              if (!connected || !publicKey) {
+                Alert.alert('Connect Wallet', 'Connect your wallet first to execute swaps.');
+                return;
+              }
+              if (!asset) {
+                Alert.alert('Error', 'Could not find asset');
+                return;
+              }
 
-        if (result.success) {
-          Alert.alert('Swap Complete! 🎉', `Swapped ${fromSymbol} → ${toSymbol}\n\nTx: ${result.signature?.slice(0, 12)}...`);
-          handleDismiss(alert.id);
-        } else if (result.error !== 'Transaction cancelled by user') {
-          Alert.alert('Swap Failed', result.error || 'Something went wrong');
-        }
-      } catch (e: any) {
-        Alert.alert('Error', e.message);
-      }
-    } else if (alert.actionParams?.type === 'fuse_transfer') {
-      const { amount, toAccount, toInstitution } = alert.actionParams;
-      const msg = `Transfer $${amount} USDC → ${toInstitution} (${toAccount})\n\nOpen Fuse to initiate the transfer. It takes ~1 business day to arrive.`;
-      if (Platform.OS === 'web') {
-        window.alert(msg);
-      } else {
-        Alert.alert('Transfer via Fuse', msg, [{ text: 'OK' }]);
-      }
-    } else if (alert.actionParams?.type === 'navigate_bank') {
-      router.push(`/bank/${alert.actionParams.bankAccountId}`);
+              const meta = asset.metadata as CryptoAsset;
+              const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
+              const decimals = (meta as any)?.decimals || 9;
+              const lamports = Math.floor(quantity * Math.pow(10, decimals));
+              const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
+
+              try {
+                const result = await executeSwap(
+                  {
+                    inputMint: fromMint, outputMint: toMint, amount: lamports, userPublicKey: publicKey.toBase58(),
+                    inputDecimals: 0
+                  },
+                  signTransaction
+                );
+
+                if (result.success) {
+                  Alert.alert('Swap Complete! 🎉', `Swapped ${fromSymbol} → ${toSymbol}\n\nTx: ${result.signature?.slice(0, 12)}...`);
+                  handleDismiss(alert.id);
+                } else if (result.error !== 'Transaction cancelled by user') {
+                  Alert.alert('Swap Failed', result.error || 'Something went wrong');
+                }
+              } catch (e: any) {
+                Alert.alert('Error', e.message);
+              }
+            },
+          },
+        ]
+      );
     } else if (alert.actionParams?.type === 'deposit') {
       router.push('/(tabs)/desires');
     } else {

@@ -11,6 +11,7 @@ import type { IncomeSource } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
 import CollapsibleSection from '../../src/components/CollapsibleSection';
 import { T } from '../../src/theme';
+import EmptyStateCard from '../../src/components/EmptyStateCard';
 
 function toMonthly(amount: number, freq: string): number {
   switch (freq) {
@@ -57,11 +58,14 @@ export default function IncomeScreen() {
   const [srcAmount, setSrcAmount] = useState('');
   const [srcFreq, setSrcFreq] = useState<IncomeSource['frequency']>('biweekly');
   const [srcAccountId, setSrcAccountId] = useState('');
+  const [srcIsLoss, setSrcIsLoss] = useState(false); // For trading: toggle between gain/loss
 
   const handleAddIncome = () => {
     if (!srcName || !srcAmount || !srcAccountId) return;
-    addIncomeSource({ id: Date.now().toString(), source: srcType, name: srcName, amount: parseFloat(srcAmount), frequency: srcFreq, bankAccountId: srcAccountId });
-    setSrcName(''); setSrcAmount(''); setSrcType('salary'); setSrcFreq('biweekly'); setSrcAccountId('');
+    const amt = parseFloat(srcAmount);
+    const finalAmount = srcIsLoss ? -Math.abs(amt) : Math.abs(amt);
+    addIncomeSource({ id: Date.now().toString(), source: srcType, name: srcName, amount: finalAmount, frequency: srcFreq, bankAccountId: srcAccountId });
+    setSrcName(''); setSrcAmount(''); setSrcType('salary'); setSrcFreq('biweekly'); setSrcAccountId(''); setSrcIsLoss(false);
     setShowIncomeModal(false);
   };
 
@@ -87,6 +91,11 @@ export default function IncomeScreen() {
   return (
     <View style={s.container}>
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Top-level empty state when no income at all */}
+        {incomeSources.length === 0 && (
+          <EmptyStateCard category="income" onAction={() => { setSrcType('salary'); setShowIncomeModal(true); }} />
+        )}
 
         {/* Summary */}
         <LinearGradient colors={T.gradients.green} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -264,7 +273,7 @@ export default function IncomeScreen() {
               <Text style={s.label}>Type</Text>
               <View style={s.pillRow}>
                 {(['salary', 'freelance', 'business', 'trading', 'other'] as const).map((t) => (
-                  <TouchableOpacity key={t} style={[s.pill, srcType === t && s.pillActive]} onPress={() => setSrcType(t)}>
+                  <TouchableOpacity key={t} style={[s.pill, srcType === t && s.pillActive]} onPress={() => { setSrcType(t); if (t !== 'trading') setSrcIsLoss(false); }}>
                     <Text style={[s.pillText, srcType === t && s.pillTextActive]}>{SOURCE_LABELS[t]}</Text>
                   </TouchableOpacity>
                 ))}
@@ -281,7 +290,26 @@ export default function IncomeScreen() {
                 placeholderTextColor="#555" value={srcName} onChangeText={setSrcName} />
 
               <Text style={s.label}>Amount per Payment</Text>
-              <View style={s.inputRow}><Text style={s.currencySymbol}>$</Text><TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={srcAmount} onChangeText={setSrcAmount} /></View>
+              {srcType === 'trading' && (
+                <View style={{ flexDirection: 'row', marginBottom: 8, gap: 8 }}>
+                  <TouchableOpacity
+                    style={[s.pill, !srcIsLoss && { backgroundColor: '#4ade80', borderColor: '#4ade80' }]}
+                    onPress={() => setSrcIsLoss(false)}
+                  >
+                    <Text style={[s.pillText, !srcIsLoss && { color: '#080c18', fontWeight: '700' }]}>📈 Gain</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.pill, srcIsLoss && { backgroundColor: '#f87171', borderColor: '#f87171' }]}
+                    onPress={() => setSrcIsLoss(true)}
+                  >
+                    <Text style={[s.pillText, srcIsLoss && { color: '#fff', fontWeight: '700' }]}>📉 Loss</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View style={s.inputRow}>
+                <Text style={[s.currencySymbol, srcIsLoss && { color: '#f87171' }]}>{srcIsLoss ? '-$' : '$'}</Text>
+                <TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={srcAmount} onChangeText={setSrcAmount} />
+              </View>
 
               <Text style={s.label}>How Often?</Text>
               <View style={s.pillRow}>
@@ -292,7 +320,11 @@ export default function IncomeScreen() {
                 ))}
               </View>
 
-              {parseFloat(srcAmount) > 0 && <Text style={s.monthlyPreview}>= ${toMonthly(parseFloat(srcAmount), srcFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo</Text>}
+              {parseFloat(srcAmount) > 0 && (
+                <Text style={[s.monthlyPreview, srcIsLoss && { color: '#f87171' }]}>
+                  = {srcIsLoss ? '-' : ''}${toMonthly(parseFloat(srcAmount), srcFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
+                </Text>
+              )}
 
               <Text style={s.label}>Deposits Into</Text>
               {srcType === 'trading' && <Text style={s.helperText}>Pick where your trading wins land.</Text>}

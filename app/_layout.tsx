@@ -61,6 +61,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="asset/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="bank/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="debt/[id]" options={{ headerShown: false }} />
@@ -70,6 +71,8 @@ export default function RootLayout() {
           <Stack.Screen name="business" options={{ headerShown: false }} />
           <Stack.Screen name="divorce-simulator" options={{ headerShown: false }} />
           <Stack.Screen name="badges" options={{ title: 'Badges' }} />
+          <Stack.Screen name="watchlist" options={{ title: 'Watchlist', headerStyle: { backgroundColor: '#080c18' }, headerTintColor: '#f4c430' }} />
+          <Stack.Screen name="goals" options={{ headerShown: false }} />
         </Stack>
       </WalletProvider>
     </PrivyWrapper>

@@ -2,7 +2,7 @@
 import { useRouter } from 'expo-router';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, Alert
+  Modal, TextInput, Alert, Platform
 } from 'react-native';
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -18,6 +18,11 @@ import AddAssetModal from '@/components/assets/AddAssetModal';
 import WalletSyncSection from '@/components/assets/WalletSyncSection';
 import SKRCard from '@/components/assets/SKRCard';
 import AssetCategoriesList from '@/components/assets/AssetCategoriesList';
+import EmptyStateCard from '@/components/EmptyStateCard';
+import CryptoOpportunityCard from '@/components/CryptoOpportunityCard';
+import AccumulationPlanCard from '@/components/AccumulationPlanCard';
+import { loadAllPlans, createPlan, getPlan, type AccumulationPlan } from '@/services/accumulationPlan';
+import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 
 // ── Build SKRCard props from a store asset ─────────────────
 function buildSkrFromAsset(asset: Asset): { holding: SKRHolding; income: SKRIncomeSnapshot } | null {
@@ -50,6 +55,43 @@ function isSkrAsset(a: Asset): boolean {
   return (a.metadata as any)?.symbol === 'SKR' || a.id === 'skr_staking';
 }
 
+// ── Accumulation Plans Section ───────────────────────────────────
+function AccumulationPlansSection({ assets }: { assets: Asset[] }) {
+  const [plans, setPlans] = useState<AccumulationPlan[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadAllPlans().then(all => {
+      if (!cancelled) setPlans(Object.values(all).filter(p => p.entries.length > 0));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (plans.length === 0) return null;
+
+  return (
+    <View style={{ marginTop: 16 }}>
+      <Text style={{ fontSize: 16, fontWeight: '700', color: '#f4c430', marginBottom: 10 }}>
+        🎯 Accumulation Plans
+      </Text>
+      {plans.map(plan => {
+        // Try to find the wallet holding for this mint
+        const held = assets.find(a => (a.metadata as any)?.mint === plan.mint);
+        const walletHolding = held ? (held.metadata as any)?.balance || 0 : undefined;
+
+        return (
+          <AccumulationPlanCard
+            key={plan.mint}
+            mint={plan.mint}
+            symbol={plan.symbol}
+            currentHolding={walletHolding}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
 export default function AssetsScreen() {
   const router = useRouter();
   const assets = useStore((state) => state.assets);
@@ -72,6 +114,12 @@ export default function AssetsScreen() {
   const [editingBankAccount, setEditingBankAccount] = useState<BankAccount | null>(null);
   const [showBankEditModal, setShowBankEditModal] = useState(false);
   const [bankEditValue, setBankEditValue] = useState('');
+
+  // Target modal state
+  const [targetAsset, setTargetAsset] = useState<Asset | null>(null);
+  const [targetAmount, setTargetAmount] = useState('');
+  const [targetAvgPrice, setTargetAvgPrice] = useState('');
+  const [showTargetModal, setShowTargetModal] = useState(false);
 
   const syncWalletAssets = useStore((state) => state.syncWalletAssets);
   const isLoadingAssets = useStore((state) => state.isLoadingAssets);
@@ -205,6 +253,61 @@ export default function AssetsScreen() {
     setShowBankEditModal(false);
   };
 
+  // ── Set accumulation target from asset card ─────────────────
+  const handleSetTarget = async (asset: Asset) => {
+    const meta = asset.metadata as any;
+    const mint = meta?.tokenMint || meta?.mint || '';
+    if (!mint) return;
+
+    // Check if plan already exists
+    const existing = await getPlan(mint);
+    if (existing) {
+      const msg = `${meta?.symbol || asset.name} already has an accumulation plan (${existing.targetAmount.toLocaleString()} target). Open goals page to manage it.`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Plan exists', msg);
+      return;
+    }
+
+    setTargetAsset(asset);
+    setTargetAmount('');
+    setTargetAvgPrice('');
+    setShowTargetModal(true);
+  };
+
+  const handleCreateTarget = async () => {
+    if (!targetAsset) return;
+    const meta = targetAsset.metadata as any;
+    const mint = meta?.tokenMint || meta?.mint || '';
+    const symbol = meta?.symbol || targetAsset.name;
+    const currentBalance = meta?.balance || 0;
+    const amount = parseFloat(targetAmount.replace(/,/g, ''));
+
+    if (!amount || amount <= 0) {
+      const msg = 'Enter a target amount';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Missing target', msg);
+      return;
+    }
+
+    // Create accumulation plan
+    const avgPrice = parseFloat(targetAvgPrice) || 0;
+    const initialEntries = avgPrice > 0 && currentBalance > 0
+      ? [{ type: 'buy' as const, date: new Date().toISOString(), tokenAmount: currentBalance, pricePerToken: avgPrice, totalUSD: currentBalance * avgPrice, notes: 'Existing position' }]
+      : [];
+    await createPlan(mint, symbol, amount, initialEntries);
+
+    // Also create a goal linked to the plan
+    const goals = await loadGoals();
+    const alreadyHasGoal = goals.some(g => g.mint === mint);
+    if (!alreadyHasGoal) {
+      await addGoal(makeTokenGoal(mint, symbol, amount, currentBalance));
+    }
+
+    setShowTargetModal(false);
+    setTargetAsset(null);
+
+    const successMsg = `Created accumulation target: ${amount.toLocaleString()} ${symbol}`;
+    Platform.OS === 'web' ? window.alert(successMsg) : Alert.alert('Target set! 🎯', successMsg);
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -221,8 +324,30 @@ export default function AssetsScreen() {
         {/* Portfolio Summary */}
         <PortfolioSummary totalValue={totalValue} totalIncome={totalIncome} />
 
+        {/* Quick links */}
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4c43010', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#f4c43020', gap: 10 }}
+          onPress={() => router.push('/watchlist')}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 18 }}>🎯</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#f4c430' }}>Coin Watchlist</Text>
+            <Text style={{ fontSize: 12, color: '#888' }}>Track coins for good entries</Text>
+          </View>
+          <Text style={{ fontSize: 16, color: '#f4c43060' }}>→</Text>
+        </TouchableOpacity>
+
         {/* Add Asset Button */}
         <AddAssetButton onPress={() => setShowAddModal(true)} />
+
+        {/* Empty state when no assets at all */}
+        {assets.length === 0 && bankAccounts.length === 0 && (
+          <EmptyStateCard category="assets" onAction={() => setShowAddModal(true)} />
+        )}
+
+        {/* Crypto opportunity — shown when no wallet/crypto */}
+        <CryptoOpportunityCard />
 
         {/* SKR Card — shown if SKR asset exists in store */}
         {skrData && skrAsset && (
@@ -242,7 +367,11 @@ export default function AssetsScreen() {
           onAssetPress={(asset) => router.push(`/asset/${asset.id}`)}
           onAssetDelete={handleRemoveAsset}
           onBankAccountPress={handleBankAccountPress}
+          onSetTarget={handleSetTarget}
         />
+
+        {/* Accumulation Plans — for held crypto with targets */}
+        <AccumulationPlansSection assets={assets} />
       </ScrollView>
 
       {/* Add / Edit Asset Modal */}
@@ -337,6 +466,99 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ═══ Set Accumulation Target Modal ═══ */}
+      <Modal
+        visible={showTargetModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setShowTargetModal(false); setTargetAsset(null); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {targetAsset && (() => {
+              const meta = targetAsset.metadata as any;
+              const symbol = meta?.symbol || targetAsset.name;
+              const balance = meta?.balance || 0;
+              const pricePerToken = balance > 0 ? targetAsset.value / balance : 0;
+              const targetNum = parseFloat(targetAmount.replace(/,/g, '')) || 0;
+              const needed = Math.max(0, targetNum - balance);
+              const costEstimate = needed * pricePerToken;
+
+              return (
+                <>
+                  <Text style={styles.modalTitle}>🎯 Set Target</Text>
+
+                  <View style={tm.assetInfo}>
+                    <Text style={tm.assetSymbol}>{symbol}</Text>
+                    <Text style={tm.assetDetail}>
+                      Current: {balance > 0 ? balance.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} tokens · ${targetAsset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </Text>
+                    {pricePerToken > 0 && (
+                      <Text style={tm.assetPrice}>
+                        ≈ ${pricePerToken < 1 ? pricePerToken.toFixed(4) : pricePerToken.toFixed(2)}/token
+                      </Text>
+                    )}
+                  </View>
+
+                  <Text style={styles.label}>Target token amount</Text>
+                  <TextInput
+                    style={tm.input}
+                    placeholder="e.g. 1000000"
+                    placeholderTextColor="#555"
+                    keyboardType="numeric"
+                    value={targetAmount}
+                    onChangeText={setTargetAmount}
+                    autoFocus
+                  />
+
+                  <Text style={styles.label}>Avg buy price (optional)</Text>
+                  <Text style={tm.hint}>If you already hold tokens, enter what you paid per token to track cost basis</Text>
+                  <TextInput
+                    style={tm.input}
+                    placeholder={pricePerToken > 0 ? `Current: $${pricePerToken < 1 ? pricePerToken.toFixed(4) : pricePerToken.toFixed(2)}` : '$0.00'}
+                    placeholderTextColor="#555"
+                    keyboardType="numeric"
+                    value={targetAvgPrice}
+                    onChangeText={setTargetAvgPrice}
+                  />
+
+                  {/* Preview */}
+                  {targetNum > 0 && (
+                    <View style={tm.preview}>
+                      <Text style={tm.previewLine}>
+                        📦 {balance.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {targetNum.toLocaleString()} {symbol}
+                        <Text style={{ color: '#888' }}> ({balance > 0 ? ((balance / targetNum) * 100).toFixed(0) : 0}%)</Text>
+                      </Text>
+                      {needed > 0 && pricePerToken > 0 && (
+                        <Text style={tm.previewLine}>
+                          🛒 Need {needed.toLocaleString(undefined, { maximumFractionDigits: 0 })} more ≈ <Text style={{ color: '#f4c430' }}>${costEstimate.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text> at current price
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                      style={styles.modalCancelButton}
+                      onPress={() => { setShowTargetModal(false); setTargetAsset(null); }}
+                    >
+                      <Text style={styles.modalCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalAddButton, { backgroundColor: '#f4c430' }, !targetAmount && styles.modalAddButtonDisabled]}
+                      onPress={handleCreateTarget}
+                      disabled={!targetAmount}
+                    >
+                      <Text style={styles.modalAddText}>🎯 Set Target</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -363,4 +585,15 @@ const styles = StyleSheet.create({
   bankAccountName: { fontSize: 18, color: '#fff', marginBottom: 4, fontFamily: 'Inter_700Bold' },
   bankAccountInstitution: { fontSize: 14, color: '#888', marginBottom: 8, fontFamily: 'Inter_400Regular' },
   currentBalanceLabel: { fontSize: 16, color: '#4ade80', fontFamily: 'Inter_600SemiBold' },
+});
+
+const tm = StyleSheet.create({
+  assetInfo: { backgroundColor: '#0c1020', borderRadius: 14, padding: 16, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: '#f4c430', borderWidth: 1, borderColor: '#2a3050' },
+  assetSymbol: { fontSize: 22, fontWeight: '800', color: '#f4c430', marginBottom: 4 },
+  assetDetail: { fontSize: 13, color: '#b0b0b8' },
+  assetPrice: { fontSize: 12, color: '#888', marginTop: 2 },
+  input: { backgroundColor: '#0c1020', borderRadius: 12, padding: 14, color: '#fff', fontSize: 18, borderWidth: 1, borderColor: '#2a3050', fontFamily: 'Inter_600SemiBold' },
+  hint: { fontSize: 11, color: '#666', marginBottom: 6, marginTop: -2 },
+  preview: { backgroundColor: '#f4c43008', borderRadius: 12, padding: 12, marginTop: 14, borderWidth: 1, borderColor: '#f4c43015' },
+  previewLine: { fontSize: 13, color: '#b0b0b8', lineHeight: 20 },
 });

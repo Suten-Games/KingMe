@@ -41,9 +41,17 @@ export default function DivorceSimulator() {
 
   const prefill = () => {
     const a = assets.reduce((s, x) => s + x.value, 0) + bankAccounts.reduce((s, b) => s + (b.currentBalance || 0), 0);
-    const d = debts.reduce((s, x) => s + (x.remainingBalance || x.principal || 0), 0);
+    const d = debts.reduce((s, x) => s + (x.balance || x.principal || 0), 0);
     const r = assets.filter(x => x.type === 'retirement').reduce((s, x) => s + x.value, 0);
-    const h = assets.filter(x => x.type === 'real_estate').reduce((s, x) => s + x.value, 0);
+    // Home equity = property value - mortgage balance (from asset metadata or matching debts)
+    const realEstate = assets.filter(x => x.type === 'real_estate');
+    const homeValue = realEstate.reduce((s, x) => s + x.value, 0);
+    const mortgageFromAssets = realEstate.reduce((s, x) => s + ((x.metadata as any)?.mortgageBalance || 0), 0);
+    const mortgageFromDebts = debts
+      .filter(x => /mortgage|home.?loan/i.test(x.name))
+      .reduce((s, x) => s + (x.balance || x.principal || 0), 0);
+    const mortgage = mortgageFromAssets || mortgageFromDebts; // prefer asset metadata, fallback to debts
+    const h = Math.max(0, homeValue - mortgage);
     setTotalAst(a.toFixed(0)); setTotalDbt(d.toFixed(0)); setRetAccts(r.toFixed(0)); setHomeEq(h.toFixed(0));
   };
 
@@ -71,16 +79,20 @@ export default function DivorceSimulator() {
     }
     const alimonyMo = alimonyAnnual / 12;
 
-    // Child support
+    // Child support — only for minor children (under 18)
     let childMo = 0, childYrs = 0;
     if (kids > 0) {
-      const combined = mi + si;
-      const pct = rules.childBasePct + (kids - 1) * rules.childAddPct;
-      const total = combined * pct;
-      childMo = combined > 0 ? (total * (mi / combined)) / 12 : 0;
       const ages = kidAges.split(',').map(a => parseInt(a.trim())).filter(a => !isNaN(a) && a >= 0);
-      const youngest = ages.length > 0 ? Math.min(...ages) : 5;
-      childYrs = Math.max(0, 18 - youngest);
+      const minorAges = ages.filter(a => a < 18);
+      const minorCount = ages.length > 0 ? minorAges.length : kids; // if no ages entered, assume all are minors
+      if (minorCount > 0) {
+        const combined = mi + si;
+        const pct = rules.childBasePct + (minorCount - 1) * rules.childAddPct;
+        const total = combined * pct;
+        childMo = combined > 0 ? (total * (mi / combined)) / 12 : 0;
+        const youngest = minorAges.length > 0 ? Math.min(...minorAges) : 5;
+        childYrs = Math.max(0, 18 - youngest);
+      }
     }
 
     const net = ast - dbt;
@@ -94,6 +106,7 @@ export default function DivorceSimulator() {
 
     return {
       alimonyMo, alimonyAnnual, alimonyDur, iHigher, childMo, childYrs, kids,
+      minorKids: kids > 0 ? (kidAges ? kidAges.split(',').map(a => parseInt(a.trim())).filter(a => !isNaN(a) && a >= 0 && a < 18).length || kids : kids) : 0,
       assetLoss, retLoss, homeLoss, legal, monthlyHit, lifetime,
       community: rules.community,
       postIncome: (mi / 12) - monthlyHit,
@@ -165,7 +178,7 @@ export default function DivorceSimulator() {
           </View>
           <View style={s.row}>
             <View style={s.half}><Text style={s.lbl}>Retirement (401k/IRA)</Text><TextInput style={s.inp} placeholder="$0" placeholderTextColor="#666" keyboardType="numeric" value={retAccts} onChangeText={setRetAccts}/></View>
-            <View style={s.half}><Text style={s.lbl}>Home Equity</Text><TextInput style={s.inp} placeholder="$0" placeholderTextColor="#666" keyboardType="numeric" value={homeEq} onChangeText={setHomeEq}/></View>
+            <View style={s.half}><Text style={s.lbl}>Home Equity (value − mortgage)</Text><TextInput style={s.inp} placeholder="$0" placeholderTextColor="#666" keyboardType="numeric" value={homeEq} onChangeText={setHomeEq}/></View>
           </View>
         </View>
 
@@ -179,7 +192,7 @@ export default function DivorceSimulator() {
               <Text style={s.rTitle}>💸 Monthly Financial Hit</Text>
               <Text style={s.bigNum}>-{fmt(results.monthlyHit)}/mo</Text>
               {results.alimonyMo > 0 && <View style={s.rRow}><Text style={s.rLbl}>Alimony ({results.iHigher ? 'you pay' : 'you receive'})</Text><Text style={s.rVal}>{results.iHigher ? '-' : '+'}{fmt(results.alimonyMo)}/mo</Text></View>}
-              {results.childMo > 0 && <View style={s.rRow}><Text style={s.rLbl}>Child support ({results.kids} kids)</Text><Text style={s.rVal}>-{fmt(results.childMo)}/mo</Text></View>}
+              {results.childMo > 0 && <View style={s.rRow}><Text style={s.rLbl}>Child support ({results.minorKids} minor{results.minorKids !== 1 ? 's' : ''})</Text><Text style={s.rVal}>-{fmt(results.childMo)}/mo</Text></View>}
             </LinearGradient>
 
             <LinearGradient colors={['#1a2040','#0e1020','#080810']} style={s.rCard}>

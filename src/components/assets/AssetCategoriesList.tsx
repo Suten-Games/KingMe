@@ -99,10 +99,12 @@ function ProtocolSubSection({
   group,
   onAssetPress,
   onAssetDelete,
+  onSetTarget,
 }: {
   group: ProtocolGroup;
   onAssetPress: (asset: Asset) => void;
   onAssetDelete: (asset: Asset) => void;
+  onSetTarget?: (asset: Asset) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -194,13 +196,24 @@ function ProtocolSubSection({
               {asset.annualIncome > 0 && (
                 <Text style={ps.incomeText}>${(asset.annualIncome / 12).toFixed(0)}/mo</Text>
               )}
-              <TouchableOpacity
-                onPress={(e) => { e.stopPropagation(); onAssetDelete(asset); }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={ps.deleteTouchable}
-              >
-                <Text style={ps.deleteBtn}>✕</Text>
-              </TouchableOpacity>
+              <View style={ps.actionRow}>
+                {onSetTarget && (
+                  <TouchableOpacity
+                    onPress={(e) => { e.stopPropagation(); onSetTarget(asset); }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={ps.targetTouchable}
+                  >
+                    <Text style={ps.targetBtn}>🎯</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={(e) => { e.stopPropagation(); onAssetDelete(asset); }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={ps.deleteTouchable}
+                >
+                  <Text style={ps.deleteBtn}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </TouchableOpacity>
         );
@@ -216,6 +229,7 @@ interface AssetCategoriesListProps {
   onAssetPress: (asset: Asset) => void;
   onAssetDelete: (asset: Asset) => void;
   onBankAccountPress?: (accountId: string) => void;
+  onSetTarget?: (asset: Asset) => void;
 }
 
 export default function AssetCategoriesList({
@@ -223,6 +237,7 @@ export default function AssetCategoriesList({
   onAssetPress,
   onAssetDelete,
   onBankAccountPress,
+  onSetTarget,
 }: AssetCategoriesListProps) {
   const protocolGroups = useMemo(
     () => groupByProtocol(categorized.crypto),
@@ -320,6 +335,7 @@ export default function AssetCategoriesList({
                   group={group}
                   onAssetPress={onAssetPress}
                   onAssetDelete={onAssetDelete}
+                  onSetTarget={onSetTarget}
                 />
               ))}
             </View>
@@ -436,4 +452,7 @@ const ps = StyleSheet.create({
   incomeText: { fontSize: 10, color: '#4ade8080' },
   deleteTouchable: { marginTop: 4 },
   deleteBtn: { fontSize: 14, color: '#ff444480' },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 4, alignItems: 'center' },
+  targetTouchable: { },
+  targetBtn: { fontSize: 14 },
 });

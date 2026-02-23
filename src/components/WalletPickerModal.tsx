@@ -1,290 +1,164 @@
 // src/components/WalletPickerModal.tsx
-// Shows wallet options: external wallets (Phantom, Solflare) + social login (Google/Apple)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Modal that shows all detected Solana wallets for the user to choose from.
+// Web: lists browser extensions. Mobile: shows a note about MWA.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import React from 'react';
-import {
-  View, Text, StyleSheet, Modal, TouchableOpacity, Platform,
-  ActivityIndicator, Linking,
-} from 'react-native';
-import { T } from '../theme';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking } from 'react-native';
+import { useWallet, DetectedWallet } from '../providers/wallet-provider';
 
-export type WalletOption = 'phantom' | 'jupiter' | 'solflare' | 'backpack' | 'google' | 'apple';
+// Export type for cross-platform compatibility with native provider
+export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave';
 
-interface Props {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (option: WalletOption) => void;
-  connecting: boolean;
-  connectingWallet: WalletOption | null;
-  externalWalletsAvailable?: boolean;
+export default function WalletPickerModal() {
+  const { detectedWallets, showPicker, setShowPicker, connect, connecting } = useWallet();
+
+  const handleSelect = async (wallet: DetectedWallet) => {
+    try {
+      await connect(wallet.id);
+    } catch (e: any) {
+      console.error('[WalletPicker] connect failed:', e);
+    }
+  };
+
+  // Don't render on mobile — MWA handles wallet selection natively
+  if (Platform.OS !== 'web') return null;
+
+  return (
+    <Modal
+      visible={showPicker}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowPicker(false)}
+    >
+      <TouchableOpacity
+        style={s.overlay}
+        activeOpacity={1}
+        onPress={() => setShowPicker(false)}
+      >
+        <View style={s.modal} onStartShouldSetResponder={() => true}>
+          <Text style={s.title}>Connect Wallet</Text>
+          <Text style={s.subtitle}>Choose a wallet to connect</Text>
+
+          <View style={s.walletList}>
+            {detectedWallets.map((wallet) => (
+              <TouchableOpacity
+                key={wallet.id}
+                style={s.walletRow}
+                onPress={() => handleSelect(wallet)}
+                disabled={connecting}
+              >
+                <Text style={s.walletIcon}>{wallet.icon}</Text>
+                <Text style={s.walletName}>{wallet.name}</Text>
+                <Text style={s.walletArrow}>→</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {detectedWallets.length === 0 && (
+            <View style={s.emptyState}>
+              <Text style={s.emptyText}>No Solana wallets detected</Text>
+              <Text style={s.emptySubtext}>
+                Install a browser extension to get started:
+              </Text>
+              <View style={s.installLinks}>
+                <InstallLink name="Phantom" url="https://phantom.app" icon="👻" />
+                <InstallLink name="Solflare" url="https://solflare.com" icon="🔆" />
+                <InstallLink name="Backpack" url="https://backpack.app" icon="🎒" />
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity style={s.cancelBtn} onPress={() => setShowPicker(false)}>
+            <Text style={s.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 }
 
-const EXTERNAL_WALLETS: { id: WalletOption; name: string; icon: string; color: string; storeUrl: string }[] = [
-  { id: 'phantom', name: 'Phantom', icon: '👻', color: '#AB9FF2', storeUrl: 'https://phantom.app/download' },
-  { id: 'jupiter', name: 'Jupiter', icon: '🪐', color: '#C7F284', storeUrl: 'https://jup.ag/download' },
-  { id: 'solflare', name: 'Solflare', icon: '🔥', color: '#FC8E1A', storeUrl: 'https://solflare.com/download' },
-];
-
-const SOCIAL_LOGINS: { id: WalletOption; name: string; icon: string; subtitle: string }[] = [
-  { id: 'google', name: 'Continue with Google', icon: '🔵', subtitle: 'We\'ll create a wallet for you' },
-  { id: 'apple', name: 'Continue with Apple', icon: '🍎', subtitle: 'We\'ll create a wallet for you' },
-];
-
-export default function WalletPickerModal({ visible, onClose, onSelect, connecting, connectingWallet, externalWalletsAvailable = false }: Props) {
+function InstallLink({ name, url, icon }: { name: string; url: string; icon: string }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <View style={s.sheet}>
-          {/* Header */}
-          <View style={s.header}>
-            <Text style={s.title}>Connect Wallet</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Text style={s.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Social Login — primary for mobile */}
-          <Text style={s.sectionLabel}>Get Started</Text>
-          <Text style={s.sectionSubtext}>
-            Sign in to create a secure wallet instantly — no apps to install, no seed phrases.
-          </Text>
-          <View style={s.socialList}>
-            {SOCIAL_LOGINS.map((login) => {
-              const isConnecting = connecting && connectingWallet === login.id;
-              return (
-                <TouchableOpacity
-                  key={login.id}
-                  style={[s.socialRow, isConnecting && s.walletRowActive]}
-                  activeOpacity={0.7}
-                  onPress={() => onSelect(login.id)}
-                  disabled={connecting}
-                >
-                  <Text style={s.socialIcon}>{login.icon}</Text>
-                  <View style={s.socialText}>
-                    <Text style={s.socialName}>{login.name}</Text>
-                    <Text style={s.socialSub}>{login.subtitle}</Text>
-                  </View>
-                  {isConnecting ? (
-                    <ActivityIndicator size="small" color={T.gold} />
-                  ) : (
-                    <Text style={s.walletArrow}>→</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Divider */}
-          <View style={s.dividerRow}>
-            <View style={s.dividerLine} />
-            <Text style={s.dividerText}>already have a wallet?</Text>
-            <View style={s.dividerLine} />
-          </View>
-
-          {/* External Wallets */}
-          <View style={s.walletList}>
-            {EXTERNAL_WALLETS.map((wallet) => {
-              const isConnecting = connecting && connectingWallet === wallet.id;
-              const disabled = !externalWalletsAvailable || connecting;
-
-              return (
-                <TouchableOpacity
-                  key={wallet.id}
-                  style={[s.walletRow, disabled && !isConnecting && s.walletRowDisabled]}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (externalWalletsAvailable) {
-                      onSelect(wallet.id);
-                    } else {
-                      // Open wallet download page
-                      Linking.openURL(wallet.storeUrl);
-                    }
-                  }}
-                  disabled={connecting}
-                >
-                  <View style={[s.walletIcon, { backgroundColor: wallet.color + '22', borderColor: wallet.color + '44' }]}>
-                    <Text style={s.walletEmoji}>{wallet.icon}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.walletName, disabled && s.walletNameDisabled]}>{wallet.name}</Text>
-                    {!externalWalletsAvailable && (
-                      <Text style={s.comingSoonText}>Deep link — coming soon</Text>
-                    )}
-                  </View>
-                  {isConnecting ? (
-                    <ActivityIndicator size="small" color={T.gold} />
-                  ) : (
-                    <Text style={[s.walletArrow, { color: disabled ? T.textDim : wallet.color }]}>→</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Footer */}
-          <Text style={s.footer}>
-            Your keys, your crypto. KingMe never has access to your funds.
-          </Text>
-        </View>
-      </View>
-    </Modal>
+    <TouchableOpacity style={s.installRow} onPress={() => Linking.openURL(url)}>
+      <Text style={s.installIcon}>{icon}</Text>
+      <Text style={s.installName}>{name}</Text>
+      <Text style={s.installAction}>Install →</Text>
+    </TouchableOpacity>
   );
 }
 
 const s = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: T.bg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: '85%',
-  },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 20,
+  },
+  modal: {
+    backgroundColor: '#0d1220',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
   },
   title: {
     fontSize: 22,
-    color: T.gold,
-    fontFamily: T.fontExtraBold,
+    fontWeight: '800',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  closeButton: {
-    fontSize: 20,
-    color: T.textMuted,
-    padding: 4,
-  },
-
-  sectionLabel: {
-    fontSize: 14,
-    color: T.textSecondary,
-    fontFamily: T.fontBold,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
-  sectionSubtext: {
+  subtitle: {
     fontSize: 13,
-    color: T.textMuted,
-    fontFamily: T.fontRegular,
-    lineHeight: 18,
-    marginBottom: 12,
-    marginTop: -4,
-  },
-
-  walletList: {
-    gap: 8,
+    color: '#666',
+    textAlign: 'center',
     marginBottom: 20,
   },
+  walletList: { gap: 6 },
   walletRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: T.bgCard,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: T.border,
-  },
-  walletRowActive: {
-    borderColor: T.gold + '80',
-    backgroundColor: T.gold + '08',
-  },
-  walletRowDisabled: {
-    opacity: 0.6,
-  },
-  walletIcon: {
-    width: 44,
-    height: 44,
+    gap: 14,
+    backgroundColor: '#1a1f2e',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
   },
-  walletEmoji: {
-    fontSize: 22,
-  },
-  walletName: {
-    fontSize: 17,
-    color: T.textPrimary,
-    fontFamily: T.fontSemiBold,
-  },
-  walletNameDisabled: {
-    color: T.textSecondary,
-  },
-  comingSoonText: {
-    fontSize: 11,
-    color: T.textDim,
-    fontFamily: T.fontRegular,
-    marginTop: 2,
-  },
-  walletArrow: {
-    fontSize: 20,
-    color: T.textMuted,
-    fontFamily: T.fontBold,
-  },
-
-  dividerRow: {
+  walletIcon: { fontSize: 26 },
+  walletName: { fontSize: 16, fontWeight: '700', color: '#e8e0d0', flex: 1 },
+  walletArrow: { fontSize: 16, color: '#555' },
+  emptyState: { alignItems: 'center', paddingVertical: 10 },
+  emptyText: { fontSize: 15, fontWeight: '700', color: '#888', marginBottom: 6 },
+  emptySubtext: { fontSize: 12, color: '#555', marginBottom: 14 },
+  installLinks: { gap: 6, width: '100%' },
+  installRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 12,
+    backgroundColor: '#141825',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e2438',
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: T.border,
-  },
-  dividerText: {
-    fontSize: 12,
-    color: T.textDim,
-    fontFamily: T.fontMedium,
-    marginHorizontal: 16,
-  },
-
-  socialList: {
-    gap: 8,
-    marginBottom: 20,
-  },
-  socialRow: {
-    flexDirection: 'row',
+  installIcon: { fontSize: 20 },
+  installName: { fontSize: 14, fontWeight: '600', color: '#e8e0d0', flex: 1 },
+  installAction: { fontSize: 12, color: '#60a5fa', fontWeight: '600' },
+  cancelBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: T.bgCard,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: T.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
   },
-  socialIcon: {
-    fontSize: 24,
-    marginRight: 14,
-  },
-  socialText: {
-    flex: 1,
-  },
-  socialName: {
-    fontSize: 16,
-    color: T.textPrimary,
-    fontFamily: T.fontSemiBold,
-    marginBottom: 2,
-  },
-  socialSub: {
-    fontSize: 12,
-    color: T.textMuted,
-    fontFamily: T.fontRegular,
-  },
-
-  footer: {
-    fontSize: 12,
-    color: T.textDim,
-    textAlign: 'center',
-    fontFamily: T.fontRegular,
-    lineHeight: 16,
-  },
+  cancelText: { fontSize: 14, color: '#888', fontWeight: '600' },
 });

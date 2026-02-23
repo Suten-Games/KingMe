@@ -37,7 +37,7 @@ export default function Index() {
     // Only redirect if we're done loading and at the root
     if (!isLoading && segments.length === 0) {
       if (!onboardingComplete) {
-        router.replace('/onboarding/welcome');
+        router.replace('/onboarding/intro');
       } else {
         router.replace('/(tabs)');
       }

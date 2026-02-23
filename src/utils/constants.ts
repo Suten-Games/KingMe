@@ -36,6 +36,33 @@ export const AVATAR_IMAGES: Record<AvatarType, Record<FreedomState, any>> = {
   },
 };
 
+// Avatar VIDEO mappings (animated avatars via expo-av)
+// Only map videos that exist. Uncomment as you generate them with Grok.
+// Naming convention: assets/video/{avatar}-freedom-{bracket}.mp4
+export const AVATAR_VIDEOS: Partial<Record<AvatarType, Partial<Record<FreedomState, any>>>> = {
+  'male-medium': {
+    drowning: require('../../assets/video/male-freedom-0-20.mp4'),
+    struggling: require('../../assets/video/male-freedom-20-40.mp4'),
+    breaking: require('../../assets/video/male-freedom-40-60.mp4'),
+    rising: require('../../assets/video/male-freedom-60-80.mp4'),
+    enthroned: require('../../assets/video/male-freedom-80-100.mp4'),
+  },
+  'female-medium': {
+    drowning: require('../../assets/video/male-freedom-0-20.mp4'),
+    struggling: require('../../assets/video/male-freedom-0-20.mp4'),
+    breaking: require('../../assets/video/male-freedom-0-20.mp4'),
+    rising: require('../../assets/video/male-freedom-0-20.mp4'),
+    // enthroned:  require('../../assets/video/female-medium-freedom-80-100.mp4'),
+  },
+  'male-dark': {
+    drowning: require('../../assets/video/male-freedom-0-20.mp4'),
+    struggling: require('../../assets/video/male-freedom-20-40.mp4'),
+    breaking: require('../../assets/video/male-freedom-40-60.mp4'),
+    rising: require('../../assets/video/male-freedom-60-80.mp4'),
+    enthroned: require('../../assets/video/male-freedom-80-100.mp4'),
+  },
+};
+
 // Avatar preview images (for selection)
 export const AVATAR_PREVIEWS: Record<AvatarType, any> = {
   'male-medium': require('../../assets/images/freedom-40-60-male-medium.png'),
@@ -71,6 +98,7 @@ export const DEFAULT_USER_PROFILE = {
   freedomHistory: [],
   settings: {
     avatarType: 'male-medium' as AvatarType,
+    animatedAvatar: false,
     notificationsEnabled: true,
     syncFrequency: 'hourly' as const,
     darkMode: true,

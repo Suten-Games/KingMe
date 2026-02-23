@@ -6,7 +6,7 @@ import { TokenPriceData } from './priceTracker';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type AlertPriority = 'urgent' | 'high' | 'medium' | 'low';
-export type AlertAction = 'trim' | 'sell' | 'stop_loss' | 'take_profit' | 'deploy_yield' | 'rebalance' | 'buy_dip' | 'watch';
+export type AlertAction = 'trim' | 'sell' | 'stop_loss' | 'take_profit' | 'deploy_yield' | 'rebalance' | 'buy_dip' | 'watch' | 'accumulate';
 
 export interface PositionAlert {
   id: string;
@@ -26,6 +26,18 @@ export interface PositionAlert {
   change: number | null;    // 24h change %
   timestamp: number;
   dismissed?: boolean;
+  hasAccPlan?: boolean;     // Whether this asset has an accumulation plan
+}
+
+// Accumulation plan context — lightweight info passed from plans
+export interface AccPlanContext {
+  mint: string;
+  symbol: string;
+  targetAmount: number;
+  currentHolding: number;
+  avgEntry: number;          // cost basis / avg buy price
+  progressPct: number;
+  strategy: 'accumulate' | 'extract';
 }
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -58,14 +70,33 @@ const STABLE_MINTS = new Set([
   'USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB',   // USD*
 ]);
 
+// Formatting helpers
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+function fmtPrice(p: number): string {
+  if (p < 0.001) return p.toExponential(2);
+  if (p < 1) return p.toFixed(4);
+  return p.toFixed(2);
+}
+
 // ─── Alert Generator ─────────────────────────────────────────────────────────
 
 export function generatePositionAlerts(
   assets: Asset[],
   priceData: Record<string, TokenPriceData>,
+  accPlans?: AccPlanContext[],
 ): PositionAlert[] {
   const alerts: PositionAlert[] = [];
   const now = Date.now();
+
+  // Index accumulation plans by mint for quick lookup
+  const plansByMint: Record<string, AccPlanContext> = {};
+  if (accPlans) {
+    for (const p of accPlans) { plansByMint[p.mint] = p; }
+  }
 
   // Get crypto assets only
   const cryptoAssets = assets.filter(a => a.type === 'crypto' && a.value >= THRESHOLDS.MIN_VALUE);
@@ -86,138 +117,192 @@ export function generatePositionAlerts(
       ? (asset.value / totalPortfolioValue) * 100
       : 0;
 
+    // Check for accumulation plan
+    const plan = plansByMint[mint];
+    const isAccumulating = plan && plan.strategy === 'accumulate';
+    const belowEntry = isAccumulating && plan.avgEntry > 0 && price.currentPrice < plan.avgEntry;
+    const aboveEntry = isAccumulating && plan.avgEntry > 0 && price.currentPrice >= plan.avgEntry;
+    const pctFromEntry = isAccumulating && plan.avgEntry > 0
+      ? ((price.currentPrice - plan.avgEntry) / plan.avgEntry) * 100
+      : 0;
+
+    // ── Helper: plan-aware formatting ──────────────────────────────
+    const fmtVal = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const planTag = isAccumulating ? ` (${plan.progressPct.toFixed(0)}% to ${fmtNum(plan.targetAmount)} target)` : '';
+
     // ── 1. Rapid pump (1h) — URGENT ──────────────────────────────────
     if (price.change1h !== null && price.change1h >= THRESHOLDS.PUMP_1H) {
-      alerts.push({
-        id: `pump-1h-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
-        priority: 'urgent',
-        action: 'trim',
-        title: `${symbol} pumping +${price.change1h.toFixed(0)}% in 1 hour`,
-        message: `Rapid pump detected. Consider trimming while it's hot.`,
-        detail: `$${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} position. Sell 25-50% and rebuy if it dips.`,
-        emoji: '🚀',
-        actionLabel: 'Trim 25%',
-        actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 25 },
-        value: asset.value,
-        change: price.change1h,
-        timestamp: now,
-      });
+      if (isAccumulating && aboveEntry) {
+        // Accumulating + above entry → trim to lower cost basis
+        alerts.push({
+          id: `pump-1h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'urgent',
+          action: 'trim',
+          title: `${symbol} pumping +${price.change1h.toFixed(0)}% in 1 hour`,
+          message: `+${pctFromEntry.toFixed(0)}% above your $${fmtPrice(plan.avgEntry)} entry. Trim to lower cost basis, buy back on the dip.`,
+          detail: `Sell some → lock profit → wait for pullback → accumulate more tokens at a lower avg.${planTag}`,
+          emoji: '🎯',
+          actionLabel: 'Trim & Reload',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 25 },
+          value: asset.value, change: price.change1h, timestamp: now, hasAccPlan: true,
+        });
+      } else {
+        alerts.push({
+          id: `pump-1h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'urgent',
+          action: 'trim',
+          title: `${symbol} pumping +${price.change1h.toFixed(0)}% in 1 hour`,
+          message: `Rapid pump detected. Consider trimming while it's hot.`,
+          detail: `$${fmtVal(asset.value)} position. Sell 25-50% and rebuy if it dips.`,
+          emoji: '🚀',
+          actionLabel: 'Trim 25%',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 25 },
+          value: asset.value, change: price.change1h, timestamp: now,
+        });
+      }
     }
 
     // ── 2. Strong pump (24h) — take profit ───────────────────────────
     if (price.change24h !== null && price.change24h >= THRESHOLDS.PUMP_24H && asset.value >= THRESHOLDS.MIN_VALUE_FOR_TRIM) {
-      alerts.push({
-        id: `pump-24h-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
-        priority: 'high',
-        action: 'take_profit',
-        title: `${symbol} up +${price.change24h.toFixed(0)}% today`,
-        message: `Strong day. Lock in gains before a pullback.`,
-        detail: `Your $${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} is worth ${price.change24h.toFixed(0)}% more than yesterday. Take some off the table.`,
-        emoji: '💰',
-        actionLabel: 'Take Profit',
-        actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 30 },
-        value: asset.value,
-        change: price.change24h,
-        timestamp: now,
-      });
+      if (isAccumulating && aboveEntry) {
+        alerts.push({
+          id: `pump-24h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'high',
+          action: 'take_profit',
+          title: `${symbol} up +${price.change24h.toFixed(0)}% today`,
+          message: `+${pctFromEntry.toFixed(0)}% above entry. Take profit → lower cost basis → re-accumulate on pullback.`,
+          detail: `Strong day while you're still building. Sell some to lock gains and buy more tokens cheaper next dip.${planTag}`,
+          emoji: '🎯',
+          actionLabel: 'Take Profit & Reload',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 30 },
+          value: asset.value, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      } else {
+        alerts.push({
+          id: `pump-24h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'high',
+          action: 'take_profit',
+          title: `${symbol} up +${price.change24h.toFixed(0)}% today`,
+          message: `Strong day. Lock in gains before a pullback.`,
+          detail: `Your $${fmtVal(asset.value)} is worth ${price.change24h.toFixed(0)}% more than yesterday. Take some off the table.`,
+          emoji: '💰',
+          actionLabel: 'Take Profit',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 30 },
+          value: asset.value, change: price.change24h, timestamp: now,
+        });
+      }
     }
     // Moderate 24h pump
     else if (price.change24h !== null && price.change24h >= THRESHOLDS.PUMP_24H_MODERATE && asset.value >= THRESHOLDS.MIN_VALUE_FOR_TRIM) {
       alerts.push({
         id: `pump-mod-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
+        assetId: asset.id, assetName: asset.name, symbol, mint,
         priority: 'medium',
         action: 'watch',
         title: `${symbol} up +${price.change24h.toFixed(0)}% today`,
-        message: `Nice move. Keep an eye on it.`,
-        detail: `$${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} position. Consider setting a mental stop-loss.`,
+        message: isAccumulating && aboveEntry
+          ? `+${pctFromEntry.toFixed(0)}% above your entry. Monitor for trim opportunity.`
+          : `Nice move. Keep an eye on it.`,
+        detail: isAccumulating
+          ? `$${fmtVal(asset.value)} position.${planTag}`
+          : `$${fmtVal(asset.value)} position. Consider setting a mental stop-loss.`,
         emoji: '📈',
         actionLabel: 'Set Alert',
-        value: asset.value,
-        change: price.change24h,
-        timestamp: now,
+        value: asset.value, change: price.change24h, timestamp: now, hasAccPlan: !!isAccumulating,
       });
     }
 
     // ── 3. 7-day rally — strong take profit ──────────────────────────
     if (price.change7d !== null && price.change7d >= THRESHOLDS.PUMP_7D && asset.value >= THRESHOLDS.MIN_VALUE_FOR_TRIM) {
-      // Don't duplicate if already have 24h alert
       const has24hAlert = alerts.some(a => a.mint === mint && (a.action === 'take_profit' || a.action === 'trim'));
       if (!has24hAlert) {
         alerts.push({
           id: `rally-7d-${mint}-${now}`,
-          assetId: asset.id,
-          assetName: asset.name,
-          symbol,
-          mint,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
           priority: 'high',
           action: 'take_profit',
           title: `${symbol} up +${price.change7d.toFixed(0)}% this week`,
-          message: `Massive weekly run. Don't ride it back down.`,
-          detail: `Remember: pigs get slaughtered. Take 25-50% off the table and buy back on a dip.`,
-          emoji: '🐷',
-          actionLabel: 'Take 25% Profit',
+          message: isAccumulating && aboveEntry
+            ? `Massive run. Trim some → lower cost basis → accumulate more on pullback.`
+            : `Massive weekly run. Don't ride it back down.`,
+          detail: isAccumulating
+            ? `You're +${pctFromEntry.toFixed(0)}% above entry. Sell some to lock gains and buy back cheaper.${planTag}`
+            : `Remember: pigs get slaughtered. Take 25-50% off the table and buy back on a dip.`,
+          emoji: isAccumulating ? '🎯' : '🐷',
+          actionLabel: isAccumulating ? 'Trim & Reload' : 'Take 25% Profit',
           actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 25 },
-          value: asset.value,
-          change: price.change7d,
-          timestamp: now,
+          value: asset.value, change: price.change7d, timestamp: now, hasAccPlan: !!isAccumulating,
         });
       }
     }
 
     // ── 4. Rapid dump (1h) — URGENT ──────────────────────────────────
     if (price.change1h !== null && price.change1h <= THRESHOLDS.DUMP_1H) {
-      alerts.push({
-        id: `dump-1h-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
-        priority: 'urgent',
-        action: 'stop_loss',
-        title: `${symbol} dropping ${price.change1h.toFixed(0)}% in 1 hour`,
-        message: `Rapid sell-off. Protect your position.`,
-        detail: `$${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} at risk. Consider selling to USDC and rebuying lower.`,
-        emoji: '🔻',
-        actionLabel: 'Sell to USDC',
-        actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 100 },
-        value: asset.value,
-        change: price.change1h,
-        timestamp: now,
-      });
+      if (isAccumulating && belowEntry) {
+        // Accumulating + below entry → this is an opportunity
+        alerts.push({
+          id: `dump-1h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'high', // downgrade from urgent — dump is expected for accumulators
+          action: 'accumulate',
+          title: `${symbol} dropping ${price.change1h.toFixed(0)}% — accumulation zone`,
+          message: `${pctFromEntry.toFixed(0)}% below your $${fmtPrice(plan.avgEntry)} avg. Flash dip = chance to lower your cost basis.`,
+          detail: `If your thesis holds, this is the price you wished you'd bought at.${planTag}`,
+          emoji: '🎯',
+          actionLabel: 'Log Buy',
+          value: asset.value, change: price.change1h, timestamp: now, hasAccPlan: true,
+        });
+      } else {
+        alerts.push({
+          id: `dump-1h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'urgent',
+          action: 'stop_loss',
+          title: `${symbol} dropping ${price.change1h.toFixed(0)}% in 1 hour`,
+          message: `Rapid sell-off. Protect your position.`,
+          detail: `$${fmtVal(asset.value)} at risk. Consider selling to USDC and rebuying lower.`,
+          emoji: '🔻',
+          actionLabel: 'Sell to USDC',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 100 },
+          value: asset.value, change: price.change1h, timestamp: now,
+        });
+      }
     }
 
     // ── 5. Significant dump (24h) ────────────────────────────────────
     if (price.change24h !== null && price.change24h <= THRESHOLDS.DUMP_24H && asset.value >= THRESHOLDS.MIN_VALUE_FOR_TRIM) {
-      alerts.push({
-        id: `dump-24h-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
-        priority: 'high',
-        action: 'sell',
-        title: `${symbol} down ${price.change24h.toFixed(0)}% today`,
-        message: `Significant decline. Cut losses or hold conviction.`,
-        detail: `Your position went from $${((asset.value / (1 + price.change24h / 100))).toLocaleString(undefined, { maximumFractionDigits: 0 })} to $${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}. Do you still believe in this?`,
-        emoji: '📉',
-        actionLabel: 'Cut Losses',
-        actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 100 },
-        value: asset.value,
-        change: price.change24h,
-        timestamp: now,
-      });
+      if (isAccumulating && belowEntry) {
+        alerts.push({
+          id: `dump-24h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'medium', // downgrade — accumulators expect dips
+          action: 'accumulate',
+          title: `${symbol} down ${Math.abs(price.change24h).toFixed(0)}% — deep discount`,
+          message: `${Math.abs(pctFromEntry).toFixed(0)}% below your entry. Add more to lower your avg?`,
+          detail: `Your avg buy is $${fmtPrice(plan.avgEntry)}. Current: $${fmtPrice(price.currentPrice)}. Buying here lowers your cost basis.${planTag}`,
+          emoji: '🔥',
+          actionLabel: 'Log Buy',
+          value: asset.value, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      } else {
+        alerts.push({
+          id: `dump-24h-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'high',
+          action: 'sell',
+          title: `${symbol} down ${price.change24h.toFixed(0)}% today`,
+          message: `Significant decline. Cut losses or hold conviction.`,
+          detail: `Your position went from $${fmtVal(asset.value / (1 + price.change24h / 100))} to $${fmtVal(asset.value)}. Do you still believe in this?`,
+          emoji: '📉',
+          actionLabel: 'Cut Losses',
+          actionParams: { type: 'swap', fromMint: mint, fromSymbol: symbol, percentage: 100 },
+          value: asset.value, change: price.change24h, timestamp: now,
+        });
+      }
     }
 
     // ── 6. Falling from ATH — you're riding it down ──────────────────
@@ -225,80 +310,92 @@ export function generatePositionAlerts(
       const peakValue = (asset.value / price.currentPrice) * price.allTimeHigh;
       const lostValue = peakValue - asset.value;
 
-      // Only alert if meaningful money was lost
       if (lostValue > 100) {
-        const hasOtherAlert = alerts.some(a => a.mint === mint && (a.action === 'sell' || a.action === 'stop_loss'));
+        const hasOtherAlert = alerts.some(a => a.mint === mint && (a.action === 'sell' || a.action === 'stop_loss' || a.action === 'accumulate'));
         if (!hasOtherAlert) {
-          alerts.push({
-            id: `ath-fall-${mint}-${now}`,
-            assetId: asset.id,
-            assetName: asset.name,
-            symbol,
-            mint,
-            priority: 'medium',
-            action: 'sell',
-            title: `${symbol} is ${Math.abs(price.fromATH).toFixed(0)}% off its high`,
-            message: `You could have had $${peakValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}. Now it's $${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}.`,
-            detail: `That's $${lostValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} left on the table. Consider selling and rebuying at support.`,
-            emoji: '🎢',
-            actionLabel: 'Review Position',
-            value: asset.value,
-            change: price.fromATH,
-            timestamp: now,
-          });
+          if (isAccumulating && belowEntry) {
+            alerts.push({
+              id: `ath-fall-${mint}-${now}`,
+              assetId: asset.id, assetName: asset.name, symbol, mint,
+              priority: 'low', // downgrade — expected for accumulators buying dips
+              action: 'accumulate',
+              title: `${symbol} is ${Math.abs(price.fromATH).toFixed(0)}% off its high`,
+              message: `Below your $${fmtPrice(plan.avgEntry)} avg entry. Accumulation zone if thesis intact.`,
+              detail: `Price pulled back from ATH. You're building toward ${fmtNum(plan.targetAmount)} ${plan.symbol} — dips are your friend.${planTag}`,
+              emoji: '🎯',
+              actionLabel: 'Review Plan',
+              value: asset.value, change: price.fromATH, timestamp: now, hasAccPlan: true,
+            });
+          } else {
+            alerts.push({
+              id: `ath-fall-${mint}-${now}`,
+              assetId: asset.id, assetName: asset.name, symbol, mint,
+              priority: 'medium',
+              action: 'sell',
+              title: `${symbol} is ${Math.abs(price.fromATH).toFixed(0)}% off its high`,
+              message: `You could have had $${fmtVal(peakValue)}. Now it's $${fmtVal(asset.value)}.`,
+              detail: `That's $${fmtVal(lostValue)} left on the table. Consider selling and rebuying at support.`,
+              emoji: '🎢',
+              actionLabel: 'Review Position',
+              value: asset.value, change: price.fromATH, timestamp: now,
+            });
+          }
         }
       }
     }
 
     // ── 7. Concentrated position ─────────────────────────────────────
     if (positionPct >= THRESHOLDS.CONCENTRATED) {
-      alerts.push({
-        id: `concentrated-${mint}-${now}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        symbol,
-        mint,
-        priority: 'medium',
-        action: 'rebalance',
-        title: `${symbol} is ${positionPct.toFixed(0)}% of your portfolio`,
-        message: `High concentration risk. One bad day could wipe your gains.`,
-        detail: `Consider trimming to <15% and diversifying into stables or yield.`,
-        emoji: '⚖️',
-        actionLabel: 'Trim to 15%',
-        actionParams: {
-          type: 'swap',
-          fromMint: mint,
-          fromSymbol: symbol,
-          percentage: Math.round(((positionPct - 15) / positionPct) * 100),
-        },
-        value: asset.value,
-        change: price.change24h,
-        timestamp: now,
-      });
+      if (isAccumulating) {
+        // Accumulating — concentration is intentional but still risky
+        alerts.push({
+          id: `concentrated-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'low', // downgrade — intentional concentration
+          action: 'watch',
+          title: `${symbol} is ${positionPct.toFixed(0)}% of your portfolio`,
+          message: `Intentional concentration per your accumulation plan.`,
+          detail: `You're building toward ${fmtNum(plan.targetAmount)} ${plan.symbol}. High conviction = high concentration, but manage your risk.${planTag}`,
+          emoji: '🎯',
+          actionLabel: 'Review Plan',
+          value: asset.value, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      } else {
+        alerts.push({
+          id: `concentrated-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: 'medium',
+          action: 'rebalance',
+          title: `${symbol} is ${positionPct.toFixed(0)}% of your portfolio`,
+          message: `High concentration risk. One bad day could wipe your gains.`,
+          detail: `Consider trimming to <15% and diversifying into stables or yield.`,
+          emoji: '⚖️',
+          actionLabel: 'Trim to 15%',
+          actionParams: {
+            type: 'swap', fromMint: mint, fromSymbol: symbol,
+            percentage: Math.round(((positionPct - 15) / positionPct) * 100),
+          },
+          value: asset.value, change: price.change24h, timestamp: now,
+        });
+      }
     }
 
     // ── 8. Idle capital — no yield ───────────────────────────────────
     if (asset.annualIncome === 0 && asset.value >= 500 && !meta.isStaked) {
-      // Only for large non-earning positions, low priority
       const hasHigherAlert = alerts.some(a => a.mint === mint && (a.priority === 'urgent' || a.priority === 'high'));
       if (!hasHigherAlert) {
         alerts.push({
           id: `idle-${mint}-${now}`,
-          assetId: asset.id,
-          assetName: asset.name,
-          symbol,
-          mint,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
           priority: 'low',
           action: 'deploy_yield',
           title: `${symbol} isn't earning anything`,
-          message: `$${asset.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} sitting idle.`,
+          message: `$${fmtVal(asset.value)} sitting idle.`,
           detail: `Deploy to Perena USD* (9.3% APY) or stake for yield.`,
           emoji: '💤',
           actionLabel: 'Earn Yield',
           actionParams: { type: 'deposit', protocol: 'perena' },
-          value: asset.value,
-          change: price.change24h,
-          timestamp: now,
+          value: asset.value, change: price.change24h, timestamp: now,
         });
       }
     }

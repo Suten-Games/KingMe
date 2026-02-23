@@ -9,6 +9,7 @@ import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
 import { T } from '../../src/theme';
+import EmptyStateCard from '../../src/components/EmptyStateCard';
 
 // ─── Audit helpers ──────────────────────────────────────────────────────────
 type NecessityLevel = 'essential' | 'important' | 'nice_to_have' | 'cuttable' | 'unreviewed';
@@ -252,10 +253,7 @@ export default function ObligationsScreen() {
           )}
 
           {obligations.length === 0 ? (
-            <View style={s.emptyState}>
-              <Text style={s.emptyText}>No obligations yet</Text>
-              <Text style={s.emptySubtext}>Tap "+ Add" to add your first obligation</Text>
-            </View>
+            <EmptyStateCard category="obligations" onAction={() => setShowAddModal(true)} />
           ) : (
             obligations.slice().sort((a, b) => {
               // In audit mode, sort unreviewed first

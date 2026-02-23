@@ -15,11 +15,28 @@ import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
 // Point to your Vercel deployment. In dev, this might be localhost.
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://your-app.vercel.app';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || '';
 
 // Helius or other Solana RPC (you already have HELIUS_API_KEY server-side;
 // for client-side RPC you can use the public endpoint or a dedicated one)
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+
+// ── Validate API_BASE at module load ─────────────────────────
+function getApiBase(): string {
+  if (!API_BASE || API_BASE === 'https://your-app.vercel.app') {
+    console.error(
+      '[JUPITER] ❌ EXPO_PUBLIC_API_URL is not set or is still the placeholder!\n' +
+      '  Current value: "' + API_BASE + '"\n' +
+      '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://your-actual-vercel-url.vercel.app`\n' +
+      '  Then rebuild with `eas build`'
+    );
+    throw new Error(
+      'Swap service not configured. EXPO_PUBLIC_API_URL is missing from this build. ' +
+      'Set it in EAS environment variables and rebuild.'
+    );
+  }
+  return API_BASE;
+}
 
 // ── Well-known Mints (for convenience in client code) ────────
 export const MINTS = {
@@ -102,27 +119,45 @@ function toSmallestUnits(amount: number, decimals: number): string {
 export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
   const { inputMint, outputMint, amount, inputDecimals, userPublicKey, slippageBps = 100 } = params;
 
+  const apiBase = getApiBase(); // throws if not configured
   const decimals = resolveDecimals(inputMint, inputDecimals);
   const amountSmallest = toSmallestUnits(amount, decimals);
+  const url = `${apiBase}/api/swap/quote`;
 
   console.log(`[JUPITER] Getting quote: ${amount} ${inputMint} → ${outputMint} (${amountSmallest} smallest units)`);
+  console.log(`[JUPITER] API URL: ${url}`);
 
-  const response = await fetch(`${API_BASE}/api/swap/quote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      inputMint,
-      outputMint,
-      amount: amountSmallest,
-      userPublicKey,
-      slippageBps,
-      action: 'quote',
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputMint,
+        outputMint,
+        amount: amountSmallest,
+        userPublicKey,
+        slippageBps,
+        action: 'quote',
+      }),
+    });
+  } catch (networkError: any) {
+    console.error(`[JUPITER] Network error fetching ${url}:`, networkError.message);
+    throw new Error(
+      `Cannot reach swap server (${apiBase}). Check your internet connection or verify EXPO_PUBLIC_API_URL is correct.`
+    );
+  }
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: 'Quote request failed' }));
-    throw new Error(err.error || `Quote failed: ${response.status}`);
+    let errorDetail = '';
+    try {
+      const err = await response.json();
+      errorDetail = err.error || err.details || '';
+    } catch {
+      errorDetail = await response.text().catch(() => '');
+    }
+    console.error(`[JUPITER] Quote failed: HTTP ${response.status}`, errorDetail);
+    throw new Error(errorDetail || `Quote failed (HTTP ${response.status})`);
   }
 
   const data = await response.json();
@@ -157,29 +192,53 @@ export async function executeSwap(
     slippageBps = 100,
   } = params;
 
+  let apiBase: string;
+  try {
+    apiBase = getApiBase(); // throws if not configured
+  } catch (configError: any) {
+    return { success: false, error: configError.message };
+  }
+
   const decimals = resolveDecimals(inputMint, inputDecimals);
   const amountSmallest = toSmallestUnits(amount, decimals);
+  const url = `${apiBase}/api/swap/quote`;
 
   console.log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint}`);
+  console.log(`[JUPITER] API URL: ${url}, amount: ${amountSmallest} (${decimals} decimals)`);
 
   try {
     // ── 1. Get serialized swap transaction from edge function ──
-    const response = await fetch(`${API_BASE}/api/swap/quote`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        inputMint,
-        outputMint,
-        amount: amountSmallest,
-        userPublicKey,
-        slippageBps,
-        action: 'swap',
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inputMint,
+          outputMint,
+          amount: amountSmallest,
+          userPublicKey,
+          slippageBps,
+          action: 'swap',
+        }),
+      });
+    } catch (networkError: any) {
+      console.error(`[JUPITER] Network error fetching ${url}:`, networkError.message);
+      throw new Error(
+        `Cannot reach swap server. Check your connection or EXPO_PUBLIC_API_URL (${apiBase}).`
+      );
+    }
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({ error: 'Swap request failed' }));
-      throw new Error(err.error || `Swap failed: ${response.status}`);
+      let errorDetail = '';
+      try {
+        const err = await response.json();
+        errorDetail = err.error || err.details || '';
+      } catch {
+        errorDetail = await response.text().catch(() => '');
+      }
+      console.error(`[JUPITER] Swap API failed: HTTP ${response.status}`, errorDetail);
+      throw new Error(errorDetail || `Swap server error (HTTP ${response.status})`);
     }
 
     const { swapTransaction, quote, lastValidBlockHeight } = await response.json();
@@ -347,4 +406,23 @@ function base64ToUint8Array(base64: string): Uint8Array {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+/**
+ * Check if swap service is properly configured.
+ * Use this to conditionally show/hide swap buttons.
+ */
+export function isSwapConfigured(): boolean {
+  return !!API_BASE && API_BASE !== 'https://your-app.vercel.app';
+}
+
+/**
+ * Get diagnostic info for debugging swap issues.
+ */
+export function getSwapDiagnostics(): { apiUrl: string; rpcUrl: string; configured: boolean } {
+  return {
+    apiUrl: API_BASE || '(not set)',
+    rpcUrl: RPC_URL,
+    configured: isSwapConfigured(),
+  };
 }

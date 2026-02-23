@@ -1,5 +1,5 @@
 // app/(tabs)/profile.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform, Switch } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,13 +13,35 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
 const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
-import PaidAddOns from '@/components/PaidAddOns';
+import PaidAddOns from '../src/components/PaidAddOns';
+
+/** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
+function crossConfirm(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Confirm', style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
+
+/** Cross-platform alert — works on both web and native */
+function crossAlert(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
   const wallets         = useStore((state) => state.wallets);
   const income            = useStore((state) => state.income);
   const avatarType        = useStore((state) => state.settings.avatarType);
+  const animatedAvatar    = useStore((state) => state.settings.animatedAvatar ?? false);
   const assets            = useStore((state) => state.assets);
   const obligations       = useStore((state) => state.obligations);
   const bankAccounts      = useStore((state) => state.bankAccounts);
@@ -46,13 +68,30 @@ export default function ProfileScreen() {
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0);
 
   const handleResetOnboarding = () => {
-    Alert.alert(
+    crossConfirm(
       'Reset All Data?',
-      'This will clear all your data. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Reset', style: 'destructive', onPress: () => resetStore() }
-      ]
+      'This will clear all your data and restart onboarding. Are you sure?',
+      async () => {
+        try {
+          // 1. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
+          await AsyncStorage.clear();
+          console.log('[RESET] AsyncStorage cleared');
+
+          // 2. Reset zustand store to initial state
+          resetStore();
+          console.log('[RESET] Store reset');
+
+          // 3. Navigate to onboarding after a brief delay so state settles
+          setTimeout(() => {
+            router.replace('/onboarding/intro');
+          }, 300);
+        } catch (err) {
+          console.error('[RESET] Error during reset:', err);
+          // Even if something fails, try to navigate
+          resetStore();
+          setTimeout(() => router.replace('/onboarding/intro'), 300);
+        }
+      }
     );
   };
 
@@ -65,20 +104,20 @@ export default function ProfileScreen() {
   const handleImportBackup = () => {
     try {
       importBackup(importJson);
-      Alert.alert('Success', 'Backup imported successfully!');
+      crossAlert('Success', 'Backup imported successfully!');
       setImportJson('');
       setShowImportModal(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to import backup: ' + (error as Error).message);
+      crossAlert('Error', 'Failed to import backup: ' + (error as Error).message);
     }
   };
 
   const handleCopyBackup = async () => {
     try {
       await Clipboard.setStringAsync(backupJson);
-      Alert.alert('Copied!', 'Backup copied to clipboard!');
+      crossAlert('Copied!', 'Backup copied to clipboard!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to copy to clipboard');
+      crossAlert('Error', 'Failed to copy to clipboard');
     }
   };
 
@@ -103,18 +142,18 @@ export default function ProfileScreen() {
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri);
         } else {
-          Alert.alert('Saved', `Backup saved to ${fileUri}`);
+          crossAlert('Saved', `Backup saved to ${fileUri}`);
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to download backup');
+      crossAlert('Error', 'Failed to download backup');
     }
   };
   
   // Arweave backup/restore
   const handleArweaveBackup = async () => {
     if (!connected || !publicKey) {
-      Alert.alert('No Wallet Connected', 'Please connect a wallet first to enable encrypted backup.');
+      crossAlert('No Wallet Connected', 'Please connect a wallet first to enable encrypted backup.');
       return;
     }
 
@@ -151,13 +190,13 @@ export default function ProfileScreen() {
       
       setLastSyncTime(new Date().toISOString());
       
-      Alert.alert(
+      crossAlert(
         'Backup Complete! 🌐',
         `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nYou can restore on any device with this wallet.`
       );
     } catch (error: any) {
       console.error('Backup failed:', error);
-      Alert.alert('Backup Failed', error.message);
+      crossAlert('Backup Failed', error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -165,66 +204,58 @@ export default function ProfileScreen() {
 
   const handleArweaveRestore = async () => {
     if (!connected || !publicKey) {
-      Alert.alert('No Wallet Connected', 'Please connect a wallet first to restore your backup.');
+      crossAlert('No Wallet Connected', 'Please connect a wallet first to restore your backup.');
       return;
     }
 
-    Alert.alert(
+    crossConfirm(
       'Restore from Cloud Backup?',
       'This will replace all current data with your backed-up profile. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'destructive',
-          onPress: async () => {
-            setIsSyncing(true);
-            
-            try {
-              const profileData = await loadBackup(publicKey.toBase58(), signMessage);
-              
-              useStore.setState({
-                bankAccounts: profileData.bankAccounts || [],
-                income: profileData.income || { salary: 0, otherIncome: 0, sources: [] },
-                obligations: profileData.obligations || [],
-                debts: profileData.debts || [],
-                assets: profileData.assets || [],
-                desires: profileData.desires || [],
-                wallets: profileData.wallets || [publicKey.toBase58()],
-                paycheckDeductions: profileData.paycheckDeductions || [],
-                preTaxDeductions: profileData.preTaxDeductions || [],
-                taxes: profileData.taxes || [],
-                postTaxDeductions: profileData.postTaxDeductions || [],
-                // ── Previously missing fields ──
-                bankTransactions: profileData.bankTransactions || [],
-                driftTrades: profileData.driftTrades || [],
-                dailyExpenses: profileData.dailyExpenses || [],
-                investmentTheses: profileData.investmentTheses || [],
-                thesisAlerts: profileData.thesisAlerts || [],
-                cryptoCardBalance: profileData.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
-                expenseTrackingMode: profileData.expenseTrackingMode || 'estimate',
-                freedomHistory: profileData.freedomHistory || [],
-                settings: profileData.settings || useStore.getState().settings,
-                onboardingComplete: profileData.onboardingComplete ?? true,
-              });
-              
-              await useStore.getState().saveProfile();
-              
-              setLastSyncTime(profileData.timestamp);
-              
-              Alert.alert(
-                'Restore Complete! ✅',
-                `Profile restored from backup.\n\nLast backup: ${new Date(profileData.timestamp).toLocaleString()}`
-              );
-            } catch (error: any) {
-              console.error('Restore failed:', error);
-              Alert.alert('Restore Failed', error.message || 'No backup found for this wallet');
-            } finally {
-              setIsSyncing(false);
-            }
-          }
+      async () => {
+        setIsSyncing(true);
+        
+        try {
+          const profileData = await loadBackup(publicKey.toBase58(), signMessage);
+          
+          useStore.setState({
+            bankAccounts: profileData.bankAccounts || [],
+            income: profileData.income || { salary: 0, otherIncome: 0, sources: [] },
+            obligations: profileData.obligations || [],
+            debts: profileData.debts || [],
+            assets: profileData.assets || [],
+            desires: profileData.desires || [],
+            wallets: profileData.wallets || [publicKey.toBase58()],
+            paycheckDeductions: profileData.paycheckDeductions || [],
+            preTaxDeductions: profileData.preTaxDeductions || [],
+            taxes: profileData.taxes || [],
+            postTaxDeductions: profileData.postTaxDeductions || [],
+            bankTransactions: profileData.bankTransactions || [],
+            driftTrades: profileData.driftTrades || [],
+            dailyExpenses: profileData.dailyExpenses || [],
+            investmentTheses: profileData.investmentTheses || [],
+            thesisAlerts: profileData.thesisAlerts || [],
+            cryptoCardBalance: profileData.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
+            expenseTrackingMode: profileData.expenseTrackingMode || 'estimate',
+            freedomHistory: profileData.freedomHistory || [],
+            settings: profileData.settings || useStore.getState().settings,
+            onboardingComplete: profileData.onboardingComplete ?? true,
+          });
+          
+          await useStore.getState().saveProfile();
+          
+          setLastSyncTime(profileData.timestamp);
+          
+          crossAlert(
+            'Restore Complete! ✅',
+            `Profile restored from backup.\n\nLast backup: ${new Date(profileData.timestamp).toLocaleString()}`
+          );
+        } catch (error: any) {
+          console.error('Restore failed:', error);
+          crossAlert('Restore Failed', error.message || 'No backup found for this wallet');
+        } finally {
+          setIsSyncing(false);
         }
-      ]
+      }
     );
   };
 
@@ -326,7 +357,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Business ── */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <TouchableOpacity onPress={() => router.push('/business' as any)} style={styles.businessLink}>
             <LinearGradient colors={['#1a2a40', '#101828', '#0a0e1a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.businessLinkInner}>
@@ -338,7 +369,7 @@ export default function ProfileScreen() {
               <Text style={styles.businessArrow}>→</Text>
             </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* ── Premium Tools ── */}
         <View style={styles.section}>
@@ -352,11 +383,40 @@ export default function ProfileScreen() {
             <View style={styles.row}>
               <Text style={styles.label}>Avatar</Text>
               <Text style={styles.value}>
-                {avatarType === 'male-medium' ? 'Male' : 'Female'}
+                {avatarType === 'male-medium' ? 'Male' : avatarType === 'female-medium' ? 'Female' : 'Male (Dark)'}
               </Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Animated Avatar</Text>
+                <Text style={[styles.label, { fontSize: 11, color: '#555', marginTop: 2 }]}>
+                  Play video instead of static image (where available)
+                </Text>
+              </View>
+              <Switch
+                value={animatedAvatar}
+                onValueChange={(val) => {
+                  useStore.setState((s) => ({
+                    settings: { ...s.settings, animatedAvatar: val },
+                  }));
+                }}
+                trackColor={{ false: '#2a2f3e', true: '#f4c43060' }}
+                thumbColor={animatedAvatar ? '#f4c430' : '#666'}
+              />
             </View>
           </View>
           <AssetSectionSettings />
+        </View>
+
+        {/* ── Quick Actions ── */}
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.backupButton, { backgroundColor: '#1a2a3a' }]}
+            onPress={() => router.push('/onboarding/intro')}
+          >
+            <Text style={[styles.backupButtonText, { color: '#60a5fa' }]}>🎬 Replay Intro</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Backup & Restore ── */}

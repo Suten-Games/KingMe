@@ -7,7 +7,6 @@
 
 import { useState, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
-import { useWallet } from '@/providers/wallet-provider';
 import { useStore } from '../store/useStore';
 import {
   getSwapQuote,
@@ -15,13 +14,14 @@ import {
   scenarioToSwapParams,
   isOnChainScenario,
   formatSwapAmount,
+  isSwapConfigured,
   MINTS,
   type SwapQuote,
   type SwapResult,
   type SwapParams,
 } from '../services/jupiterSwap';
 import type { WhatIfScenario } from '../types';
-
+import { useWallet } from '@/providers/wallet-provider';
 
 export type SwapState =
   | 'idle'
@@ -84,6 +84,15 @@ export function useSwapScenario() {
     });
 
     if (!onChain) return;
+
+    if (!isSwapConfigured()) {
+      setSwapState((prev) => ({
+        ...prev,
+        state: 'error',
+        error: 'Swap service not configured. Set EXPO_PUBLIC_API_URL in EAS and rebuild.',
+      }));
+      return;
+    }
 
     if (!connected || !publicKey) {
       setSwapState((prev) => ({
@@ -150,6 +159,14 @@ export function useSwapScenario() {
     }
 
     // On-chain flow
+    if (!isSwapConfigured()) {
+      Alert.alert(
+        'Swap Not Available',
+        'The swap service isn\'t configured in this build. Set EXPO_PUBLIC_API_URL in EAS environment variables and rebuild.'
+      );
+      return false;
+    }
+
     if (!connected || !publicKey) {
       Alert.alert(
         'Wallet Required',
