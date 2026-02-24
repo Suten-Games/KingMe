@@ -1,7 +1,7 @@
 // src/components/PositionAlertCards.tsx
 // Displays smart position alerts on the home screen with action buttons
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
@@ -12,6 +12,29 @@ import { getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics, fetchM
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generatePositionAlerts, getAlertColor, PositionAlert, AccPlanContext } from '@/services/positionAlerts';
 import { loadAllPlans, computePlanStats } from '@/services/accumulationPlan';
+import { useSwapToast } from './SwapToast';
+import { postSwapUpdate } from '@/utils/postSwapUpdate';
+
+// Platform-safe confirm — Alert.alert is silent on web
+function xConfirm(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Swap to USDC', onPress: onConfirm },
+    ]);
+  }
+}
+
+// Platform-safe alert for errors
+function xAlert(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 
 const DISMISSED_KEY = 'dismissed_position_alerts';
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
@@ -24,6 +47,7 @@ export default function PositionAlertCards() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(0);
+  const { showToast, ToastComponent } = useSwapToast();
 
   // Get crypto assets with their mints
   const cryptoMints = React.useMemo(() => {
@@ -169,83 +193,101 @@ export default function PositionAlertCards() {
     await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify(parsed));
   }, [dismissed]);
 
-  // Handle action button
+  // Handle action button — replaces Alert.alert with styled toast
   const handleAction = useCallback((alert: PositionAlert) => {
     if (alert.actionParams?.type === 'swap') {
-      console.log('🔴 TRIM CLICKED', alert.actionParams);
       const { fromMint, fromSymbol, percentage } = alert.actionParams;
-      const toSymbol = 'USDC';
+      const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
       const dollarValue = Math.round(alert.value * (percentage / 100));
 
-      // Find the asset to get quantity and decimals
+      // Pre-flight checks — still use Alert for errors (not part of the flow)
+      if (!isSwapConfigured()) {
+        const diag = getSwapDiagnostics();
+        xAlert('Swap Not Available', `The swap service isn't configured in this build.\n\nAPI URL: ${diag.apiUrl}\n\nSet EXPO_PUBLIC_API_URL in EAS env vars and rebuild.`);
+        return;
+      }
+      if (!connected || !publicKey) {
+        xAlert('Connect Wallet', 'Connect your wallet first to execute swaps.');
+        return;
+      }
+
       const asset = assets.find(a => {
         const meta = a.metadata as CryptoAsset;
         return meta?.tokenMint === fromMint || meta?.mint === fromMint;
       });
+      if (!asset) {
+        xAlert('Error', 'Could not find asset');
+        return;
+      }
 
-      Alert.alert(
+      // Confirm — xConfirm works on both web and native
+      xConfirm(
         `Trim ${fromSymbol}`,
-        `Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → ${toSymbol}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: `Swap to ${toSymbol}`,
-            onPress: async () => {
-              if (!isSwapConfigured()) {
-                const diag = getSwapDiagnostics();
-                Alert.alert(
-                  'Swap Not Available',
-                  `The swap service isn't configured in this build.\n\nAPI URL: ${diag.apiUrl}\n\nSet EXPO_PUBLIC_API_URL in EAS env vars and rebuild.`
-                );
-                return;
-              }
-              if (!connected || !publicKey) {
-                Alert.alert('Connect Wallet', 'Connect your wallet first to execute swaps.');
-                return;
-              }
-              if (!asset) {
-                Alert.alert('Error', 'Could not find asset');
-                return;
-              }
-
+        `Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → USDC?`,
+        async () => {
               const meta = asset.metadata as CryptoAsset;
               const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
-              const toMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC
-
-              // Fetch real decimals from RPC — don't guess
               const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
+
               console.log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
+
+              // Show loading toast immediately
+              showToast({ type: 'loading', symbol: fromSymbol, percentage });
 
               try {
                 const result = await executeSwap(
                   {
-                    inputMint: fromMint, outputMint: toMint,
-                    amount: quantity,           // human-readable token amount
+                    inputMint: fromMint,
+                    outputMint: toMint,
+                    amount: quantity,
                     userPublicKey: publicKey.toBase58(),
-                    inputDecimals: decimals,    // fetched from chain
+                    inputDecimals: decimals,
                   },
                   signTransaction
                 );
 
                 if (result.success) {
-                  Alert.alert('Swap Complete! 🎉', `Swapped ${fromSymbol} → ${toSymbol}\n\nTx: ${result.signature?.slice(0, 12)}...`);
+                  // Estimate price per token from dollar value + quantity
+                  const pricePerToken = quantity > 0 ? dollarValue / quantity : 0;
+
+                  // Update plan, store, emit event
+                  await postSwapUpdate({
+                    fromMint,
+                    fromSymbol,
+                    tokenAmountSold: quantity,
+                    pricePerToken,
+                    usdReceived: dollarValue,
+                    signature: result.signature || '',
+                  });
+
+                  // Show success toast (replaces Alert.alert)
+                  showToast({
+                    type: 'success',
+                    symbol: fromSymbol,
+                    usdReceived: dollarValue,
+                    signature: result.signature || '',
+                  });
+
+                  // Dismiss the alert card
                   handleDismiss(alert.id);
                 } else if (result.error !== 'Transaction cancelled by user') {
-                  Alert.alert('Swap Failed', result.error || 'Something went wrong');
+                  showToast({ type: 'error', message: result.error || 'Something went wrong' });
+                } else {
+                  // User cancelled — just hide the loading toast
+                  // hideToast is called automatically after 5s, or user taps X
+                  showToast({ type: 'error', message: 'Transaction cancelled.' });
                 }
               } catch (e: any) {
-                Alert.alert('Error', e.message);
+                showToast({ type: 'error', message: e.message });
               }
-            },
-          },
-        ]
+        }
       );
     } else if (alert.actionParams?.type === 'deposit') {
       router.push('/(tabs)/desires');
     } else {
       router.push(`/asset/${alert.assetId}`);
     }
-  }, [router, assets, connected, publicKey, signTransaction, handleDismiss]);
+  }, [router, assets, connected, publicKey, signTransaction, handleDismiss, showToast]);
 
   // Filter out dismissed alerts
   const visibleAlerts = alerts.filter(a => {
@@ -254,7 +296,7 @@ export default function PositionAlertCards() {
   });
 
   if (loading && visibleAlerts.length === 0) {
-    return null; // Don't show loading spinner, just hide until ready
+    return null;
   }
 
   if (visibleAlerts.length === 0) return null;
@@ -327,6 +369,9 @@ export default function PositionAlertCards() {
           <Text style={s.moreText}>+{visibleAlerts.length - 4} more alerts</Text>
         </TouchableOpacity>
       )}
+
+      {/* Toast renders here, floats above everything */}
+      <ToastComponent />
     </View>
   );
 }

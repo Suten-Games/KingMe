@@ -169,11 +169,12 @@ export default function HomeScreen() {
     <View style={styles.content}>
       <SetupChecklist />
       <CashFlowSummary cashFlow={cashFlow} />
-      <PortfolioTrendCard />
-      <GoalsStrip />
+
+      
+      
       <PositionAlertCards  />
       <AccumulationAlerts />
-      <BadgeStrip />
+      
 
       <ThesisAlerts alerts={thesisAlerts} onDismiss={dismissThesisAlert} onReview={(id) => router.push(`/asset/${id}`)} />
 
@@ -226,6 +227,8 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
+      <PortfolioTrendCard />
+
       <TradingIncomeWarning />
 
       {/* ── Recommendations ───────────────────────────────────────── */}
@@ -269,6 +272,12 @@ export default function HomeScreen() {
         onApply={handleApplyScenario}
         swapState={swapState}
       />  
+
+
+      
+      <GoalsStrip />
+      
+
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
       <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => setInfoModal(null)}>
@@ -395,6 +404,13 @@ export default function HomeScreen() {
         <ToolCard emoji="👤" title="Profile & Settings" sub="Accounts and backup"
           colors={['#2a1a40', '#181028']} accent="#a78bfa" onPress={() => router.push('/profile')} />
       </View>
+
+      <View style={styles.toolsSection}>
+        <Text style={styles.toolsSectionTitle}>Badges</Text>
+        <BadgeStrip />
+      </View>
+
+
     </View>
   );
 

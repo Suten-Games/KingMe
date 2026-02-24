@@ -22,6 +22,7 @@ import EmptyStateCard from '@/components/EmptyStateCard';
 import CryptoOpportunityCard from '@/components/CryptoOpportunityCard';
 import AccumulationPlanCard from '@/components/AccumulationPlanCard';
 import { loadAllPlans, createPlan, getPlan, type AccumulationPlan } from '@/services/accumulationPlan';
+import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 
 // ── Build SKRCard props from a store asset ─────────────────
@@ -58,6 +59,7 @@ function isSkrAsset(a: Asset): boolean {
 // ── Accumulation Plans Section ───────────────────────────────────
 function AccumulationPlansSection({ assets }: { assets: Asset[] }) {
   const [plans, setPlans] = useState<AccumulationPlan[]>([]);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,27 +72,105 @@ function AccumulationPlansSection({ assets }: { assets: Asset[] }) {
   if (plans.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 16 }}>
-      <Text style={{ fontSize: 16, fontWeight: '700', color: '#f4c430', marginBottom: 10 }}>
-        🎯 Accumulation Plans
-      </Text>
-      {plans.map(plan => {
-        // Try to find the wallet holding for this mint
-        const held = assets.find(a => (a.metadata as any)?.mint === plan.mint);
-        const walletHolding = held ? (held.metadata as any)?.balance || 0 : undefined;
+    <View style={accSt.container}>
+      {/* Accordion header — matches AssetCategoriesList row style */}
+      <TouchableOpacity
+        style={accSt.header}
+        onPress={() => setExpanded(e => !e)}
+        activeOpacity={0.75}
+      >
+        <View style={accSt.headerLeft}>
+          <CrownIcon color="#f4c430" size={18} />
+          <Text style={accSt.headerTitle}>Accumulation Plans</Text>
+          <View style={accSt.badge}>
+            <Text style={accSt.badgeText}>{plans.length}</Text>
+          </View>
+        </View>
+        <Text style={[accSt.chevron, expanded && accSt.chevronOpen]}>▾</Text>
+      </TouchableOpacity>
 
-        return (
-          <AccumulationPlanCard
-            key={plan.mint}
-            mint={plan.mint}
-            symbol={plan.symbol}
-            currentHolding={walletHolding}
-          />
-        );
-      })}
+      {/* Collapsible body */}
+      {expanded && (
+        <View style={accSt.body}>
+          {plans.map(plan => {
+            const held = assets.find(a =>
+              (a.metadata as any)?.mint === plan.mint ||
+              (a.metadata as any)?.tokenMint === plan.mint
+            );
+            const walletHolding = held
+              ? ((held.metadata as any)?.quantity ?? (held.metadata as any)?.balance)
+              : undefined;
+
+            return (
+              <AccumulationPlanCard
+                key={plan.mint}
+                mint={plan.mint}
+                symbol={plan.symbol}
+                currentHolding={walletHolding}
+              />
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
+
+const accSt = StyleSheet.create({
+  container: {
+    marginTop: 16,
+    backgroundColor: '#0c1020',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f4c43020',
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter_700Bold',
+    color: '#f4c430',
+    letterSpacing: 0.2,
+  },
+  badge: {
+    backgroundColor: '#f4c43020',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#f4c43030',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    color: '#f4c430',
+  },
+  chevron: {
+    fontSize: 16,
+    color: '#f4c43080',
+    transform: [{ rotate: '-90deg' }],
+  },
+  chevronOpen: {
+    transform: [{ rotate: '0deg' }],
+  },
+  body: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f4c43015',
+  },
+});
 
 export default function AssetsScreen() {
   const router = useRouter();
@@ -330,7 +410,7 @@ export default function AssetsScreen() {
           onPress={() => router.push('/watchlist')}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 18 }}>🎯</Text>
+          <CrownIcon color="#f4c430" size={20} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 14, fontWeight: '700', color: '#f4c430' }}>Coin Watchlist</Text>
             <Text style={{ fontSize: 12, color: '#888' }}>Track coins for good entries</Text>

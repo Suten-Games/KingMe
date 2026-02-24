@@ -9,6 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { loadBackup, saveBackup } from '@/services/encryptedBackup';
+import { buildFullBackup, restoreAsyncData, deserializeBackup, serializeBackup } from '@/services/fullBackup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
 const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
@@ -95,16 +96,32 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleExportBackup = () => {
-    const json = exportBackup();
-    setBackupJson(json);
-    setShowBackupModal(true);
+  const handleExportBackup = async () => {
+    try {
+      const storeJson = exportBackup();
+      const storeData = JSON.parse(storeJson);
+      const fullBackup = await buildFullBackup(storeData);
+      setBackupJson(JSON.stringify(fullBackup));
+      setShowBackupModal(true);
+    } catch (error) {
+      crossAlert('Error', 'Failed to create backup: ' + (error as Error).message);
+    }
   };
 
-  const handleImportBackup = () => {
+  const handleImportBackup = async () => {
     try {
-      importBackup(importJson);
-      crossAlert('Success', 'Backup imported successfully!');
+      const parsed = JSON.parse(importJson);
+      const isV2 = parsed?.version >= 2 && parsed?.store;
+      const storeJson = isV2 ? JSON.stringify(parsed.store) : importJson;
+      importBackup(storeJson);
+
+      // Restore AsyncStorage satellite data if v2
+      if (isV2 && parsed.asyncStorage) {
+        const count = await restoreAsyncData(parsed.asyncStorage);
+        crossAlert('Success', `Backup imported! + ${count} feature stores restored.`);
+      } else {
+        crossAlert('Success', 'Backup imported successfully!');
+      }
       setImportJson('');
       setShowImportModal(false);
     } catch (error) {
@@ -160,7 +177,7 @@ export default function ProfileScreen() {
     setIsSyncing(true);
     
     try {
-      const profileData = {
+      const storeData = {
         bankAccounts,
         income,
         obligations: useStore.getState().obligations,
@@ -172,27 +189,35 @@ export default function ProfileScreen() {
         preTaxDeductions: useStore.getState().preTaxDeductions,
         taxes: useStore.getState().taxes,
         postTaxDeductions: useStore.getState().postTaxDeductions,
-        // ── Previously missing fields ──
         bankTransactions: useStore.getState().bankTransactions || [],
         driftTrades: useStore.getState().driftTrades || [],
         dailyExpenses: useStore.getState().dailyExpenses || [],
         investmentTheses: useStore.getState().investmentTheses || [],
         thesisAlerts: useStore.getState().thesisAlerts || [],
+        whatIfScenarios: useStore.getState().whatIfScenarios || [],
         cryptoCardBalance: useStore.getState().cryptoCardBalance,
         expenseTrackingMode: useStore.getState().expenseTrackingMode,
         freedomHistory: useStore.getState().freedomHistory || [],
         settings: useStore.getState().settings,
         onboardingComplete: useStore.getState().onboardingComplete,
-        timestamp: new Date().toISOString(),
+        // Badge system
+        earnedBadges: useStore.getState().earnedBadges || [],
+        trimCount: useStore.getState().trimCount ?? 0,
+        importWeeks: useStore.getState().importWeeks ?? [],
+        appOpenDays: useStore.getState().appOpenDays ?? [],
       };
+
+      // Build full backup: store + ALL AsyncStorage satellite data
+      // (goals, accumulation plans, watchlist, portfolio snapshots, business data, etc.)
+      const fullBackup = await buildFullBackup(storeData);
       
-      const txId = await saveBackup(profileData, signMessage, publicKey.toBase58());
+      const txId = await saveBackup(fullBackup, signMessage, publicKey.toBase58());
       
       setLastSyncTime(new Date().toISOString());
       
       crossAlert(
         'Backup Complete! 🌐',
-        `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nYou can restore on any device with this wallet.`
+        `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nIncludes: store data + ${Object.keys(fullBackup.asyncStorage).length} feature stores (goals, plans, snapshots, etc.)\n\nYou can restore on any device with this wallet.`
       );
     } catch (error: any) {
       console.error('Backup failed:', error);
@@ -215,7 +240,12 @@ export default function ProfileScreen() {
         setIsSyncing(true);
         
         try {
-          const profileData = await loadBackup(publicKey.toBase58(), signMessage);
+          const rawBackup = await loadBackup(publicKey.toBase58(), signMessage);
+
+          // Handle both v1 (flat store) and v2 (store + asyncStorage) formats
+          const isV2 = rawBackup?.version >= 2 && rawBackup?.store;
+          const profileData = isV2 ? rawBackup.store : rawBackup;
+          const asyncData = isV2 ? rawBackup.asyncStorage : {};
           
           useStore.setState({
             bankAccounts: profileData.bankAccounts || [],
@@ -234,20 +264,33 @@ export default function ProfileScreen() {
             dailyExpenses: profileData.dailyExpenses || [],
             investmentTheses: profileData.investmentTheses || [],
             thesisAlerts: profileData.thesisAlerts || [],
+            whatIfScenarios: profileData.whatIfScenarios || [],
             cryptoCardBalance: profileData.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
             expenseTrackingMode: profileData.expenseTrackingMode || 'estimate',
             freedomHistory: profileData.freedomHistory || [],
-            settings: profileData.settings || useStore.getState().settings,
+            settings: { ...useStore.getState().settings, ...(profileData.settings || {}) },
             onboardingComplete: profileData.onboardingComplete ?? true,
+            // Badge system
+            earnedBadges: profileData.earnedBadges || [],
+            trimCount: profileData.trimCount ?? 0,
+            importWeeks: profileData.importWeeks ?? [],
+            appOpenDays: profileData.appOpenDays ?? [],
           });
           
           await useStore.getState().saveProfile();
+
+          // Restore AsyncStorage satellite data (goals, plans, snapshots, etc.)
+          let asyncCount = 0;
+          if (asyncData && Object.keys(asyncData).length > 0) {
+            asyncCount = await restoreAsyncData(asyncData);
+          }
           
-          setLastSyncTime(profileData.timestamp);
+          const backupTime = isV2 ? rawBackup.timestamp : profileData.timestamp;
+          setLastSyncTime(backupTime);
           
           crossAlert(
             'Restore Complete! ✅',
-            `Profile restored from backup.\n\nLast backup: ${new Date(profileData.timestamp).toLocaleString()}`
+            `Profile restored from backup.${asyncCount > 0 ? `\n\n+ ${asyncCount} feature stores restored (goals, plans, snapshots, etc.)` : ''}\n\nLast backup: ${backupTime ? new Date(backupTime).toLocaleString() : 'Unknown'}`
           );
         } catch (error: any) {
           console.error('Restore failed:', error);
@@ -357,7 +400,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── Business ── */}
-        {/* <View style={styles.section}>
+        <View style={styles.section}>
           <TouchableOpacity onPress={() => router.push('/business' as any)} style={styles.businessLink}>
             <LinearGradient colors={['#1a2a40', '#101828', '#0a0e1a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.businessLinkInner}>
@@ -369,7 +412,7 @@ export default function ProfileScreen() {
               <Text style={styles.businessArrow}>→</Text>
             </LinearGradient>
           </TouchableOpacity>
-        </View> */}
+        </View>
 
         {/* ── Premium Tools ── */}
         <View style={styles.section}>

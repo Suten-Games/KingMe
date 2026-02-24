@@ -10,6 +10,7 @@ import {
   Modal, ScrollView, Platform, Alert as RNAlert, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import {
   getPlan, savePlan, createPlan, addEntry, removeEntry,
   computePlanStats, generateAccSignals, formatNum, formatPrice,
@@ -31,11 +32,12 @@ interface Props {
   currentHolding?: number;   // from wallet sync — if available, show alongside plan
   allTimeLow?: number | null;
   compact?: boolean;         // compact mode for home screen alerts
+  assetId?: string;          // passed in compact mode to enable View/Swap navigation
 }
 
 export default function AccumulationPlanCard({
   mint, symbol, currentPrice: propPrice, currentHolding: walletHolding,
-  allTimeLow, compact = false,
+  allTimeLow, compact = false, assetId,
 }: Props) {
   const [plan, setPlan] = useState<AccumulationPlan | null>(null);
   const [stats, setStats] = useState<PlanStats | null>(null);
@@ -46,6 +48,8 @@ export default function AccumulationPlanCard({
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [expanded, setExpanded] = useState(!compact);
+
+  const router = useRouter();
 
   // Setup form
   const [setupTarget, setSetupTarget] = useState('');
@@ -242,6 +246,11 @@ export default function AccumulationPlanCard({
 
   // ── Compact mode (home alerts) ───────────────────────────────
   if (compact && topSignal) {
+    const isTrimSignal = topSignal.type === 'above_entry_trim' || topSignal.type === 'strong_above_entry';
+    const isBuySignal = topSignal.type === 'below_entry_accumulate' || topSignal.type === 'deep_below_entry' || topSignal.type === 'bounce_detected';
+    const actionLabel = isTrimSignal ? '✂️ Swap' : isBuySignal ? '📥 Buy' : '📊 View';
+    const actionColor = isTrimSignal ? '#f4c430' : isBuySignal ? '#4ade80' : '#60a5fa';
+
     return (
       <LinearGradient
         colors={[topSignal.color + '15', '#0a0e1a']}
@@ -256,9 +265,30 @@ export default function AccumulationPlanCard({
         </View>
         <View style={st.compactMeta}>
           <Text style={st.compactMetaText}>
-            {formatNum(stats.currentHolding)}/{formatNum(plan.targetAmount)} tokens · Avg: ${formatPrice(stats.costBasis)}
+            {formatNum(walletHolding ?? stats.currentHolding)}/{formatNum(plan.targetAmount)} tokens · Avg: ${formatPrice(stats.costBasis)}
+            {walletHolding !== undefined && Math.abs(walletHolding - stats.currentHolding) > 1 && (
+              <Text style={{ color: '#60a5fa' }}>{' '}(wallet)</Text>
+            )}
           </Text>
         </View>
+        {assetId && (
+          <View style={st.compactActions}>
+            <TouchableOpacity
+              style={[st.compactActionBtn, { backgroundColor: actionColor + '20', borderColor: actionColor + '50' }]}
+              onPress={() => router.push(`/asset/${assetId}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={[st.compactActionText, { color: actionColor }]}>{actionLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={st.compactViewBtn}
+              onPress={() => router.push(`/asset/${assetId}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={st.compactViewText}>Details →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </LinearGradient>
     );
   }
@@ -519,6 +549,11 @@ const st = StyleSheet.create({
   compactMessage: { fontSize: 12, color: '#b0b0b8', lineHeight: 16 },
   compactMeta: { marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#2a305030' },
   compactMetaText: { fontSize: 11, color: '#888' },
+  compactActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  compactActionBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+  compactActionText: { fontSize: 13, fontFamily: 'Inter_700Bold', fontWeight: '700' },
+  compactViewBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#2a2f3e', marginLeft: 'auto' as any },
+  compactViewText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: '#f4c430' },
 
   // Full card
   card: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#2a305040', marginBottom: 12 },

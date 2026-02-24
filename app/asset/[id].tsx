@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import ThesisModal from '../../src/components/ThesisModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
+import AssetTargetSection from '@/components/AssetTargetSection';
+import SwapSection from '../../src/components/SwapSection';
 import type { Asset, RealEstateAsset, StockAsset } from '../../src/types';
-import AssetTargetSection from '@/components/assets/AssetTargetSection';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -407,6 +408,11 @@ export default function AssetDetailScreen() {
         {/* Accumulation Target — crypto only */}
         {asset.type === 'crypto' && (
           <AssetTargetSection asset={asset} />
+        )}
+
+        {/* Swap — crypto only */}
+        {asset.type === 'crypto' && (
+          <SwapSection asset={asset} />
         )}
 
         {/* Thesis Modal */}

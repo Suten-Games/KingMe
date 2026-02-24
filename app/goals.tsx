@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../src/store/useStore';
+import { SwapEvents } from '../src/utils/swapEvents';
 import {
   loadGoals, saveGoals, addGoal, updateGoal, removeGoal,
   refreshGoalProgress, calcGoalProgress, sortByReachability,
@@ -114,6 +115,14 @@ export default function GoalsScreen() {
   }, [debts, bankAccounts, assets, obligations]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Re-refresh immediately when any swap completes (from any screen)
+  useEffect(() => {
+    const unsub = SwapEvents.on(() => {
+      refresh();
+    });
+    return () => { unsub(); };
+  }, [refresh]);
 
   // ── Handlers ─────────────────────────────────────────────────
   const resetForm = () => {

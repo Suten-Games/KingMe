@@ -1,6 +1,8 @@
 // src/components/AccumulationAlerts.tsx
-// Shows compact accumulation signals on the home screen
-import React, { useState, useEffect } from 'react';
+// Shows compact accumulation signals on the home screen.
+// Reloads automatically when a swap completes (via SwapEvents bus).
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import {
   loadAllPlans, computePlanStats, generateAccSignals,
@@ -8,65 +10,109 @@ import {
 } from '@/services/accumulationPlan';
 import { getTokenPriceData } from '../services/priceTracker';
 import AccumulationPlanCard from './AccumulationPlanCard';
+import { SwapEvents } from '@/utils/swapEvents';
+import { useStore } from '@/store/useStore';
+import type { CryptoAsset } from '@/types';
 
 export default function AccumulationAlerts() {
+  const assets = useStore(s => s.assets);
+
   const [planAlerts, setPlanAlerts] = useState<Array<{
     plan: AccumulationPlan;
     signals: AccSignal[];
     price: number;
     atl: number | null;
-  }>>([]);
+    assetId?: string;
+    walletBalance?: number;
+  }>>([]); 
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const plans = await loadAllPlans();
-        const mints = Object.keys(plans);
-        if (mints.length === 0) return;
-
-        const symbolMap: Record<string, string> = {};
-        mints.forEach(m => { symbolMap[m] = plans[m].symbol; });
-
-        const priceData = await getTokenPriceData(mints, symbolMap);
-        const results: typeof planAlerts = [];
-
-        for (const mint of mints) {
-          const plan = plans[mint];
-          if (plan.entries.length === 0) continue;
-
-          const pd = priceData[mint];
-          const price = pd?.currentPrice || 0;
-          if (price <= 0) continue;
-
-          const stats = computePlanStats(plan, price);
-          const signals = generateAccSignals(plan, stats, price, null);
-          if (signals.length > 0) {
-            results.push({ plan, signals, price, atl: null });
-          }
-        }
-
-        if (!cancelled) setPlanAlerts(results);
-      } catch (err) {
-        console.error('[ACC_ALERTS] Error:', err);
+  // Build mint → assetId and mint → wallet balance lookups from the store
+  const { mintToAssetId, mintToBalance } = React.useMemo(() => {
+    const mintToAssetId: Record<string, string> = {};
+    const mintToBalance: Record<string, number> = {};
+    assets.forEach(a => {
+      const meta = a.metadata as CryptoAsset;
+      const mint = meta?.tokenMint || meta?.mint;
+      if (mint) {
+        mintToAssetId[mint] = a.id;
+        const bal = meta?.quantity ?? meta?.balance;
+        if (bal !== undefined) mintToBalance[mint] = bal;
       }
+    });
+    return { mintToAssetId, mintToBalance };
+  }, [assets]);
+
+  const load = useCallback(async () => {
+    try {
+      const plans = await loadAllPlans();
+      const mints = Object.keys(plans);
+      if (mints.length === 0) {
+        setPlanAlerts([]);
+        return;
+      }
+
+      const symbolMap: Record<string, string> = {};
+      mints.forEach(m => { symbolMap[m] = plans[m].symbol; });
+
+      const priceData = await getTokenPriceData(mints, symbolMap);
+      const results: typeof planAlerts = [];
+
+      for (const mint of mints) {
+        const plan = plans[mint];
+        if (plan.entries.length === 0) continue;
+
+        const pd = priceData[mint];
+        const price = pd?.currentPrice || 0;
+        if (price <= 0) continue;
+
+        const stats = computePlanStats(plan, price);
+        const signals = generateAccSignals(plan, stats, price, null);
+        if (signals.length > 0) {
+          results.push({
+            plan,
+            signals,
+            price,
+            atl: null,
+            assetId: mintToAssetId[mint],
+            walletBalance: mintToBalance[mint],
+          });
+        }
+      }
+
+      setPlanAlerts(results);
+    } catch (err) {
+      console.error('[ACC_ALERTS] Error:', err);
     }
+  }, [mintToAssetId]);
+
+  // Initial load
+  useEffect(() => {
     load();
-    return () => { cancelled = true; };
-  }, []);
+  }, [load]);
+
+  // Re-load whenever a swap completes
+  useEffect(() => {
+    const unsubscribe = SwapEvents.on((payload) => {
+      console.log(`[ACC_ALERTS] Swap detected for ${payload.symbol}, reloading signals…`);
+      load();
+    });
+    return () => { unsubscribe(); };
+  }, [load]);
 
   if (planAlerts.length === 0) return null;
 
   return (
     <View style={st.container}>
       <Text style={st.header}>🎯 Accumulation Signals</Text>
-      {planAlerts.map(({ plan, price, atl }) => (
+      {planAlerts.map(({ plan, price, atl, assetId, walletBalance }) => (
         <AccumulationPlanCard
           key={plan.mint}
           mint={plan.mint}
           symbol={plan.symbol}
           currentPrice={price}
           allTimeLow={atl}
+          assetId={assetId}
+          currentHolding={walletBalance}
           compact
         />
       ))}

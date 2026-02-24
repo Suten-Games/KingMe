@@ -981,6 +981,9 @@ export const useStore = create<AppState>((set, get) => ({
           dailyExpenses: saved.dailyExpenses ?? initialState.dailyExpenses,
           cryptoCardBalance: saved.cryptoCardBalance ?? initialState.cryptoCardBalance,
           freedomHistory: saved.freedomHistory ?? initialState.freedomHistory,
+          investmentTheses: saved.investmentTheses ?? [],
+          thesisAlerts: saved.thesisAlerts ?? [],
+          whatIfScenarios: saved.whatIfScenarios ?? [],
           // Ensure expenseTrackingMode defaults if missing
           expenseTrackingMode: saved.expenseTrackingMode ?? initialState.expenseTrackingMode,
           // Badge system
@@ -1019,6 +1022,7 @@ export const useStore = create<AppState>((set, get) => ({
         driftTrades: state.driftTrades || [],
         investmentTheses: state.investmentTheses || [],
         thesisAlerts: state.thesisAlerts || [],
+        whatIfScenarios: state.whatIfScenarios || [],
         dailyExpenses: state.dailyExpenses || [],
         cryptoCardBalance: state.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
         expenseTrackingMode: state.expenseTrackingMode || 'estimate',
@@ -1071,6 +1075,9 @@ export const useStore = create<AppState>((set, get) => ({
         cryptoCardBalance: imported.cryptoCardBalance ?? initialState.cryptoCardBalance,
         freedomHistory: imported.freedomHistory ?? initialState.freedomHistory,
         expenseTrackingMode: imported.expenseTrackingMode ?? initialState.expenseTrackingMode,
+        investmentTheses: imported.investmentTheses ?? [],
+        thesisAlerts: imported.thesisAlerts ?? [],
+        whatIfScenarios: imported.whatIfScenarios ?? [],
         // Badge system
         earnedBadges: imported.earnedBadges ?? initialState.earnedBadges,
         trimCount: imported.trimCount ?? 0,

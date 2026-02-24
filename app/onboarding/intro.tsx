@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AVATAR_PREVIEWS } from '../../src/utils/constants';
 import { useWallet } from '../../src/providers/wallet-provider';
 import { loadBackup } from '../../src/services/encryptedBackup';
+import { restoreAsyncData } from '../../src/services/fullBackup';
 import { useStore } from '../../src/store/useStore';
 import WalletPickerModal from '../../src/components/WalletPickerModal';
 import { T } from '../../src/theme';
@@ -41,7 +42,13 @@ export default function OnboardingIntro() {
 
   const attemptRestore = async (walletAddress: string) => {
     try {
-      const profileData = await loadBackup(walletAddress, signMessage);
+      const rawBackup = await loadBackup(walletAddress, signMessage);
+
+      // Handle v1 (flat store) and v2 (store + asyncStorage) formats
+      const isV2 = rawBackup?.version >= 2 && rawBackup?.store;
+      const profileData = isV2 ? rawBackup.store : rawBackup;
+      const asyncData = isV2 ? rawBackup.asyncStorage : {};
+
       useStore.setState({
         bankAccounts: profileData.bankAccounts || [],
         income: profileData.income || { salary: 0, otherIncome: 0, sources: [] },
@@ -59,13 +66,25 @@ export default function OnboardingIntro() {
         dailyExpenses: profileData.dailyExpenses || [],
         investmentTheses: profileData.investmentTheses || [],
         thesisAlerts: profileData.thesisAlerts || [],
+        whatIfScenarios: profileData.whatIfScenarios || [],
         cryptoCardBalance: profileData.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
         expenseTrackingMode: profileData.expenseTrackingMode || 'estimate',
         freedomHistory: profileData.freedomHistory || [],
-        settings: profileData.settings || useStore.getState().settings,
+        settings: { ...useStore.getState().settings, ...(profileData.settings || {}) },
         onboardingComplete: true,
+        // Badge system
+        earnedBadges: profileData.earnedBadges || [],
+        trimCount: profileData.trimCount ?? 0,
+        importWeeks: profileData.importWeeks ?? [],
+        appOpenDays: profileData.appOpenDays ?? [],
       });
       await useStore.getState().saveProfile();
+
+      // Restore AsyncStorage satellite data (goals, plans, snapshots, etc.)
+      if (asyncData && Object.keys(asyncData).length > 0) {
+        await restoreAsyncData(asyncData);
+      }
+
       router.replace('/(tabs)');
     } catch (err: any) {
       console.error('Restore failed:', err);
@@ -261,7 +280,7 @@ export default function OnboardingIntro() {
             <Text style={st.pageSub}>A fully set up dashboard tracking everything</Text>
             <View style={st.demoContainer}>
               <View style={st.demoHeader}>
-                <Image source={AVATAR_PREVIEWS['male-medium']} style={st.demoAvatar} resizeMode="cover" />
+                <Image source={AVATAR_PREVIEWS['male-dark']} style={st.demoAvatar} resizeMode="cover" />
                 <View style={st.demoScoreBubble}>
                   <Text style={st.demoScoreValue}>4.6y</Text>
                   <Text style={st.demoScoreLabel}>freedom</Text>
