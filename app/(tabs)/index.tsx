@@ -671,11 +671,29 @@ function ToolCard({ emoji, title, sub, colors, accent, onPress }: {
 
 // ─── Phase insight ───────────────────────────────────────────────────────────
 function getInsight(cf: ReturnType<typeof analyzeAllAccounts>, freedom: any) {
-  if (cf.healthStatus === 'critical') return { emoji: '⚡', title: 'Cash flow needs attention', body: cf.totalMonthlyNet < 0 ? `You're spending ${Math.abs(cf.totalMonthlyNet).toFixed(0)} more than you earn each month.` : cf.healthMessage };
-  if (cf.healthStatus === 'struggling') return { emoji: '🏗️', title: 'Building the foundation', body: `Only $${cf.totalMonthlyNet.toFixed(0)}/mo surplus. Trim obligations or boost income.` };
-  if (cf.healthStatus === 'stable') return { emoji: '🛡️', title: 'Emergency fund in progress', body: `You're saving, but runway is under 3 months. Keep building.` };
-  if (cf.healthStatus === 'building') return { emoji: '📈', title: 'Ready to invest', body: `Runway is solid. Deploy your $${cf.totalMonthlyNet.toFixed(0)}/mo surplus into yield.` };
-  return { emoji: '🚀', title: 'Invest aggressively', body: `${(cf.totalBalance / (cf.totalMonthlyObligations + cf.totalMonthlyDebtPayments || 1)).toFixed(1)} months runway, $${cf.totalMonthlyNet.toFixed(0)}/mo to deploy. Push toward ${freedom.isKinged ? 'legacy' : 'KINGED'}.` };
+  const monthlyBurn = cf.totalMonthlyObligations + cf.totalMonthlyDebtPayments;
+  const runwayMonths = monthlyBurn > 0 ? cf.liquidAssets / monthlyBurn : Infinity;
+  const surplus = cf.totalMonthlyNet;
+  const fmtK = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : `$${n.toFixed(0)}`;
+
+  if (cf.healthStatus === 'critical') {
+    return { emoji: '⚡', title: 'Cash flow needs attention', body: cf.totalMonthlyNet < 0 ? `Spending $${Math.abs(surplus).toFixed(0)}/mo more than you earn. Fix this before anything else.` : cf.healthMessage };
+  }
+  if (cf.healthStatus === 'struggling') {
+    return { emoji: '🏗️', title: 'Building the foundation', body: `$${surplus.toFixed(0)}/mo surplus — thin margin. Focus on cutting obligations or boosting income.` };
+  }
+  if (cf.healthStatus === 'stable') {
+    return { emoji: '🛡️', title: 'Stacking reserves', body: `${runwayMonths.toFixed(0)} months of runway. Keep building toward 6+ months before going aggressive.` };
+  }
+  if (cf.healthStatus === 'building') {
+    return { emoji: '📈', title: 'Ready to deploy', body: `${runwayMonths.toFixed(0)} months runway, ${fmtK(surplus)}/mo surplus. Start deploying into yield-bearing assets.` };
+  }
+  // thriving
+  if (freedom.isKinged) {
+    return { emoji: '👑', title: 'You\'re KINGED', body: `Passive income covers all expenses. ${fmtK(surplus)}/mo surplus to compound or enjoy.` };
+  }
+  const pctToKinged = freedom.dailyNeeds > 0 ? Math.round((freedom.dailyAssetIncome / freedom.dailyNeeds) * 100) : 0;
+  return { emoji: '🚀', title: 'Compounding toward freedom', body: `${(runwayMonths / 12).toFixed(1)}y runway, ${fmtK(surplus)}/mo to deploy. Passive income covers ${pctToKinged}% of expenses.` };
 }
 
 const styles = StyleSheet.create({
