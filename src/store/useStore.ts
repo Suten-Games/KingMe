@@ -11,7 +11,7 @@ import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
 import { generateSmartScenarios } from '../utils/scenarioGenerator';
-import { BankTransaction } from '@/types/bankTransactionTypes';
+import { BankTransaction, CustomCategoryDef } from '@/types/bankTransactionTypes';
 import { getISODate, getISOWeek } from '../services/badgeEngine';
 import {
   generateWindfallPlan,
@@ -131,6 +131,10 @@ interface AppState extends UserProfile {
   recordImportWeek: () => void;
   recordAppOpen: () => void;
 
+  setMonthlyDiscretionary: (amount: number) => void;
+  addCustomCategory: (key: string, def: CustomCategoryDef) => void;
+  removeCustomCategory: (key: string) => void;
+
   resetStore: () => void;
 }
 
@@ -168,6 +172,8 @@ const initialState: UserProfile = {
   whatIfScenarios: [],
   investmentTheses: [],
   thesisAlerts: [],
+  monthlyDiscretionary: 0,
+  customCategories: {},
   earnedBadges: [],
   trimCount: 0,
   importWeeks: [],
@@ -867,6 +873,19 @@ export const useStore = create<AppState>((set, get) => ({
   setExpenseTrackingMode: (mode) =>
     set({ expenseTrackingMode: mode }),
 
+  setMonthlyDiscretionary: (amount) => set({ monthlyDiscretionary: amount }),
+
+  addCustomCategory: (key, def) =>
+    set((state) => ({
+      customCategories: { ...state.customCategories, [key]: def },
+    })),
+
+  removeCustomCategory: (key) =>
+    set((state) => {
+      const { [key]: _, ...rest } = state.customCategories;
+      return { customCategories: rest };
+    }),
+
   setCryptoCardBalance: (balance) =>
     set({
       cryptoCardBalance: {
@@ -1091,12 +1110,23 @@ export const useStore = create<AppState>((set, get) => ({
           whatIfScenarios: saved.whatIfScenarios ?? [],
           // Ensure expenseTrackingMode defaults if missing
           expenseTrackingMode: saved.expenseTrackingMode ?? initialState.expenseTrackingMode,
+          monthlyDiscretionary: saved.monthlyDiscretionary ?? initialState.monthlyDiscretionary,
+          customCategories: saved.customCategories ?? initialState.customCategories,
           // Badge system
           earnedBadges: saved.earnedBadges ?? initialState.earnedBadges,
           trimCount: saved.trimCount ?? 0,
           importWeeks: saved.importWeeks ?? [],
           appOpenDays: saved.appOpenDays ?? [],
         };
+        // Re-sync Drift trading income for current month.
+        // Without this, a stale income source from last month persists
+        // until the user adds/removes a trade (the only other sync triggers).
+        const driftTrades = merged.driftTrades || [];
+        const incomeSources = merged.income?.sources || [];
+        const defaultAccount = getDefaultDriftIncomeAccount(merged.bankAccounts || []);
+        const syncedSources = syncDriftIncomeSource(driftTrades, incomeSources, defaultAccount);
+        merged.income = { ...merged.income, sources: syncedSources };
+
         set(merged);
         console.log('Profile loaded successfully');
       }
@@ -1132,6 +1162,8 @@ export const useStore = create<AppState>((set, get) => ({
         cryptoCardBalance: state.cryptoCardBalance || { currentBalance: 0, lastUpdated: new Date().toISOString() },
         expenseTrackingMode: state.expenseTrackingMode || 'estimate',
         freedomHistory: state.freedomHistory || [],
+        monthlyDiscretionary: state.monthlyDiscretionary || 0,
+        customCategories: state.customCategories || {},
         settings: state.settings,
         onboardingComplete: state.onboardingComplete,
         lastSynced: new Date().toISOString(),
@@ -1183,6 +1215,7 @@ export const useStore = create<AppState>((set, get) => ({
         investmentTheses: imported.investmentTheses ?? [],
         thesisAlerts: imported.thesisAlerts ?? [],
         whatIfScenarios: imported.whatIfScenarios ?? [],
+        customCategories: imported.customCategories ?? initialState.customCategories,
         // Badge system
         earnedBadges: imported.earnedBadges ?? initialState.earnedBadges,
         trimCount: imported.trimCount ?? 0,
