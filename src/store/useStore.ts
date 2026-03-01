@@ -468,11 +468,22 @@ export const useStore = create<AppState>((set, get) => ({
 
   toggleDebtPaid: (id: string) => {
     set((state) => ({
-      debts: state.debts.map(d =>
-        d.id === id
-          ? { ...d, isPaidThisMonth: !d.isPaidThisMonth, lastPaidDate: new Date().toISOString() }
-          : d
-      ),
+      debts: state.debts.map(d => {
+        if (d.id !== id) return d;
+        const wasPaid = d.isPaidThisMonth;
+        const currentBalance = d.balance ?? d.principal;
+        // When marking paid: reduce balance by monthly payment
+        // When unmarking: restore the payment
+        const newBalance = wasPaid
+          ? currentBalance + d.monthlyPayment
+          : Math.max(0, currentBalance - d.monthlyPayment);
+        return {
+          ...d,
+          isPaidThisMonth: !wasPaid,
+          lastPaidDate: new Date().toISOString(),
+          balance: newBalance,
+        };
+      }),
     }));
   },
 
@@ -588,7 +599,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   addDebt: (debt) =>
     set((state) => ({
-      debts: [...state.debts, debt],
+      debts: [...state.debts, { ...debt, balance: debt.balance ?? debt.principal }],
     })),
 
   removeDebt: (debtId) =>

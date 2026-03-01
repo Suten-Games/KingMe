@@ -6,8 +6,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadAllPlans, computePlanStats } from './accumulationPlan';
-import { fetchPrices } from './priceTracker';
+// accumulationPlan module removed — token goals now sync directly from store assets
 
 const GOALS_KEY = 'kingme_goals';
 
@@ -113,23 +112,6 @@ export async function refreshGoalProgress(
     assets: Array<{ id: string; value: number; metadata?: any }>;
   }
 ): Promise<Goal[]> {
-  // Load accumulation plans for crypto goals
-  const accPlans = await loadAllPlans();
-
-  // Collect mints that need price data
-  const mintsNeedingPrice: string[] = [];
-  for (const g of goals) {
-    if (g.autoSource?.type === 'accumulation_plan' && g.mint) {
-      mintsNeedingPrice.push(g.mint);
-    }
-  }
-
-  // Fetch prices for accumulation plans
-  let prices: Record<string, number> = {};
-  if (mintsNeedingPrice.length > 0) {
-    try { prices = await fetchPrices(mintsNeedingPrice); } catch {}
-  }
-
   return goals.map(goal => {
     if (!goal.autoSource) return goal;
 
@@ -137,12 +119,18 @@ export async function refreshGoalProgress(
     let newAmount = goal.currentAmount;
 
     switch (src.type) {
-      case 'accumulation_plan': {
-        const plan = accPlans[src.sourceId];
-        if (plan) {
-          const price = prices[src.sourceId] || 0;
-          const stats = computePlanStats(plan, price);
-          newAmount = stats.currentHolding;
+      case 'accumulation_plan':
+      case 'asset_tokens': {
+        // Match by asset ID first, then fall back to mint matching
+        let asset = storeData.assets.find(a => a.id === src.sourceId);
+        if (!asset && goal.mint) {
+          asset = storeData.assets.find(a => {
+            const meta = a.metadata as any;
+            return meta?.mint === goal.mint || meta?.tokenMint === goal.mint;
+          });
+        }
+        if (asset?.metadata) {
+          newAmount = (asset.metadata as any).balance ?? (asset.metadata as any).quantity ?? 0;
         }
         break;
       }
@@ -164,13 +152,6 @@ export async function refreshGoalProgress(
         const asset = storeData.assets.find(a => a.id === src.sourceId);
         if (asset) {
           newAmount = asset.value;
-        }
-        break;
-      }
-      case 'asset_tokens': {
-        const asset = storeData.assets.find(a => a.id === src.sourceId);
-        if (asset?.metadata) {
-          newAmount = (asset.metadata as any).balance || 0;
         }
         break;
       }
@@ -294,7 +275,7 @@ export function makeTokenGoal(
     currentAmount: currentTokens,
     mint,
     symbol,
-    autoSource: { type: 'accumulation_plan', sourceId: mint },
+    autoSource: { type: 'asset_tokens', sourceId: mint },
   };
 }
 
@@ -396,22 +377,6 @@ export async function autoPopulateGoals(storeData: {
       goalNames.push(goal.name);
     }
   }
-
-  // ── 3. Accumulation plans → token goals ────────────────────
-  try {
-    const accPlans = await loadAllPlans();
-    for (const [mint, plan] of Object.entries(accPlans)) {
-      if (plan.entries.length === 0) continue;
-      const nameCheck = `${formatNum(plan.targetAmount)} ${plan.symbol}`.toLowerCase();
-      const alreadyExists = existing.some(g => g.mint === mint) || existingNames.has(nameCheck);
-      if (alreadyExists) continue;
-
-      const stats = computePlanStats(plan, 0); // price doesn't matter for token count
-      const goal = makeTokenGoal(mint, plan.symbol, plan.targetAmount, stats.currentHolding);
-      newGoals.push(goal);
-      goalNames.push(goal.name);
-    }
-  } catch {}
 
   // Save all new goals
   if (newGoals.length > 0) {

@@ -100,6 +100,24 @@ export default function GoalsScreen() {
 
       let raw = await loadGoals();
 
+      // Migrate legacy accumulation_plan goals → asset_tokens
+      let migrated = false;
+      raw = raw.map(g => {
+        if (g.autoSource?.type !== 'accumulation_plan') return g;
+        const mint = g.mint || g.autoSource.sourceId;
+        const matchedAsset = assets.find(a => {
+          const meta = a.metadata as any;
+          return meta?.mint === mint || meta?.tokenMint === mint;
+        });
+        migrated = true;
+        return {
+          ...g,
+          autoSource: { type: 'asset_tokens' as const, sourceId: matchedAsset?.id || mint },
+          assetId: matchedAsset?.id || g.assetId,
+        };
+      });
+      if (migrated) await saveGoals(raw);
+
       // Auto-update from store data
       raw = await refreshGoalProgress(raw, { debts, bankAccounts, assets });
       await saveGoals(raw);
@@ -215,6 +233,10 @@ export default function GoalsScreen() {
     setFormCurrent(goal.currentAmount.toString());
     setFormUnit(goal.targetUnit);
     setFormNotes(goal.notes || '');
+    setFormLinkedAssetId(goal.assetId || null);
+    setFormLinkedMint(goal.mint || null);
+    setFormLinkedDebtId(goal.debtId || null);
+    setFormLinkedBankId(goal.bankAccountId || null);
     setShowAddModal(true);
   };
 
