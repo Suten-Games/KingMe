@@ -5,7 +5,7 @@ import type {
   UserProfile, Asset, Obligation, Desire, Debt, Income, BankAccount, IncomeSource,
   AvatarType, PaycheckDeduction, DriftTrade, DailyExpense,
   PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
-  WhatIfScenario, ThesisAlert, InvestmentThesis, EarnedBadge
+  WhatIfScenario, ThesisAlert, InvestmentThesis
 } from '../types';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
@@ -13,6 +13,14 @@ import { exportProfile, importProfile } from '../services/backup';
 import { generateSmartScenarios } from '../utils/scenarioGenerator';
 import { BankTransaction } from '@/types/bankTransactionTypes';
 import { getISODate, getISOWeek } from '../services/badgeEngine';
+import {
+  generateWindfallPlan,
+  WINDFALL_THRESHOLD,
+  type WindfallAlert,
+} from '../services/windfallPlanner';
+import { EarnedBadge } from '@/types/badges';
+import { loadAllPlans, computePlanStats } from '../services/accumulationPlan';
+import { loadGoals } from '../services/goals';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -80,6 +88,11 @@ interface AppState extends UserProfile {
   toggleObligationPaid: (id: string) => void;
   toggleDebtPaid: (id: string) => void;
   resetMonthlyPayments: () => void;
+
+  // Windfall Alerts
+  windfallAlerts: WindfallAlert[];
+  checkWindfall: (accountId: string, oldBalance: number, newBalance: number) => void;
+  dismissWindfallAlert: (alertId: string) => void;
 
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
@@ -159,6 +172,7 @@ const initialState: UserProfile = {
   trimCount: 0,
   importWeeks: [],
   appOpenDays: [],
+  windfallAlerts: [],
 };
 
 // Helper: Map API category to app asset type
@@ -181,6 +195,75 @@ export const useStore = create<AppState>((set, get) => ({
   _isLoaded: false, // NOT persisted, internal flag only
   isLoadingAssets: false,
   lastAssetSync: undefined,
+
+  checkWindfall: (accountId: string, oldBalance: number, newBalance: number) => {
+    const increase = newBalance - oldBalance;
+    if (increase < WINDFALL_THRESHOLD) return;
+
+    const state = get();
+    const account = state.bankAccounts.find(a => a.id === accountId);
+    if (!account) return;
+
+    // Don't re-alert if there's already an active (undismissed) windfall for this account
+    const existing = (state as any).windfallAlerts?.find(
+      (a: WindfallAlert) => a.accountId === accountId && !a.dismissedAt
+    );
+    if (existing) return;
+
+    // Calculate monthly expenses from obligations + debts
+    const monthlyObligations = state.obligations.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const monthlyDebts = state.debts.reduce((sum, d) => sum + (d.monthlyPayment || 0), 0);
+    const monthlyExpenses = monthlyObligations + monthlyDebts;
+
+    // Build accumulation plan contexts from loaded plans
+    // (accPlans come from AsyncStorage — load them inline)
+    Promise.all([loadAllPlans(), loadGoals()]).then(([plans, goals]: [any, any]) => {
+      const accPlans = Object.values(plans).map((p: any) => {
+        const stats = computePlanStats(p, 0);
+        return {
+          mint: p.mint,
+          symbol: p.symbol,
+          targetAmount: p.targetAmount,
+          currentHolding: stats.currentHolding,
+          avgEntry: stats.costBasis,
+          progressPct: stats.progressPct,
+          strategy: 'accumulate' as const,
+        };
+      });
+
+      const alert = generateWindfallPlan({
+        windfallAmount: increase,
+        newBalance,
+        accountId,
+        accountName: account.name,
+        assets: state.assets,
+        obligations: state.obligations,
+        debts: state.debts,
+        goals,
+        accPlans,
+        monthlyExpenses,
+        exchangeName: (state as any).settings?.exchangeName,
+      });
+
+      set((s: any) => ({
+        windfallAlerts: [...(s.windfallAlerts || []), alert],
+      }));
+
+      get().saveProfile();
+      console.log(`[WINDFALL] Detected $${increase.toFixed(0)} increase in ${account.name}`);
+    }).catch(console.error);
+  },
+
+  dismissWindfallAlert: (alertId: string) => {
+    set((s: any) => ({
+      windfallAlerts: (s.windfallAlerts || []).map((a: WindfallAlert) =>
+        a.id === alertId ? { ...a, dismissedAt: new Date().toISOString() } : a
+      ),
+    }));
+    get().saveProfile();
+  },
+
+
 
   // What-If Scenarios
   whatIfScenarios: [],
@@ -511,12 +594,23 @@ export const useStore = create<AppState>((set, get) => ({
       bankAccounts: state.bankAccounts.filter((a) => a.id !== accountId),
     })),
 
-  updateBankAccount: (accountId, accountUpdate) =>
-    set((state) => ({
-      bankAccounts: state.bankAccounts.map((a) =>
+  updateBankAccount: (accountId: string, accountUpdate: Partial<any>) => {
+    const state = get();
+    const existing = state.bankAccounts.find(a => a.id === accountId);
+    const oldBalance = existing?.currentBalance ?? 0;
+    const newBalance = accountUpdate.currentBalance ?? oldBalance;
+
+    set((s: any) => ({
+      bankAccounts: s.bankAccounts.map((a: any) =>
         a.id === accountId ? { ...a, ...accountUpdate } : a
       ),
-    })),
+    }));
+
+    // Check for windfall after update
+    if (newBalance > oldBalance) {
+      get().checkWindfall(accountId, oldBalance, newBalance);
+    }
+  },
 
   // Income Source actions
   addIncomeSource: (source) =>

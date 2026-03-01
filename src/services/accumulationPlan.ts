@@ -71,7 +71,10 @@ export function computePlanStats(plan: AccumulationPlan, currentPrice: number, w
   const avgBuyPrice = totalBought > 0 ? totalInvested / totalBought : 0;
   const avgSellPrice = totalSold > 0 ? totalReceived / totalSold : 0;
   const netCost = totalInvested - totalReceived;
-  const costBasis = currentHolding > 0 ? netCost / currentHolding : avgBuyPrice;
+  const rawCostBasis = currentHolding > 0 ? netCost / currentHolding : avgBuyPrice;
+  // If sells recovered more than cost (netCost negative), costBasis would go negative.
+  // Fall back to avgBuyPrice so the display remains meaningful.
+  const costBasis = rawCostBasis > 0 ? rawCostBasis : avgBuyPrice;
   const realizedPnL = totalSold > 0 ? totalReceived - (avgBuyPrice * totalSold) : 0;
   const unrealizedPnL = currentHolding > 0 ? (currentPrice - costBasis) * currentHolding : 0;
 
@@ -283,9 +286,18 @@ function formatNum(n: number): string {
 }
 
 function formatPrice(p: number): string {
-  if (p < 0.001) return p.toExponential(2);
-  if (p < 1) return p.toFixed(4);
-  return p.toFixed(2);
+  if (p <= 0) return '0.00';
+  if (p < 0.000001) {
+    // e.g. 0.00000069 — show enough significant figures
+    const sig = p.toPrecision(2);
+    // Convert any exponential output to decimal
+    return parseFloat(sig).toFixed(10).replace(/0+$/, '').replace(/\.$/, '');
+  }
+  if (p < 0.0001) return p.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+  if (p < 0.01)   return p.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (p < 1)      return p.toFixed(4);
+  if (p < 1000)   return p.toFixed(2);
+  return p.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
 export { formatNum, formatPrice };

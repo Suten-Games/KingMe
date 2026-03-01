@@ -7,8 +7,6 @@ import { FreedomScore } from '../../src/components/FreedomScore';
 import CashFlowSummary from '../../src/components/CashFlowSummary';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
-import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
-import type { SKRIncomeSnapshot } from '../../src/services/skr';
 import WhatIfCard from '@/components/WhatIfCard';
 import WhatIfModal from '@/components/WhatIfModal';
 import { Asset, WhatIfScenario } from '@/types';
@@ -24,6 +22,7 @@ import SetupChecklist from '@/components/SetupChecklist';
 import AccumulationAlerts from '@/components/AccumulationAlerts';
 import GoalsStrip from '@/components/GoalsStrip';
 import PortfolioTrendCard from '@/components/PortfolioTrendCard';
+import WindfallAlertCard from '@/components/WindfallAlertCard';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -100,6 +99,9 @@ export default function HomeScreen() {
   const dismissThesisAlert = useStore(s => s.dismissThesisAlert);
   const checkThesisAlerts = useStore(s => s.checkThesisAlerts);
 
+  const windfallAlerts = useStore(s => (s as any).windfallAlerts || []);
+  const dismissWindfallAlert = useStore(s => (s as any).dismissWindfallAlert);
+
   const { swapState, previewScenario, applyWithSwap, reset } = useSwapScenario();
 
   const freedom = useFreedomScore();
@@ -111,18 +113,7 @@ export default function HomeScreen() {
   );
 
   const wallets = useStore((state) => state.wallets);
-  const [skrIncome, setSKRIncome] = useState<SKRIncomeSnapshot | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      let holding = null;
-      if (wallets.length > 0) { for (const addr of wallets) { holding = await fetchSKRHolding(addr); if (holding) break; } }
-      if (!cancelled) setSKRIncome(holding ? calcSKRIncome(holding) : null);
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [wallets]);
 
   useEffect(() => { checkThesisAlerts(); const i = setInterval(() => checkThesisAlerts(), 86400000); return () => clearInterval(i); }, []);
   useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/intro'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
@@ -162,7 +153,7 @@ export default function HomeScreen() {
   const runwayMonths = monthlyOut > 0 ? cashFlow.liquidAssets / monthlyOut : Infinity;
   const runwayLabel = runwayMonths === Infinity ? '∞' : runwayMonths >= 12 ? `${(runwayMonths / 12).toFixed(1)}y` : `${runwayMonths.toFixed(1)}m`;
   const healthColor = HEALTH_COLORS[cashFlow.healthStatus] || HEALTH_COLORS.stable;
-  const insight = getInsight(cashFlow, freedom, skrIncome);
+  const insight = getInsight(cashFlow, freedom);
   const isWeb = Platform.OS === 'web';
 
   const dashboardBody = (
@@ -173,6 +164,16 @@ export default function HomeScreen() {
       
       
       <PositionAlertCards  />
+            {windfallAlerts
+        .filter((a: any) => !a.dismissedAt)
+        .map((alert: any) => (
+          <WindfallAlertCard
+            key={alert.id}
+            alert={alert}
+            onDismiss={dismissWindfallAlert}
+          />
+        ))
+      }
       <AccumulationAlerts />
       
 
@@ -485,15 +486,10 @@ function ToolCard({ emoji, title, sub, colors, accent, onPress }: {
 }
 
 // ─── Phase insight ───────────────────────────────────────────────────────────
-function getInsight(cf: ReturnType<typeof analyzeAllAccounts>, freedom: any, skrIncome: SKRIncomeSnapshot | null) {
+function getInsight(cf: ReturnType<typeof analyzeAllAccounts>, freedom: any) {
   if (cf.healthStatus === 'critical') return { emoji: '⚡', title: 'Cash flow needs attention', body: cf.totalMonthlyNet < 0 ? `You're spending ${Math.abs(cf.totalMonthlyNet).toFixed(0)} more than you earn each month.` : cf.healthMessage };
   if (cf.healthStatus === 'struggling') return { emoji: '🏗️', title: 'Building the foundation', body: `Only $${cf.totalMonthlyNet.toFixed(0)}/mo surplus. Trim obligations or boost income.` };
   if (cf.healthStatus === 'stable') return { emoji: '🛡️', title: 'Emergency fund in progress', body: `You're saving, but runway is under 3 months. Keep building.` };
-  if (skrIncome && skrIncome.monthlyYieldUsd > 0) {
-    const dailyNeeds = (cf.totalMonthlyObligations + cf.totalMonthlyDebtPayments) / 30;
-    const days = dailyNeeds > 0 ? skrIncome.monthlyYieldUsd / dailyNeeds : 0;
-    return { emoji: '◎', title: 'SKR staking → Freedom', body: `$SKR earns $${skrIncome.monthlyYieldUsd.toFixed(2)}/mo — ${days.toFixed(1)} extra freedom days/month.` };
-  }
   if (cf.healthStatus === 'building') return { emoji: '📈', title: 'Ready to invest', body: `Runway is solid. Deploy your $${cf.totalMonthlyNet.toFixed(0)}/mo surplus into yield.` };
   return { emoji: '🚀', title: 'Invest aggressively', body: `${(cf.totalBalance / (cf.totalMonthlyObligations + cf.totalMonthlyDebtPayments || 1)).toFixed(1)} months runway, $${cf.totalMonthlyNet.toFixed(0)}/mo to deploy. Push toward ${freedom.isKinged ? 'legacy' : 'KINGED'}.` };
 }

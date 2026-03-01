@@ -61,6 +61,16 @@ export default function AccumulationPlanCard({
   const [entryTokens, setEntryTokens] = useState('');
   const [entryPrice, setEntryPrice] = useState('');
   const [entryNotes, setEntryNotes] = useState('');
+  const [entryMode, setEntryMode] = useState<'per_token' | 'total_spent'>('per_token');
+  const [entryTotalUSD, setEntryTotalUSD] = useState('');
+  const [entrySpentToken, setEntrySpentToken] = useState('');
+  const [entrySpentAmount, setEntrySpentAmount] = useState('');
+  const [entrySpentPrice, setEntrySpentPrice] = useState('');
+  const [entrySubMode, setEntrySubMode] = useState<'usd' | 'token'>('usd');
+  const [txSignature, setTxSignature] = useState('');
+  const [txFetching, setTxFetching] = useState(false);
+  const [txResult, setTxResult] = useState<any>(null);
+  const [txError, setTxError] = useState('');
 
   // Load plan
   const loadPlan = useCallback(async () => {
@@ -128,26 +138,86 @@ export default function AccumulationPlanCard({
     await loadPlan();
   };
 
+  // Import from transaction signature
+  const handleFetchTx = async () => {
+    if (!txSignature.trim()) return;
+    setTxFetching(true);
+    setTxError('');
+    setTxResult(null);
+    try {
+      const res = await fetch('/api/wallet/parse-tx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature: txSignature.trim(), targetMint: mint }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setTxError(data.error || 'Could not parse transaction');
+        return;
+      }
+      setTxResult(data);
+      // Auto-fill form fields
+      setEntryTokens(data.targetReceived.toString());
+      setEntryMode('total_spent');
+      setEntrySubMode('usd');
+      setEntryTotalUSD(data.spentUSD > 0 ? data.spentUSD.toFixed(4) : '');
+    } catch (e: any) {
+      setTxError(e.message || 'Network error');
+    } finally {
+      setTxFetching(false);
+    }
+  };
+
   // Add entry
   const handleAddEntry = async () => {
     const tokens = parseFloat(entryTokens);
-    const price = parseFloat(entryPrice) || currentPrice;
     if (!tokens || tokens <= 0) return xAlert('Enter token amount');
-    if (!price || price <= 0) return xAlert('Enter price per token');
+
+    let price: number;
+    let totalUSD: number;
+
+    if (entryMode === 'total_spent') {
+      if (entrySubMode === 'token') {
+        const spentAmt = parseFloat(entrySpentAmount);
+        const spentPrice = parseFloat(entrySpentPrice);
+        if (!spentAmt || spentAmt <= 0) return xAlert('Enter amount of token spent');
+        if (!spentPrice || spentPrice <= 0) return xAlert('Enter USD price of token spent');
+        totalUSD = spentAmt * spentPrice;
+        price = totalUSD / tokens;
+      } else {
+        const total = parseFloat(entryTotalUSD);
+        if (!total || total <= 0) return xAlert('Enter total amount spent');
+        price = total / tokens;
+        totalUSD = total;
+      }
+    } else {
+      price = parseFloat(entryPrice) || currentPrice;
+      if (!price || price <= 0) return xAlert('Enter price per token');
+      totalUSD = tokens * price;
+    }
 
     await addEntry(mint, {
       date: new Date().toISOString(),
       action: entryAction,
       tokenAmount: tokens,
       pricePerToken: price,
-      totalUSD: tokens * price,
+      totalUSD,
       notes: entryNotes || undefined,
     });
 
     setShowAddEntry(false);
     setEntryTokens('');
     setEntryPrice('');
+    setEntryTotalUSD('');
+    setEntrySpentToken('');
+    setEntrySpentAmount('');
+    setEntrySpentPrice('');
     setEntryNotes('');
+    setEntryMode('per_token');
+    setEntrySubMode('usd');
+    setTxSignature('');
+    setTxResult(null);
+    setTxError('');
     await loadPlan();
   };
 
@@ -240,7 +310,8 @@ export default function AccumulationPlanCard({
 
   const pctFromEntry = stats.costBasis > 0 ? ((currentPrice - stats.costBasis) / stats.costBasis) * 100 : 0;
   const isAboveEntry = pctFromEntry > 0;
-  const tokensNeeded = Math.max(0, plan.targetAmount - stats.currentHolding);
+  const displayHolding = walletHolding ?? stats.currentHolding;
+  const tokensNeeded = Math.max(0, plan.targetAmount - displayHolding);
   const dollarsToTarget = tokensNeeded * currentPrice;
   const topSignal = signals[0];
 
@@ -305,8 +376,8 @@ export default function AccumulationPlanCard({
             <View style={{ flex: 1 }}>
               <Text style={st.headerTitle}>🎯 {symbol} Accumulation</Text>
               <Text style={st.headerSubtitle}>
-                {formatNum(stats.currentHolding)} / {formatNum(plan.targetAmount)} tokens
-                {stats.progressPct >= 100 ? ' ✅' : ` · ${stats.progressPct.toFixed(0)}%`}
+                {formatNum(walletHolding ?? stats.currentHolding)} / {formatNum(plan.targetAmount)} tokens
+                {stats.progressPct >= 100 ? ' ✅' : ` · ${((walletHolding ?? stats.currentHolding) / plan.targetAmount * 100).toFixed(0)}%`}
               </Text>
             </View>
             <Text style={st.expandArrow}>{expanded ? '▾' : '▸'}</Text>
@@ -351,7 +422,7 @@ export default function AccumulationPlanCard({
             <View style={st.metric}>
               <Text style={st.metricLabel}>Position $</Text>
               <Text style={st.metricValue}>
-                ${(stats.currentHolding * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                ${(displayHolding * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </Text>
             </View>
           </View>
@@ -489,20 +560,171 @@ export default function AccumulationPlanCard({
               onChangeText={setEntryTokens}
             />
 
-            <Text style={st.fieldLabel}>Price per token ($)</Text>
-            <TextInput
-              style={st.fieldInput}
-              placeholder={currentPrice > 0 ? `Current: $${formatPrice(currentPrice)}` : '$0.00'}
-              placeholderTextColor="#555"
-              keyboardType="numeric"
-              value={entryPrice}
-              onChangeText={setEntryPrice}
-            />
+            {/* Input mode toggle */}
+            <View style={[st.toggleRow, { marginTop: 12, marginBottom: 4 }]}>
+              <TouchableOpacity
+                style={[st.toggleBtn, entryMode === 'per_token' && { backgroundColor: '#60a5fa20', borderColor: '#60a5fa' }]}
+                onPress={() => setEntryMode('per_token')}
+              >
+                <Text style={[st.toggleText, entryMode === 'per_token' && { color: '#60a5fa' }]}>Per token</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[st.toggleBtn, entryMode === 'total_spent' && { backgroundColor: '#f4c43020', borderColor: '#f4c430' }]}
+                onPress={() => setEntryMode('total_spent')}
+              >
+                <Text style={[st.toggleText, entryMode === 'total_spent' && { color: '#f4c430' }]}>Total spent</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[st.toggleBtn, entryMode === 'import_tx' && { backgroundColor: '#4ade8020', borderColor: '#4ade80' }]}
+                onPress={() => { setEntryMode('import_tx' as any); setTxResult(null); setTxError(''); }}
+              >
+                <Text style={[st.toggleText, entryMode === 'import_tx' as any && { color: '#4ade80' }]}>Import tx</Text>
+              </TouchableOpacity>
+            </View>
 
-            {parseFloat(entryTokens) > 0 && parseFloat(entryPrice) > 0 && (
-              <Text style={st.fieldHint}>
-                = ${(parseFloat(entryTokens) * parseFloat(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total
-              </Text>
+            {entryMode === 'per_token' && (
+              <>
+                <Text style={st.fieldLabel}>Price per token ($)</Text>
+                <TextInput
+                  style={st.fieldInput}
+                  placeholder={currentPrice > 0 ? `Current: $${formatPrice(currentPrice)}` : '$0.00'}
+                  placeholderTextColor="#555"
+                  keyboardType="numeric"
+                  value={entryPrice}
+                  onChangeText={setEntryPrice}
+                />
+                {parseFloat(entryTokens) > 0 && parseFloat(entryPrice) > 0 && (
+                  <Text style={st.fieldHint}>
+                    = ${(parseFloat(entryTokens) * parseFloat(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total
+                  </Text>
+                )}
+              </>
+            )}
+
+            {entryMode === 'total_spent' && (
+              <>
+                <View style={[st.toggleRow, { marginTop: 8, marginBottom: 4 }]}>
+                  <TouchableOpacity
+                    style={[st.toggleBtn, entrySubMode === 'usd' && { backgroundColor: '#4ade8020', borderColor: '#4ade80' }]}
+                    onPress={() => setEntrySubMode('usd')}
+                  >
+                    <Text style={[st.toggleText, entrySubMode === 'usd' && { color: '#4ade80' }]}>USD / USDC</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[st.toggleBtn, entrySubMode === 'token' && { backgroundColor: '#a78bfa20', borderColor: '#a78bfa' }]}
+                    onPress={() => setEntrySubMode('token')}
+                  >
+                    <Text style={[st.toggleText, entrySubMode === 'token' && { color: '#a78bfa' }]}>Another token</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {entrySubMode === 'usd' && (
+                  <>
+                    <Text style={st.fieldLabel}>Total spent ($)</Text>
+                    <TextInput
+                      style={st.fieldInput}
+                      placeholder="e.g. 999"
+                      placeholderTextColor="#555"
+                      keyboardType="numeric"
+                      value={entryTotalUSD}
+                      onChangeText={setEntryTotalUSD}
+                    />
+                    {parseFloat(entryTokens) > 0 && parseFloat(entryTotalUSD) > 0 && (
+                      <Text style={st.fieldHint}>
+                        = ${(parseFloat(entryTotalUSD) / parseFloat(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token
+                      </Text>
+                    )}
+                  </>
+                )}
+
+                {entrySubMode === 'token' && (
+                  <>
+                    <Text style={st.fieldLabel}>Token you spent</Text>
+                    <TextInput
+                      style={st.fieldInput}
+                      placeholder="e.g. HYPE, JUP, SOL"
+                      placeholderTextColor="#555"
+                      autoCapitalize="characters"
+                      value={entrySpentToken}
+                      onChangeText={setEntrySpentToken}
+                    />
+                    <Text style={st.fieldLabel}>Amount spent</Text>
+                    <TextInput
+                      style={st.fieldInput}
+                      placeholder="e.g. 0.360450059"
+                      placeholderTextColor="#555"
+                      keyboardType="numeric"
+                      value={entrySpentAmount}
+                      onChangeText={setEntrySpentAmount}
+                    />
+                    <Text style={st.fieldLabel}>
+                      {entrySpentToken ? entrySpentToken : 'Token'} price at trade time ($)
+                    </Text>
+                    <TextInput
+                      style={st.fieldInput}
+                      placeholder="e.g. 28.50"
+                      placeholderTextColor="#555"
+                      keyboardType="numeric"
+                      value={entrySpentPrice}
+                      onChangeText={setEntrySpentPrice}
+                    />
+                    {parseFloat(entrySpentAmount) > 0 && parseFloat(entrySpentPrice) > 0 && parseFloat(entryTokens) > 0 && (
+                      <Text style={st.fieldHint}>
+                        {`= $${(parseFloat(entrySpentAmount) * parseFloat(entrySpentPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total · $${(parseFloat(entrySpentAmount) * parseFloat(entrySpentPrice) / parseFloat(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token`}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {(entryMode as any) === 'import_tx' && (
+              <>
+                <Text style={st.fieldLabel}>Transaction signature</Text>
+                <TextInput
+                  style={st.fieldInput}
+                  placeholder="Paste Jupiter/Solscan tx signature"
+                  placeholderTextColor="#555"
+                  value={txSignature}
+                  onChangeText={setTxSignature}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={[st.confirmButton, { marginTop: 10, backgroundColor: txFetching ? '#333' : '#4ade80', flex: 0 }]}
+                  onPress={handleFetchTx}
+                  disabled={txFetching}
+                >
+                  <Text style={[st.confirmText, { color: '#080c18' }]}>
+                    {txFetching ? 'Fetching...' : 'Fetch Transaction'}
+                  </Text>
+                </TouchableOpacity>
+
+                {txError ? (
+                  <Text style={[st.fieldHint, { color: '#f87171', marginTop: 8 }]}>{txError}</Text>
+                ) : null}
+
+                {txResult && (
+                  <View style={{ marginTop: 12, backgroundColor: '#4ade8010', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#4ade8030' }}>
+                    <Text style={{ color: '#4ade80', fontWeight: '700', marginBottom: 6 }}>✓ Transaction parsed</Text>
+                    <Text style={{ color: '#b0b0b8', fontSize: 13 }}>
+                      Received: {txResult.targetReceived.toLocaleString(undefined, { maximumFractionDigits: 2 })} {symbol}
+                    </Text>
+                    <Text style={{ color: '#b0b0b8', fontSize: 13 }}>
+                      Spent: {txResult.spentAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} {txResult.spentSymbol}
+                    </Text>
+                    <Text style={{ color: '#b0b0b8', fontSize: 13 }}>
+                      USD value: ~${txResult.spentUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    </Text>
+                    {txResult.isPriceApproximate && (
+                      <Text style={{ color: '#f4c430', fontSize: 11, marginTop: 4 }}>
+                        ⚠ {txResult.spentSymbol} price is current, not historical — adjust if price has changed significantly since this trade
+                      </Text>
+                    )}
+                    <Text style={[st.fieldHint, { marginTop: 6 }]}>Form filled — review below and confirm</Text>
+                  </View>
+                )}
+              </>
             )}
 
             <Text style={st.fieldLabel}>Notes (optional)</Text>
