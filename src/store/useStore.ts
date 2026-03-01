@@ -1488,8 +1488,7 @@ export const useStore = create<AppState>((set, get) => ({
         // Second try: match against wallet assets (for tokens held in wallet)
         let matched: any = null;
         if (mint) matched = syncedByMint.get(mint);
-        if (!matched && meta.symbol) matched = syncedBySymbol.get(meta.symbol.toUpperCase());
-        if (!matched && asset.name.toLowerCase().includes('drift')) matched = syncedBySymbol.get('DRIFT');
+        if (!matched && meta.symbol && !meta.protocol) matched = syncedBySymbol.get(meta.symbol.toUpperCase());
 
         if (matched) {
           const newValue = matched.valueUSD || 0;
@@ -1521,12 +1520,9 @@ export const useStore = create<AppState>((set, get) => ({
           const matched = syncedByMint.get(meta.mint);
           if (matched) manualMatchedMints.add(matched.mint);
         }
-        if (meta.symbol) {
+        if (meta.symbol && !meta.protocol) {
           const matched = syncedBySymbol.get(meta.symbol.toUpperCase());
           if (matched) manualMatchedSymbols.add(matched.symbol?.toUpperCase());
-        }
-        if (asset.name.toLowerCase().includes('drift')) {
-          manualMatchedSymbols.add('DRIFT');
         }
       }
 
