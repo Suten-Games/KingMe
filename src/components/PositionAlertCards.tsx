@@ -63,6 +63,18 @@ export default function PositionAlertCards() {
     return mintMap;
   }, [assets]);
 
+  // Build mint → wallet balance lookup for all crypto assets
+  const mintToBalance = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    assets.forEach(a => {
+      const meta = a.metadata as CryptoAsset;
+      const mint = meta?.tokenMint || meta?.mint;
+      const bal = meta?.quantity ?? meta?.balance;
+      if (mint && bal !== undefined) map[mint] = bal;
+    });
+    return map;
+  }, [assets]);
+
   // Load dismissed alerts
   useEffect(() => {
     AsyncStorage.getItem(DISMISSED_KEY).then(raw => {
@@ -88,11 +100,26 @@ export default function PositionAlertCards() {
     }
 
     try {
+      // Load accumulation plans first so we can include their mints in price fetch
+      let allPlans: Record<string, any> = {};
+      try {
+        allPlans = await loadAllPlans();
+      } catch (err) {
+        console.warn('[ALERTS] Failed to load accumulation plans:', err);
+      }
+
+      // Merge plan mints into the fetch so exited positions still get price data
+      const allMintSymbols = { ...cryptoMints };
+      for (const [mint, plan] of Object.entries(allPlans)) {
+        if (!allMintSymbols[mint]) allMintSymbols[mint] = (plan as any).symbol;
+      }
+      const allMints = Object.keys(allMintSymbols);
+
       // Record snapshot (throttled internally to 30min)
-      await recordPriceSnapshot(mints, cryptoMints);
+      await recordPriceSnapshot(allMints, allMintSymbols);
 
       // Get price data with changes
-      const priceData = await getTokenPriceData(mints, cryptoMints);
+      const priceData = await getTokenPriceData(allMints, allMintSymbols);
 
       // Log price changes for debugging
       for (const [mint, data] of Object.entries(priceData)) {
@@ -107,32 +134,23 @@ export default function PositionAlertCards() {
 
       // Generate alerts with accumulation plan awareness
       let accPlans: AccPlanContext[] = [];
-      try {
-        const allPlans = await loadAllPlans();
-        const planMints = Object.keys(allPlans);
-        if (planMints.length > 0) {
-          const planPrices: Record<string, number> = {};
-          for (const mint of planMints) {
+      const planMints = Object.keys(allPlans);
+      if (planMints.length > 0) {
+        accPlans = Object.entries(allPlans)
+          .filter(([_, p]) => (p as any).entries.length > 0)
+          .map(([mint, p]: [string, any]) => {
             const pd = priceData[mint];
-            if (pd) planPrices[mint] = pd.currentPrice;
-          }
-          accPlans = Object.entries(allPlans)
-            .filter(([_, p]) => p.entries.length > 0)
-            .map(([mint, p]) => {
-              const stats = computePlanStats(p, planPrices[mint] || 0);
-              return {
-                mint,
-                symbol: p.symbol,
-                targetAmount: p.targetAmount,
-                currentHolding: stats.currentHolding,
-                avgEntry: stats.costBasis,
-                progressPct: stats.progressPct,
-                strategy: 'accumulate' as const,
-              };
-            });
-        }
-      } catch (err) {
-        console.warn('[ALERTS] Failed to load accumulation plans:', err);
+            const stats = computePlanStats(p, pd?.currentPrice || 0, mintToBalance[mint]);
+            return {
+              mint,
+              symbol: p.symbol,
+              targetAmount: p.targetAmount,
+              currentHolding: stats.currentHolding,
+              avgEntry: stats.costBasis,
+              progressPct: stats.progressPct,
+              strategy: 'accumulate' as const,
+            };
+          });
       }
 
       const newAlerts = generatePositionAlerts(assets, priceData, accPlans);

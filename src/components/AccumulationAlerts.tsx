@@ -65,7 +65,7 @@ export default function AccumulationAlerts() {
         const price = pd?.currentPrice || 0;
         if (price <= 0) continue;
 
-        const stats = computePlanStats(plan, price);
+        const stats = computePlanStats(plan, price, mintToBalance[mint]);
         const signals = generateAccSignals(plan, stats, price, null);
         if (signals.length > 0) {
           results.push({

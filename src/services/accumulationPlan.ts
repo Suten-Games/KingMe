@@ -153,7 +153,61 @@ export function generateAccSignals(
   }
 
   // ── Price vs entry ─────────────────────────────────────────
-  if (pctFromEntry <= -20) {
+  if (currentHolding <= 0) {
+    // Fully exited — show re-accumulation guidance instead of trim/hold signals
+    const reEntryPrice = currentPrice * 0.6; // 40% drop from current
+    const hasBounce = allTimeLow && allTimeLow > 0 && currentPrice > allTimeLow
+      ? ((currentPrice - allTimeLow) / allTimeLow) * 100
+      : 0;
+
+    if (pctFromEntry <= -40 && hasBounce >= 10) {
+      // Dropped hard AND showing recovery — prime re-entry
+      signals.push({
+        type: 'reentry_zone',
+        title: `${plan.symbol} — re-entry zone`,
+        message: `${pctFromEntry.toFixed(0)}% below your avg and bouncing ${hasBounce.toFixed(0)}% off the low. Signs of recovery — good time to start re-accumulating.`,
+        emoji: '🎯',
+        priority: 'urgent',
+        color: '#f4c430',
+      });
+    } else if (pctFromEntry <= -40) {
+      signals.push({
+        type: 'deep_below_entry',
+        title: `${plan.symbol} ${pctFromEntry.toFixed(0)}% below your entry`,
+        message: `Deep discount vs your $${formatPrice(costBasis)} avg. Watch for a bounce before re-entering — no rush while it's still falling.`,
+        emoji: '🔥',
+        priority: 'high',
+        color: '#f87171',
+      });
+    } else if (pctFromEntry <= -20) {
+      signals.push({
+        type: 'deep_below_entry',
+        title: `${plan.symbol} ${pctFromEntry.toFixed(0)}% below your entry`,
+        message: `Getting cheaper vs your $${formatPrice(costBasis)} avg. Re-entry zone around $${formatPrice(reEntryPrice)} (40% below current). Be patient.`,
+        emoji: '🔥',
+        priority: 'medium',
+        color: '#f87171',
+      });
+    } else if (pctFromEntry < -5) {
+      signals.push({
+        type: 'below_entry_accumulate',
+        title: `${plan.symbol} below your entry`,
+        message: `${pctFromEntry.toFixed(0)}% below $${formatPrice(costBasis)} avg. Dropping toward a re-entry zone — target around $${formatPrice(reEntryPrice)}.`,
+        emoji: '🟢',
+        priority: 'medium',
+        color: '#4ade80',
+      });
+    } else if (pctFromEntry >= 0) {
+      signals.push({
+        type: 'exited_above_entry',
+        title: `${plan.symbol} — exited position`,
+        message: `Price still +${pctFromEntry.toFixed(0)}% above your $${formatPrice(costBasis)} avg. Target re-entry around $${formatPrice(reEntryPrice)} — wait for a 40%+ pullback.`,
+        emoji: '⏳',
+        priority: 'low',
+        color: '#60a5fa',
+      });
+    }
+  } else if (pctFromEntry <= -20) {
     signals.push({
       type: 'deep_below_entry',
       title: `${plan.symbol} ${pctFromEntry.toFixed(0)}% below your entry`,

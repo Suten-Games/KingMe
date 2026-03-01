@@ -401,6 +401,70 @@ export function generatePositionAlerts(
     }
   }
 
+  // ── Re-entry alerts for exited accumulation positions ──────────────────────
+  if (accPlans) {
+    const heldMints = new Set(cryptoAssets.map(a => {
+      const m = a.metadata as CryptoAsset;
+      return m.tokenMint || m.mint || '';
+    }));
+
+    for (const plan of accPlans) {
+      // Only for fully exited positions that aren't already covered by the asset loop
+      if (plan.currentHolding > 0 || heldMints.has(plan.mint)) continue;
+      if (plan.avgEntry <= 0) continue;
+
+      const price = priceData[plan.mint];
+      if (!price || !price.currentPrice) continue;
+
+      const pctFromEntry = ((price.currentPrice - plan.avgEntry) / plan.avgEntry) * 100;
+      const reEntryPrice = price.currentPrice * 0.6; // 40% drop target
+
+      if (pctFromEntry <= -40 && price.change24h !== null && price.change24h > 0) {
+        // Dropped 40%+ AND showing recovery (positive 24h change)
+        alerts.push({
+          id: `reentry-zone-${plan.mint}-${now}`,
+          assetId: '', assetName: plan.symbol, symbol: plan.symbol, mint: plan.mint,
+          priority: 'high',
+          action: 'accumulate',
+          title: `${plan.symbol} — re-entry zone`,
+          message: `${pctFromEntry.toFixed(0)}% below your $${fmtPrice(plan.avgEntry)} avg and showing signs of recovery.`,
+          detail: `Price bouncing after a deep drop. Good time to start re-accumulating if thesis still holds.`,
+          emoji: '🎯',
+          actionLabel: 'Buy',
+          value: 0, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      } else if (pctFromEntry <= -40) {
+        // Deep drop but still falling
+        alerts.push({
+          id: `reentry-watch-${plan.mint}-${now}`,
+          assetId: '', assetName: plan.symbol, symbol: plan.symbol, mint: plan.mint,
+          priority: 'medium',
+          action: 'watch',
+          title: `${plan.symbol} ${pctFromEntry.toFixed(0)}% below your entry`,
+          message: `Deep discount vs your $${fmtPrice(plan.avgEntry)} avg. Watch for a bounce before re-entering.`,
+          detail: `Wait for positive momentum (green day) before buying back in.`,
+          emoji: '👀',
+          actionLabel: 'Watch',
+          value: 0, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      } else if (pctFromEntry >= 0) {
+        // Still above entry — show re-entry target
+        alerts.push({
+          id: `reentry-wait-${plan.mint}-${now}`,
+          assetId: '', assetName: plan.symbol, symbol: plan.symbol, mint: plan.mint,
+          priority: 'low',
+          action: 'watch',
+          title: `${plan.symbol} — waiting to re-enter`,
+          message: `Still +${pctFromEntry.toFixed(0)}% above your avg. Target re-entry around $${fmtPrice(reEntryPrice)}.`,
+          detail: `Wait for a 40%+ pullback from current price before re-accumulating.`,
+          emoji: '⏳',
+          actionLabel: 'Watch',
+          value: 0, change: price.change24h, timestamp: now, hasAccPlan: true,
+        });
+      }
+    }
+  }
+
   // Sort: urgent first, then high, medium, low
   const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
   alerts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
