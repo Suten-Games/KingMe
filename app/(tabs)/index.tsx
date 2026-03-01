@@ -9,7 +9,7 @@ import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import WhatIfCard from '@/components/WhatIfCard';
 import WhatIfModal from '@/components/WhatIfModal';
-import { Asset, WhatIfScenario } from '@/types';
+import { Asset, WhatIfScenario, CryptoAsset, RealEstateAsset, StockAsset, BusinessAsset } from '@/types';
 import { generateSmartScenarios } from '@/utils/scenarioGenerator';
 import ThesisAlerts from '@/components/ThesisAlerts';
 import { useSwapScenario } from '@/hooks/useSwapScenario';
@@ -91,6 +91,7 @@ export default function HomeScreen() {
   const [selectedScenario, setSelectedScenario] = useState<WhatIfScenario | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [infoModal, setInfoModal] = useState<'freedom' | 'runway' | null>(null);
+  const [infoDetails, setInfoDetails] = useState(false);
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -155,6 +156,79 @@ export default function HomeScreen() {
   const healthColor = HEALTH_COLORS[cashFlow.healthStatus] || HEALTH_COLORS.stable;
   const insight = getInsight(cashFlow, freedom);
   const isWeb = Platform.OS === 'web';
+
+  // ── Breakdown data for info modals ────────────────────────
+  const breakdown = useMemo(() => {
+    const fmt = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+    // Group assets by type
+    let bankTotal = bankAccounts.reduce((s, a) => s + (typeof a.currentBalance === 'number' && !isNaN(a.currentBalance) ? a.currentBalance : 0), 0);
+    let cryptoTotal = 0, defiTotal = 0, stockTotal = 0, realEstateTotal = 0, businessTotal = 0, retirementTotal = 0;
+    let cryptoYield = 0, dividendYield = 0, rentalNet = 0, bizDistributions = 0;
+
+    for (const a of assets) {
+      const val = a.value || 0;
+      switch (a.type) {
+        case 'crypto': {
+          cryptoTotal += val;
+          const m = a.metadata as CryptoAsset;
+          if (m?.apy && m.apy > 0) cryptoYield += val * (m.apy / 100);
+          break;
+        }
+        case 'defi': {
+          defiTotal += val;
+          const m = a.metadata as CryptoAsset;
+          if (m?.apy && m.apy > 0) cryptoYield += val * (m.apy / 100);
+          break;
+        }
+        case 'stocks': {
+          stockTotal += val;
+          const m = a.metadata as StockAsset;
+          if (m?.dividendYield) dividendYield += val * (m.dividendYield / 100);
+          break;
+        }
+        case 'real_estate': {
+          const m = a.metadata as RealEstateAsset;
+          const mortgage = m?.mortgageBalance || 0;
+          realEstateTotal += Math.max(0, val - mortgage);
+          rentalNet += ((m?.monthlyRentalIncome || 0) - (m?.monthlyExpenses || 0)) * 12;
+          break;
+        }
+        case 'business': {
+          businessTotal += val;
+          const m = a.metadata as BusinessAsset;
+          bizDistributions += m?.annualDistributions || 0;
+          break;
+        }
+        default:
+          if ((a.metadata as any)?.type === 'retirement') retirementTotal += val;
+          break;
+      }
+    }
+
+    const totalPassiveIncome = cryptoYield + dividendYield + rentalNet + bizDistributions;
+    const monthlyObligations = cashFlow.totalMonthlyObligations;
+    const monthlyDebt = cashFlow.totalMonthlyDebtPayments;
+    const annualExpenses = (monthlyObligations + monthlyDebt) * 12;
+
+    // Runway: liquidAssets / monthlyOut (bank + all non-retirement assets)
+    const runwayLiquid = cashFlow.liquidAssets;
+    const runwayBurn = monthlyObligations + monthlyDebt;
+
+    // Freedom: liquidAssets / (dailyNeeds - dailyAssetIncome)
+    // Freedom liquid = crypto + defi + stocks (not RE, not retirement)
+    const freedomLiquid = cryptoTotal + defiTotal + stockTotal;
+    const freedomDailyBurn = freedom.dailyNeeds - freedom.dailyAssetIncome;
+    const freedomMonthlyBurn = freedomDailyBurn * 30;
+
+    return {
+      fmt, bankTotal, cryptoTotal, defiTotal, stockTotal, realEstateTotal,
+      businessTotal, retirementTotal, cryptoYield, dividendYield, rentalNet,
+      bizDistributions, totalPassiveIncome, monthlyObligations, monthlyDebt,
+      annualExpenses, runwayLiquid, runwayBurn, freedomLiquid, freedomDailyBurn,
+      freedomMonthlyBurn,
+    };
+  }, [assets, bankAccounts, cashFlow, freedom]);
 
   const dashboardBody = (
     <View style={styles.content}>
@@ -281,8 +355,8 @@ export default function HomeScreen() {
 
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
-      <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => setInfoModal(null)}>
-        <TouchableOpacity style={styles.infoModalOverlay} activeOpacity={1} onPress={() => setInfoModal(null)}>
+      <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => { setInfoModal(null); setInfoDetails(false); }}>
+        <TouchableOpacity style={styles.infoModalOverlay} activeOpacity={1} onPress={() => { setInfoModal(null); setInfoDetails(false); }}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <LinearGradient
               colors={infoModal === 'freedom' ? ['#3d3010', '#1e1808', '#0e0c04'] : ['#1a3868', '#102040', '#081020']}
@@ -297,31 +371,63 @@ export default function HomeScreen() {
               </View>
 
               {infoModal === 'freedom' ? (
+                <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
                 <View style={styles.infoModalBody}>
-                  <Text style={styles.infoModalQuestion}>What is this?</Text>
                   <Text style={styles.infoModalAnswer}>
-                    Your Freedom Score is how many months you could survive without working — living entirely off your passive income and liquid assets.
+                    How long you could survive without working — living off liquid assets, offset by passive income.
                   </Text>
 
-                  <Text style={styles.infoModalQuestion}>How is it calculated?</Text>
                   <View style={styles.infoFormula}>
                     <Text style={styles.infoFormulaText}>
-                      (Liquid Assets + Annual Passive Income){'\n'}÷ Monthly Expenses
+                      {breakdown.fmt(breakdown.freedomLiquid)} liquid ÷ {breakdown.fmt(Math.round(breakdown.freedomMonthlyBurn))}/mo burn = <Text style={{ color: '#f4c430' }}>{freedom.formatted}</Text>
                     </Text>
                   </View>
-                  <Text style={styles.infoModalAnswer}>
-                    Liquid assets include bank balances and liquid crypto. Monthly expenses include all obligations and debt payments. Passive income includes staking yields, dividends, and rental income.
-                  </Text>
-
-                  <Text style={styles.infoModalQuestion}>What's the goal?</Text>
-                  <Text style={styles.infoModalAnswer}>
-                    When your passive income covers 100% of your expenses indefinitely, you reach <Text style={{ color: '#f4c430', fontFamily: 'Inter_700Bold' }}>KINGED</Text> status — true financial freedom.
-                  </Text>
 
                   <View style={styles.infoCurrentBox}>
                     <Text style={styles.infoCurrentLabel}>Your Freedom</Text>
                     <Text style={[styles.infoCurrentValue, { color: '#f4c430' }]}>{freedom.formatted}</Text>
                   </View>
+
+                  <TouchableOpacity style={styles.detailsToggle} onPress={() => setInfoDetails(!infoDetails)}>
+                    <Text style={styles.detailsToggleText}>{infoDetails ? 'Hide details' : 'Show the math'}</Text>
+                  </TouchableOpacity>
+
+                  {infoDetails && (<>
+                    <Text style={styles.infoModalQuestion}>Liquid Assets</Text>
+                    <View style={styles.infoFormula}>
+                      {breakdown.cryptoTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Crypto</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.cryptoTotal)}</Text></View>}
+                      {breakdown.defiTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>DeFi</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.defiTotal)}</Text></View>}
+                      {breakdown.stockTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Stocks</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.stockTotal)}</Text></View>}
+                      <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={[styles.breakdownLabel, { color: '#fff' }]}>Total Liquid</Text><Text style={[styles.breakdownValue, { color: '#f4c430' }]}>{breakdown.fmt(breakdown.freedomLiquid)}</Text></View>
+                    </View>
+                    {(breakdown.realEstateTotal > 0 || breakdown.retirementTotal > 0) && (
+                      <Text style={[styles.infoModalAnswer, { fontStyle: 'italic' }]}>
+                        Not counted: {[breakdown.realEstateTotal > 0 && `Real estate (${breakdown.fmt(breakdown.realEstateTotal)})`, breakdown.retirementTotal > 0 && `Retirement (${breakdown.fmt(breakdown.retirementTotal)})`].filter(Boolean).join(', ')} — not liquid.
+                      </Text>
+                    )}
+
+                    <Text style={styles.infoModalQuestion}>Passive Income vs Expenses</Text>
+                    <View style={styles.infoFormula}>
+                      {breakdown.cryptoYield > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Staking/DeFi yield</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>+{breakdown.fmt(breakdown.cryptoYield)}/yr</Text></View>}
+                      {breakdown.dividendYield > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Dividends</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>+{breakdown.fmt(breakdown.dividendYield)}/yr</Text></View>}
+                      {breakdown.rentalNet > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Rental income (net)</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>+{breakdown.fmt(breakdown.rentalNet)}/yr</Text></View>}
+                      {breakdown.bizDistributions > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Business distributions</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>+{breakdown.fmt(breakdown.bizDistributions)}/yr</Text></View>}
+                      <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={styles.breakdownLabel}>Obligations</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>-{breakdown.fmt(breakdown.monthlyObligations)}/mo</Text></View>
+                      {breakdown.monthlyDebt > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Debt payments</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>-{breakdown.fmt(breakdown.monthlyDebt)}/mo</Text></View>}
+                      <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={[styles.breakdownLabel, { color: '#fff' }]}>Net monthly burn</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>{breakdown.fmt(Math.round(breakdown.freedomMonthlyBurn))}/mo</Text></View>
+                    </View>
+
+                    {breakdown.totalPassiveIncome > 0 && (
+                      <Text style={styles.infoModalAnswer}>
+                        Your {breakdown.fmt(breakdown.totalPassiveIncome)}/yr passive income offsets expenses. Without it, you'd have {breakdown.freedomDailyBurn > 0 ? Math.round(breakdown.freedomLiquid / ((freedom.dailyNeeds) * 30)) + ' months' : '∞'}.
+                      </Text>
+                    )}
+
+                    <Text style={styles.infoModalQuestion}>Goal</Text>
+                    <Text style={styles.infoModalAnswer}>
+                      When passive income covers 100% of expenses = <Text style={{ color: '#f4c430', fontFamily: 'Inter_700Bold' }}>KINGED</Text>. Need {breakdown.fmt(Math.round(freedom.dailyNeeds * 365))}/yr — currently at {breakdown.fmt(Math.round(breakdown.totalPassiveIncome))}/yr ({breakdown.annualExpenses > 0 ? Math.round((breakdown.totalPassiveIncome / breakdown.annualExpenses) * 100) : 0}%).
+                    </Text>
+                  </>)}
 
                   {/* ── Next Level Progress ─── */}
                   {nextLevel.next && (
@@ -340,55 +446,82 @@ export default function HomeScreen() {
                     </View>
                   )}
 
-                  {/* ── All Levels ─── */}
-                  <View style={styles.allLevelsBox}>
-                    <Text style={styles.infoModalQuestion}>Freedom Levels</Text>
-                    {FREEDOM_LEVELS.map((level, i) => {
-                      const isCurrent = i === nextLevel.currentIndex;
-                      const isPast = i < nextLevel.currentIndex;
-                      return (
-                        <View key={level.key} style={[styles.levelRow, isCurrent && styles.levelRowCurrent]}>
-                          <Text style={styles.levelEmoji}>{level.emoji}</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.levelName, isCurrent && { color: '#f4c430' }, isPast && { color: '#4ade80' }]}>
-                              {level.label} {isCurrent ? '← You' : isPast ? '✓' : ''}
+                  {infoDetails && (
+                    <View style={styles.allLevelsBox}>
+                      <Text style={styles.infoModalQuestion}>Freedom Levels</Text>
+                      {FREEDOM_LEVELS.map((level, i) => {
+                        const isCurrent = i === nextLevel.currentIndex;
+                        const isPast = i < nextLevel.currentIndex;
+                        return (
+                          <View key={level.key} style={[styles.levelRow, isCurrent && styles.levelRowCurrent]}>
+                            <Text style={styles.levelEmoji}>{level.emoji}</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.levelName, isCurrent && { color: '#f4c430' }, isPast && { color: '#4ade80' }]}>
+                                {level.label} {isCurrent ? '← You' : isPast ? '✓' : ''}
+                              </Text>
+                            </View>
+                            <Text style={styles.levelThreshold}>
+                              {level.max === Infinity ? '∞' : level.max >= 365 ? `${(level.max / 365).toFixed(0)}y` : `${level.max}d`}
                             </Text>
                           </View>
-                          <Text style={styles.levelThreshold}>
-                            {level.max === Infinity ? '∞' : level.max >= 365 ? `${(level.max / 365).toFixed(0)}y` : `${level.max}d`}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
+                </ScrollView>
               ) : (
+                <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
                 <View style={styles.infoModalBody}>
-                  <Text style={styles.infoModalQuestion}>What is this?</Text>
                   <Text style={styles.infoModalAnswer}>
-                    Runway is how long your liquid cash reserves would last if all income stopped today — covering only your fixed monthly obligations and debt payments.
+                    How long all your sellable assets would cover bills if income stopped. Includes everything except retirement accounts.
                   </Text>
 
-                  <Text style={styles.infoModalQuestion}>How is it calculated?</Text>
                   <View style={styles.infoFormula}>
                     <Text style={styles.infoFormulaText}>
-                      Total Liquid Cash{'\n'}÷ (Monthly Obligations + Debt Payments)
+                      {breakdown.fmt(breakdown.runwayLiquid)} total ÷ {breakdown.fmt(breakdown.runwayBurn)}/mo burn = <Text style={{ color: '#60a5fa' }}>{runwayLabel}</Text>
                     </Text>
                   </View>
-                  <Text style={styles.infoModalAnswer}>
-                    This only counts cash in your bank accounts — not investments or crypto. It's your pure emergency buffer. Most experts recommend at least 3–6 months of runway.
-                  </Text>
-
-                  <Text style={styles.infoModalQuestion}>How is it different from Freedom?</Text>
-                  <Text style={styles.infoModalAnswer}>
-                    Freedom includes passive income — runway does not. Runway is your raw safety net. Freedom is your long-term trajectory toward financial independence.
-                  </Text>
 
                   <View style={styles.infoCurrentBox}>
                     <Text style={styles.infoCurrentLabel}>Your Runway</Text>
                     <Text style={[styles.infoCurrentValue, { color: '#60a5fa' }]}>{runwayLabel}</Text>
                   </View>
+
+                  <TouchableOpacity style={styles.detailsToggle} onPress={() => setInfoDetails(!infoDetails)}>
+                    <Text style={styles.detailsToggleText}>{infoDetails ? 'Hide details' : 'Show the math'}</Text>
+                  </TouchableOpacity>
+
+                  {infoDetails && (<>
+                    <Text style={styles.infoModalQuestion}>What's counted</Text>
+                    <View style={styles.infoFormula}>
+                      {breakdown.bankTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Bank accounts</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.bankTotal)}</Text></View>}
+                      {breakdown.cryptoTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Crypto</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.cryptoTotal)}</Text></View>}
+                      {breakdown.defiTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>DeFi positions</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.defiTotal)}</Text></View>}
+                      {breakdown.stockTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Stocks</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.stockTotal)}</Text></View>}
+                      {breakdown.realEstateTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Real estate equity</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.realEstateTotal)}</Text></View>}
+                      {breakdown.businessTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Business equity</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.businessTotal)}</Text></View>}
+                      <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={[styles.breakdownLabel, { color: '#fff' }]}>Total</Text><Text style={[styles.breakdownValue, { color: '#60a5fa' }]}>{breakdown.fmt(breakdown.runwayLiquid)}</Text></View>
+                    </View>
+                    {breakdown.retirementTotal > 0 && (
+                      <Text style={[styles.infoModalAnswer, { fontStyle: 'italic' }]}>
+                        Not counted: Retirement ({breakdown.fmt(breakdown.retirementTotal)}) — can't liquidate without penalties.
+                      </Text>
+                    )}
+
+                    <Text style={styles.infoModalQuestion}>Monthly burn</Text>
+                    <View style={styles.infoFormula}>
+                      <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Obligations</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>{breakdown.fmt(breakdown.monthlyObligations)}/mo</Text></View>
+                      {breakdown.monthlyDebt > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Debt payments</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>{breakdown.fmt(breakdown.monthlyDebt)}/mo</Text></View>}
+                      <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={[styles.breakdownLabel, { color: '#fff' }]}>Total burn</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>{breakdown.fmt(breakdown.runwayBurn)}/mo</Text></View>
+                    </View>
+
+                    <Text style={styles.infoModalAnswer}>
+                      This assumes selling everything (crypto, stocks{breakdown.realEstateTotal > 0 ? ', even the house' : ''}) to cover bills. Freedom offsets burn with passive income ({breakdown.fmt(Math.round(breakdown.totalPassiveIncome))}/yr) — runway does not.
+                    </Text>
+                  </>)}
                 </View>
+                </ScrollView>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -606,6 +739,11 @@ const styles = StyleSheet.create({
   },
   infoCurrentLabel: { fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6, fontFamily: 'Inter_700Bold' },
   infoCurrentValue: { fontSize: 32, fontFamily: 'Inter_800ExtraBold' },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
+  breakdownLabel: { fontSize: 13, color: '#b0b0b8', fontFamily: 'Inter_400Regular' },
+  breakdownValue: { fontSize: 13, color: '#e0e0e8', fontFamily: 'Inter_600SemiBold' },
+  detailsToggle: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 20, marginTop: 8, borderRadius: 20, backgroundColor: '#ffffff10', borderWidth: 1, borderColor: '#ffffff15' },
+  detailsToggleText: { fontSize: 13, color: '#888', fontFamily: 'Inter_600SemiBold' },
 
   // Next Level Progress
   nextLevelBox: {

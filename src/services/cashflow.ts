@@ -1,7 +1,7 @@
 // src/services/cashflow.ts
 // Analyzes cash flow per bank account using actual store types
 
-import type { BankAccount, IncomeSource, Obligation, Debt, Asset, PaycheckDeduction } from '../types';
+import type { BankAccount, IncomeSource, Obligation, Debt, Asset, PaycheckDeduction, RealEstateAsset } from '../types';
 
 export interface CashFlowAnalysis {
   account: BankAccount;
@@ -173,15 +173,21 @@ export function analyzeAllAccounts(
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (typeof a.currentBalance === 'number' && !isNaN(a.currentBalance) ? a.currentBalance : 0), 0);
 
   // Calculate liquid assets: bank balances + non-retirement liquid assets
+  // For real estate, use equity (value minus mortgage) instead of gross value
   const liquidNonRetirementAssets = assets
     .filter(a => {
       // Exclude retirement accounts (401k, IRA, etc.)
       if (a.metadata?.type === 'retirement') return false;
-      // For crypto/other assets, only count if they're marked as liquid or have a reasonable value
-      // SKR staking, savings accounts, etc. count
       return true;
     })
-    .reduce((sum, a) => sum + (a.value || 0), 0);
+    .reduce((sum, a) => {
+      const val = a.value || 0;
+      if (a.type === 'real_estate') {
+        const m = a.metadata as RealEstateAsset;
+        return sum + Math.max(0, val - (m?.mortgageBalance || 0));
+      }
+      return sum + val;
+    }, 0);
 
   const liquidAssets = totalBalance + liquidNonRetirementAssets;
 
