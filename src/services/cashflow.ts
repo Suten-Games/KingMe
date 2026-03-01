@@ -174,6 +174,10 @@ export function analyzeAllAccounts(
 
   // Calculate liquid assets: bank balances + non-retirement liquid assets
   // For real estate, use equity (value minus mortgage) instead of gross value
+  const totalMortgageBalance = debts
+    .filter(d => d.name.toLowerCase().includes('mortgage'))
+    .reduce((sum, d) => sum + (d.balance ?? d.principal ?? 0), 0);
+
   const liquidNonRetirementAssets = assets
     .filter(a => {
       // Exclude retirement accounts (401k, IRA, etc.)
@@ -184,7 +188,8 @@ export function analyzeAllAccounts(
       const val = a.value || 0;
       if (a.type === 'real_estate') {
         const m = a.metadata as RealEstateAsset;
-        return sum + Math.max(0, val - (m?.mortgageBalance || 0));
+        const mortgage = (m?.mortgageBalance || 0) > 0 ? m!.mortgageBalance! : totalMortgageBalance;
+        return sum + Math.max(0, val - mortgage);
       }
       return sum + val;
     }, 0);

@@ -92,6 +92,7 @@ export default function HomeScreen() {
   const [showModal, setShowModal] = useState(false);
   const [infoModal, setInfoModal] = useState<'freedom' | 'runway' | null>(null);
   const [infoDetails, setInfoDetails] = useState(false);
+  const [includeHouse, setIncludeHouse] = useState(false);
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -164,7 +165,12 @@ export default function HomeScreen() {
     // Group assets by type
     let bankTotal = bankAccounts.reduce((s, a) => s + (typeof a.currentBalance === 'number' && !isNaN(a.currentBalance) ? a.currentBalance : 0), 0);
     let cryptoTotal = 0, defiTotal = 0, stockTotal = 0, realEstateTotal = 0, businessTotal = 0, retirementTotal = 0;
-    let cryptoYield = 0, dividendYield = 0, rentalNet = 0, bizDistributions = 0;
+    let cryptoYield = 0, dividendYield = 0, rentalNet = 0, bizDistributions = 0, retirementAfterPenalty = 0;
+
+    // Sum mortgage debts for real estate equity fallback
+    const totalMortgageBalance = debts
+      .filter(d => d.name.toLowerCase().includes('mortgage'))
+      .reduce((sum, d) => sum + (d.balance ?? d.principal ?? 0), 0);
 
     for (const a of assets) {
       const val = a.value || 0;
@@ -189,7 +195,7 @@ export default function HomeScreen() {
         }
         case 'real_estate': {
           const m = a.metadata as RealEstateAsset;
-          const mortgage = m?.mortgageBalance || 0;
+          const mortgage = (m?.mortgageBalance || 0) > 0 ? m!.mortgageBalance! : totalMortgageBalance;
           realEstateTotal += Math.max(0, val - mortgage);
           rentalNet += ((m?.monthlyRentalIncome || 0) - (m?.monthlyExpenses || 0)) * 12;
           break;
@@ -201,7 +207,12 @@ export default function HomeScreen() {
           break;
         }
         default:
-          if ((a.metadata as any)?.type === 'retirement') retirementTotal += val;
+          if ((a.metadata as any)?.type === 'retirement' || a.type === 'retirement') {
+            retirementTotal += val;
+            const acctType = (a.metadata as any)?.accountType || '';
+            const isRoth = acctType.startsWith('roth');
+            retirementAfterPenalty += val * (1 - (isRoth ? 0.10 : 0.35));
+          }
           break;
       }
     }
@@ -216,19 +227,39 @@ export default function HomeScreen() {
     const runwayBurn = monthlyObligations + monthlyDebt;
 
     // Freedom: liquidAssets / (dailyNeeds - dailyAssetIncome)
-    // Freedom liquid = crypto + defi + stocks (not RE, not retirement)
-    const freedomLiquid = cryptoTotal + defiTotal + stockTotal;
+    // Freedom liquid = crypto + defi + stocks + retirement (after penalty)
+    const freedomLiquid = cryptoTotal + defiTotal + stockTotal + retirementAfterPenalty;
     const freedomDailyBurn = freedom.dailyNeeds - freedom.dailyAssetIncome;
     const freedomMonthlyBurn = freedomDailyBurn * 30;
 
+    // "Sell the house" scenario: add equity, but add rent to burn
+    // Estimate rent as ~0.7% of property value/mo (national avg rent-to-value ratio)
+    // Remove existing housing obligations (mortgage payment) since you'd no longer pay that
+    const estMonthlyRent = assets
+      .filter(a => a.type === 'real_estate')
+      .reduce((s, a) => s + Math.round((a.value || 0) * 0.005), 0); // 0.5% of value = downsized rental
+    const currentHousingCost = obligations
+      .filter(o => o.category === 'housing')
+      .reduce((s, o) => s + o.amount, 0);
+    const houseNetBurnChange = estMonthlyRent - currentHousingCost; // could be negative if mortgage > rent
+    const houseFreedomLiquid = freedomLiquid + realEstateTotal;
+    const houseFreedomBurn = freedomMonthlyBurn + houseNetBurnChange;
+    const houseFreedomMonths = houseFreedomBurn > 0 ? houseFreedomLiquid / houseFreedomBurn : Infinity;
+    const houseFreedomFormatted = houseFreedomMonths === Infinity ? 'Forever'
+      : houseFreedomMonths >= 24 ? `${(houseFreedomMonths / 12).toFixed(1)}y`
+      : houseFreedomMonths >= 2 ? `${Math.round(houseFreedomMonths)} months`
+      : `${Math.round(houseFreedomMonths * 30)} days`;
+
     return {
       fmt, bankTotal, cryptoTotal, defiTotal, stockTotal, realEstateTotal,
-      businessTotal, retirementTotal, cryptoYield, dividendYield, rentalNet,
-      bizDistributions, totalPassiveIncome, monthlyObligations, monthlyDebt,
-      annualExpenses, runwayLiquid, runwayBurn, freedomLiquid, freedomDailyBurn,
-      freedomMonthlyBurn,
+      businessTotal, retirementTotal, retirementAfterPenalty, cryptoYield,
+      dividendYield, rentalNet, bizDistributions, totalPassiveIncome,
+      monthlyObligations, monthlyDebt, annualExpenses, runwayLiquid, runwayBurn,
+      freedomLiquid, freedomDailyBurn, freedomMonthlyBurn,
+      estMonthlyRent, currentHousingCost, houseNetBurnChange,
+      houseFreedomLiquid, houseFreedomBurn, houseFreedomFormatted,
     };
-  }, [assets, bankAccounts, cashFlow, freedom]);
+  }, [assets, bankAccounts, cashFlow, freedom, obligations]);
 
   const dashboardBody = (
     <View style={styles.content}>
@@ -355,8 +386,8 @@ export default function HomeScreen() {
 
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
-      <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => { setInfoModal(null); setInfoDetails(false); }}>
-        <TouchableOpacity style={styles.infoModalOverlay} activeOpacity={1} onPress={() => { setInfoModal(null); setInfoDetails(false); }}>
+      <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => { setInfoModal(null); setInfoDetails(false); setIncludeHouse(false); }}>
+        <TouchableOpacity style={styles.infoModalOverlay} activeOpacity={1} onPress={() => { setInfoModal(null); setInfoDetails(false); setIncludeHouse(false); }}>
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <LinearGradient
               colors={infoModal === 'freedom' ? ['#3d3010', '#1e1808', '#0e0c04'] : ['#1a3868', '#102040', '#081020']}
@@ -398,12 +429,32 @@ export default function HomeScreen() {
                       {breakdown.cryptoTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Crypto</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.cryptoTotal)}</Text></View>}
                       {breakdown.defiTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>DeFi</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.defiTotal)}</Text></View>}
                       {breakdown.stockTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Stocks</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.stockTotal)}</Text></View>}
+                      {breakdown.retirementTotal > 0 && <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>401k/IRA (after penalty)</Text><Text style={styles.breakdownValue}>{breakdown.fmt(breakdown.retirementAfterPenalty)}</Text></View>}
                       <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 4 }]}><Text style={[styles.breakdownLabel, { color: '#fff' }]}>Total Liquid</Text><Text style={[styles.breakdownValue, { color: '#f4c430' }]}>{breakdown.fmt(breakdown.freedomLiquid)}</Text></View>
                     </View>
-                    {(breakdown.realEstateTotal > 0 || breakdown.retirementTotal > 0) && (
+                    {breakdown.retirementTotal > 0 && (
                       <Text style={[styles.infoModalAnswer, { fontStyle: 'italic' }]}>
-                        Not counted: {[breakdown.realEstateTotal > 0 && `Real estate (${breakdown.fmt(breakdown.realEstateTotal)})`, breakdown.retirementTotal > 0 && `Retirement (${breakdown.fmt(breakdown.retirementTotal)})`].filter(Boolean).join(', ')} — not liquid.
+                        401k/IRA: {breakdown.fmt(breakdown.retirementTotal)} gross, {breakdown.fmt(breakdown.retirementAfterPenalty)} after 10% penalty + ~25% tax.
                       </Text>
+                    )}
+                    {breakdown.realEstateTotal > 0 && !includeHouse && (
+                      <TouchableOpacity style={[styles.detailsToggle, { marginTop: 4, backgroundColor: '#ffffff08', borderColor: '#f4c43030' }]} onPress={() => setIncludeHouse(true)}>
+                        <Text style={[styles.detailsToggleText, { color: '#f4c430' }]}>What if I sold the house?</Text>
+                      </TouchableOpacity>
+                    )}
+                    {includeHouse && breakdown.realEstateTotal > 0 && (
+                      <View style={[styles.infoFormula, { borderColor: '#f4c43030' }]}>
+                        <Text style={[styles.infoModalQuestion, { marginTop: 0 }]}>Sell the house scenario</Text>
+                        <View style={[styles.breakdownRow, { marginTop: 6 }]}><Text style={styles.breakdownLabel}>Home equity added</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>+{breakdown.fmt(breakdown.realEstateTotal)}</Text></View>
+                        <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>New liquid total</Text><Text style={[styles.breakdownValue, { color: '#f4c430' }]}>{breakdown.fmt(breakdown.houseFreedomLiquid)}</Text></View>
+                        <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#ffffff15', paddingTop: 6, marginTop: 6 }]}><Text style={styles.breakdownLabel}>Drop mortgage/housing</Text><Text style={[styles.breakdownValue, { color: '#4ade80' }]}>-{breakdown.fmt(breakdown.currentHousingCost)}/mo</Text></View>
+                        <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Add rent (downsized est.)</Text><Text style={[styles.breakdownValue, { color: '#f87171' }]}>+{breakdown.fmt(breakdown.estMonthlyRent)}/mo</Text></View>
+                        <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Net burn change</Text><Text style={[styles.breakdownValue, { color: breakdown.houseNetBurnChange <= 0 ? '#4ade80' : '#f87171' }]}>{breakdown.houseNetBurnChange <= 0 ? '-' : '+'}{breakdown.fmt(Math.abs(breakdown.houseNetBurnChange))}/mo</Text></View>
+                        <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#f4c43030', paddingTop: 6, marginTop: 6 }]}><Text style={[styles.breakdownLabel, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>Freedom with house sold</Text><Text style={[styles.breakdownValue, { color: '#f4c430', fontFamily: 'Inter_700Bold' }]}>{breakdown.houseFreedomFormatted}</Text></View>
+                        <TouchableOpacity style={{ alignSelf: 'center', marginTop: 8 }} onPress={() => setIncludeHouse(false)}>
+                          <Text style={[styles.detailsToggleText, { fontSize: 12 }]}>Hide scenario</Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
 
                     <Text style={styles.infoModalQuestion}>Passive Income vs Expenses</Text>

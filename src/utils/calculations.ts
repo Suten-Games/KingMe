@@ -89,13 +89,19 @@ export function calculateAnnualDebtService(profile: UserProfile): number {
 
 /**
  * Calculate total liquid assets (what you can sell for cash)
+ * Includes retirement accounts with early-withdrawal penalty applied.
  */
 export function calculateLiquidAssets(assets: Asset[]): number {
   return assets.reduce((total, asset) => {
-    // All crypto/DeFi is liquid
-    // Real estate is NOT liquid for this calculation
     if (asset.type === 'crypto' || asset.type === 'defi' || asset.type === 'stocks') {
       return total + asset.value;
+    }
+    // Retirement: include at reduced value (10% penalty + ~25% tax = 35% hit for traditional, 10% for Roth)
+    if (asset.type === 'retirement' || (asset.metadata as any)?.type === 'retirement') {
+      const acctType = (asset.metadata as any)?.accountType || '';
+      const isRoth = acctType.startsWith('roth');
+      const penalty = isRoth ? 0.10 : 0.35; // Roth: 10% on earnings; Traditional: 10% penalty + ~25% tax
+      return total + asset.value * (1 - penalty);
     }
     return total;
   }, 0);
