@@ -59,7 +59,7 @@ export default function AssetTargetSection({ asset }: Props) {
       const p = await getPlan(mint);
       setPlan(p);
       if (p) {
-        setStats(computePlanStats(p, pricePerToken));
+        setStats(computePlanStats(p, pricePerToken, balance));
       }
     } catch {}
     setLoading(false);

@@ -48,7 +48,7 @@ export interface PlanStats {
   entries: AccEntry[];
 }
 
-export function computePlanStats(plan: AccumulationPlan, currentPrice: number): PlanStats {
+export function computePlanStats(plan: AccumulationPlan, currentPrice: number, walletBalance?: number): PlanStats {
   let totalBought = 0;
   let totalSold = 0;
   let totalInvested = 0;
@@ -64,7 +64,9 @@ export function computePlanStats(plan: AccumulationPlan, currentPrice: number): 
     }
   }
 
-  const currentHolding = totalBought - totalSold;
+  // Use actual wallet balance when available — entries may be incomplete
+  const entryDerived = totalBought - totalSold;
+  const currentHolding = walletBalance != null && walletBalance > 0 ? walletBalance : Math.max(0, entryDerived);
   const progressPct = plan.targetAmount > 0 ? (currentHolding / plan.targetAmount) * 100 : 0;
   const avgBuyPrice = totalBought > 0 ? totalInvested / totalBought : 0;
   const avgSellPrice = totalSold > 0 ? totalReceived / totalSold : 0;

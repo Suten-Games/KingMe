@@ -60,7 +60,7 @@ export default function AssetDetailScreen() {
   const logoURI = meta?.logoURI || '';
   const protocol = meta?.protocol || '';
   const apy = meta?.apy || meta?.dividendYield || 0;
-  const isCrypto = asset.type === 'crypto';
+  const isCrypto = asset.type === 'crypto' || asset.type === 'defi';
 
   const isPrimaryResidence = asset.type === 'real_estate' &&
     (asset.metadata as RealEstateAsset)?.isPrimaryResidence;
