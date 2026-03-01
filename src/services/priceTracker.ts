@@ -94,7 +94,7 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, numbe
 
 // ─── Snapshot Storage ────────────────────────────────────────────────────────
 
-async function loadSnapshots(): Promise<PriceSnapshot[]> {
+export async function loadSnapshots(): Promise<PriceSnapshot[]> {
   try {
     const raw = await AsyncStorage.getItem(SNAPSHOT_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -216,6 +216,89 @@ function findClosestPrice(snapshots: PriceSnapshot[], targetTime: number): numbe
   }
 
   return closest?.price ?? null;
+}
+
+// ─── Sparkline Helpers ───────────────────────────────────────────────────────
+
+export async function loadSnapshotsForMint(
+  mint: string
+): Promise<PriceSnapshot[]> {
+  const all = await loadSnapshots();
+  return all
+    .filter(s => s.mint === mint)
+    .sort((a, b) => a.timestamp - b.timestamp);
+}
+
+// ─── Token Project Info ──────────────────────────────────────────────────────
+
+export interface TokenProjectInfo {
+  description?: string;
+  websiteUrl?: string;
+  twitterUrl?: string;
+  discordUrl?: string;
+  telegramUrl?: string;
+}
+
+const TOKEN_INFO_CACHE_KEY = 'token_project_info_';
+const TOKEN_INFO_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+export async function fetchTokenInfo(mint: string): Promise<TokenProjectInfo | null> {
+  // Check cache first
+  const cacheKey = `${TOKEN_INFO_CACHE_KEY}${mint}`;
+  try {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < TOKEN_INFO_TTL) return data;
+    }
+  } catch {}
+
+  try {
+    const response = await fetch(`https://api.dexscreener.com/tokens/v1/solana/${mint}`);
+    if (!response.ok) return null;
+
+    const pairs = await response.json();
+    if (!Array.isArray(pairs) || pairs.length === 0) return null;
+
+    // Use the first pair that has info
+    const pair = pairs.find((p: any) => p.info) || pairs[0];
+    const info = pair?.info;
+    if (!info) return null;
+
+    const result: TokenProjectInfo = {};
+
+    if (info.description) result.description = info.description;
+
+    // Websites
+    if (Array.isArray(info.websites)) {
+      const site = info.websites.find((w: any) => w.url);
+      if (site) result.websiteUrl = site.url;
+    }
+
+    // Socials
+    if (Array.isArray(info.socials)) {
+      for (const social of info.socials) {
+        if (social.type === 'twitter' || social.platform === 'twitter') {
+          result.twitterUrl = social.url;
+        } else if (social.type === 'discord' || social.platform === 'discord') {
+          result.discordUrl = social.url;
+        } else if (social.type === 'telegram' || social.platform === 'telegram') {
+          result.telegramUrl = social.url;
+        }
+      }
+    }
+
+    // Cache for 24h
+    await AsyncStorage.setItem(cacheKey, JSON.stringify({
+      data: result,
+      timestamp: Date.now(),
+    }));
+
+    return result;
+  } catch (error) {
+    console.error('Failed to fetch token info:', error);
+    return null;
+  }
 }
 
 // ─── Watchlist ───────────────────────────────────────────────────────────────
