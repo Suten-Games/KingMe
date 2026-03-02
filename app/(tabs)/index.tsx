@@ -24,6 +24,7 @@ import GoalsStrip from '@/components/GoalsStrip';
 import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 import WindfallAlertCard from '@/components/WindfallAlertCard';
 import SpendingGapAlert from '../../src/components/SpendingGapAlert';
+import TradeInsightCards from '@/components/TradeInsightCards';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -351,6 +352,8 @@ export default function HomeScreen() {
       <PortfolioTrendCard />
 
       <TradingIncomeWarning />
+
+      <TradeInsightCards />
 
       {/* ── Recommendations ───────────────────────────────────────── */}
       {cashFlow.recommendations.length > 0 && (
