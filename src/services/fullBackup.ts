@@ -19,6 +19,7 @@ const ASYNC_KEYS = [
   'price_watchlist',
   'watchlist_extended',
   'business_dashboard_data',
+  'companionship_tracker_data',
 
   // Preferences & dismissals
   'paid_addons_hidden',

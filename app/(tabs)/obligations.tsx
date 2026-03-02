@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import type { Obligation } from '../../src/types';
+import { BankTransactionCategory, TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '../../src/types/bankTransactionTypes';
 import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
@@ -34,6 +35,71 @@ const CHALLENGE_QUESTIONS: Record<string, string[]> = {
   other:         ['What exactly is this for?', 'Would you sign up for this again today?', 'What happens if you stop paying?'],
 };
 
+// ─── Category Picker (modal-based) ────────────────────────────────────────────
+function ObligationCategoryPicker({ value, onChange }: { value: BankTransactionCategory | ''; onChange: (cat: BankTransactionCategory | '') => void }) {
+  const [open, setOpen] = useState(false);
+  const meta = value ? TRANSACTION_CATEGORY_META[value] : null;
+
+  return (
+    <>
+      <Text style={s.label}>Spending Category</Text>
+      <TouchableOpacity style={s.catPickerField} onPress={() => setOpen(true)}>
+        <Text style={meta ? s.catPickerValue : s.catPickerPlaceholder}>
+          {meta ? `${meta.emoji} ${meta.label}` : 'Tap to select category'}
+        </Text>
+        <Text style={s.catPickerArrow}>▼</Text>
+      </TouchableOpacity>
+
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <View style={s.catModalOverlay}>
+          <View style={s.catModalContent}>
+            <View style={s.catModalHeader}>
+              <Text style={s.catModalTitle}>Select Category</Text>
+              <TouchableOpacity onPress={() => setOpen(false)}>
+                <Text style={s.catModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[s.catOption, !value && s.catOptionActive]}
+                onPress={() => { onChange(''); setOpen(false); }}>
+                <Text style={[s.catOptionText, !value && s.catOptionTextActive]}>None</Text>
+              </TouchableOpacity>
+
+              {CATEGORY_OPTIONS.map(({ group, categories }) => {
+                const gMeta = TRANSACTION_GROUP_META[group];
+                return (
+                  <View key={group}>
+                    <Text style={[s.catGroupHeader, { color: gMeta?.color || T.textMuted }]}>
+                      {gMeta?.emoji} {gMeta?.label}
+                    </Text>
+                    {categories.map(({ value: cat, label }) => {
+                      const catMeta = TRANSACTION_CATEGORY_META[cat];
+                      const isActive = value === cat;
+                      return (
+                        <TouchableOpacity key={cat}
+                          style={[s.catOption, isActive && { ...s.catOptionActive, borderColor: gMeta?.color || T.gold }]}
+                          onPress={() => { onChange(cat); setOpen(false); }}>
+                          <Text style={[s.catOptionText, isActive && s.catOptionTextActive]}>
+                            {catMeta?.emoji || ''} {label}
+                          </Text>
+                          {isActive && <Text style={[s.catOptionCheck, { color: gMeta?.color || T.gold }]}>✓</Text>}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 export default function ObligationsScreen() {
   const obligations = useStore((state) => state.obligations);
   const bankAccounts = useStore((state) => state.bankAccounts);
@@ -51,6 +117,7 @@ export default function ObligationsScreen() {
   const [amount, setAmount] = useState('');
   const [accountId, setAccountId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [transactionCategory, setTransactionCategory] = useState<BankTransactionCategory | ''>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -143,8 +210,10 @@ export default function ObligationsScreen() {
       amount: parseFloat(amount), category: 'other', isRecurring: true,
       dueDate: dueDate ? parseInt(dueDate) : 1,
       bankAccountId: accountId || undefined,
+      ...(transactionCategory && { transactionCategory }),
     });
     setName(''); setPayee(''); setAmount(''); setAccountId(''); setDueDate('');
+    setTransactionCategory('');
     setShowAddModal(false);
   };
 
@@ -154,6 +223,7 @@ export default function ObligationsScreen() {
     setAmount(obligation.amount.toString());
     setAccountId(obligation.bankAccountId || '');
     setDueDate(obligation.dueDate?.toString() || '');
+    setTransactionCategory(obligation.transactionCategory || '');
     setShowAddModal(true);
   };
 
@@ -163,14 +233,15 @@ export default function ObligationsScreen() {
       name, payee: payee || 'Various', amount: parseFloat(amount),
       bankAccountId: accountId || undefined,
       dueDate: dueDate ? parseInt(dueDate) : undefined,
+      transactionCategory: transactionCategory || undefined,
     });
     setEditingObligation(null); setName(''); setPayee(''); setAmount('');
-    setAccountId(''); setDueDate(''); setShowAddModal(false);
+    setAccountId(''); setDueDate(''); setTransactionCategory(''); setShowAddModal(false);
   };
 
   const handleCloseModal = () => {
     setEditingObligation(null); setName(''); setPayee(''); setAmount('');
-    setAccountId(''); setDueDate(''); setShowAddModal(false);
+    setAccountId(''); setDueDate(''); setTransactionCategory(''); setShowAddModal(false);
   };
 
   const monthlyTotal = obligations.reduce((sum, o) => sum + o.amount, 0);
@@ -441,6 +512,8 @@ export default function ObligationsScreen() {
               <Text style={s.label}>Due Day of Month (Optional)</Text>
               <TextInput style={s.modalInput} placeholder="e.g., 1, 15" placeholderTextColor="#555" keyboardType="numeric" value={dueDate} onChangeText={setDueDate} />
 
+              <ObligationCategoryPicker value={transactionCategory} onChange={setTransactionCategory} />
+
               <Text style={s.label}>Paid From (Optional)</Text>
               {bankAccounts.length === 0 ? (
                 <Text style={s.noAccountsWarning}>⚠️ No bank accounts added yet</Text>
@@ -607,4 +680,21 @@ const s = StyleSheet.create({
 
   // Tap hint
   auditTapHint: { fontSize: 11, color: T.textDim, marginTop: 8, fontFamily: T.fontRegular, textAlign: 'right' },
+
+  // Category picker
+  catPickerField: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, borderWidth: 1.5, borderColor: T.border },
+  catPickerValue: { fontSize: 16, color: T.textPrimary, fontFamily: T.fontMedium },
+  catPickerPlaceholder: { fontSize: 16, color: '#555', fontFamily: T.fontRegular },
+  catPickerArrow: { fontSize: 12, color: T.textMuted },
+  catModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  catModalContent: { backgroundColor: T.bg, borderTopLeftRadius: T.radius.xl, borderTopRightRadius: T.radius.xl, padding: 20, maxHeight: '70%' },
+  catModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  catModalTitle: { fontSize: 20, color: T.textPrimary, fontFamily: T.fontExtraBold },
+  catModalClose: { fontSize: 22, color: T.textMuted, padding: 4 },
+  catGroupHeader: { fontSize: 13, fontFamily: T.fontBold, marginTop: 16, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  catOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: T.radius.md, borderWidth: 1.5, borderColor: 'transparent', marginBottom: 4 },
+  catOptionActive: { borderColor: T.gold, backgroundColor: T.gold + '15' },
+  catOptionText: { fontSize: 15, color: T.textSecondary, fontFamily: T.fontMedium },
+  catOptionTextActive: { color: T.textPrimary, fontFamily: T.fontBold },
+  catOptionCheck: { fontSize: 16, fontFamily: T.fontBold },
 });

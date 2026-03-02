@@ -11,7 +11,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '@/types/bankTransactionTypes';
-import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '@/types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import { parseCSVTransactions, detectRecurring, autoCategorize } from '../../src/utils/csvBankImport';
 import { T } from '../../src/theme';
 
@@ -53,13 +53,7 @@ function monthsToPayoff(principal: number, payment: number, rate: number): strin
   return m >= 12 ? `${(m / 12).toFixed(1)}y` : `${m}mo`;
 }
 
-const QUICK_CATEGORIES: BankTransactionCategory[] = [
-  'food_grocery', 'food_restaurant', 'food_delivery', 'food_coffee',
-  'transport_fuel', 'transport_rideshare', 'utilities_electric', 'utilities_internet',
-  'subscription_streaming', 'subscription_software', 'personal_clothing',
-  'entertainment_events', 'medical_pharmacy', 'financial_debt_payment',
-  'transfer_between_accounts', 'other',
-];
+const ALL_CATEGORIES: BankTransactionCategory[] = CATEGORY_OPTIONS.flatMap(g => g.categories.map(c => c.value));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function DebtDetailScreen() {
@@ -585,7 +579,7 @@ export default function DebtDetailScreen() {
               {/* Category */}
               <Text style={s.modalLabel}>Category</Text>
               <View style={s.categoryGrid}>
-                {QUICK_CATEGORIES.map(cat => {
+                {ALL_CATEGORIES.map(cat => {
                   const cm = TRANSACTION_CATEGORY_META[cat];
                   return (
                     <TouchableOpacity key={cat} style={[s.categoryPill, formCategory === cat && s.categoryPillActive]}

@@ -44,6 +44,15 @@ const ADD_ONS: AddOn[] = [
     hideable: true,
   },
   {
+    id: 'companionship_tracker',
+    name: 'Companionship',
+    emoji: '💜',
+    description: 'Track and optimize spending for a special someone — budgets, insights, and privacy',
+    price: '$4.99',
+    route: '/companionship',
+    hideable: true,
+  },
+  {
     id: 'tax_optimizer',
     name: 'Tax Loss Harvesting',
     emoji: '🧾',

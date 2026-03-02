@@ -11,113 +11,12 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
-import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '@/types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import type { ObligationCategory } from '@/types';
 
 const fmt = (n: number) => '$' + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-// ── Category picker options (same as categorize.tsx) ────────────────────────
-const RECAT_OPTIONS: { group: BankTransactionGroup; categories: { value: BankTransactionCategory; label: string }[] }[] = [
-  {
-    group: 'housing',
-    categories: [
-      { value: 'housing_mortgage', label: 'Mortgage' },
-      { value: 'housing_rent', label: 'Rent' },
-      { value: 'housing_maintenance', label: 'Home Maint.' },
-    ],
-  },
-  {
-    group: 'food',
-    categories: [
-      { value: 'food_grocery', label: 'Grocery' },
-      { value: 'food_restaurant', label: 'Restaurant' },
-      { value: 'food_delivery', label: 'Delivery' },
-      { value: 'food_coffee', label: 'Coffee' },
-    ],
-  },
-  {
-    group: 'transport',
-    categories: [
-      { value: 'transport_fuel', label: 'Fuel' },
-      { value: 'transport_rideshare', label: 'Rideshare' },
-      { value: 'transport_parking', label: 'Parking' },
-      { value: 'transport_maintenance', label: 'Auto Care' },
-    ],
-  },
-  {
-    group: 'utilities',
-    categories: [
-      { value: 'utilities_electric', label: 'Electric' },
-      { value: 'utilities_internet', label: 'Internet' },
-      { value: 'utilities_phone', label: 'Phone' },
-      { value: 'utilities_water', label: 'Water' },
-      { value: 'utilities_gas', label: 'Gas Utility' },
-      { value: 'utilities_other', label: 'Other Utility' },
-    ],
-  },
-  {
-    group: 'insurance',
-    categories: [
-      { value: 'insurance_auto', label: 'Auto Ins.' },
-      { value: 'insurance_health', label: 'Health Ins.' },
-      { value: 'insurance_home', label: 'Home Ins.' },
-      { value: 'insurance_life', label: 'Life Ins.' },
-      { value: 'insurance_other', label: 'Other Ins.' },
-    ],
-  },
-  {
-    group: 'subscriptions',
-    categories: [
-      { value: 'subscription_streaming', label: 'Streaming' },
-      { value: 'subscription_software', label: 'Software' },
-      { value: 'subscription_gym', label: 'Gym' },
-      { value: 'subscription_other', label: 'Other Sub' },
-    ],
-  },
-  {
-    group: 'medical',
-    categories: [
-      { value: 'medical_doctor', label: 'Doctor' },
-      { value: 'medical_pharmacy', label: 'Pharmacy' },
-      { value: 'medical_dental', label: 'Dental' },
-      { value: 'medical_other', label: 'Other Medical' },
-    ],
-  },
-  {
-    group: 'personal',
-    categories: [
-      { value: 'personal_clothing', label: 'Clothing' },
-      { value: 'personal_grooming', label: 'Grooming' },
-      { value: 'personal_education', label: 'Education' },
-      { value: 'personal_gifts', label: 'Gifts' },
-    ],
-  },
-  {
-    group: 'entertainment',
-    categories: [
-      { value: 'entertainment_events', label: 'Events' },
-      { value: 'entertainment_hobbies', label: 'Hobbies' },
-      { value: 'entertainment_travel', label: 'Travel' },
-    ],
-  },
-  {
-    group: 'financial',
-    categories: [
-      { value: 'financial_debt_payment', label: 'Debt Payment' },
-      { value: 'financial_investment', label: 'Investment' },
-      { value: 'financial_savings_transfer', label: 'Savings' },
-      { value: 'financial_fees', label: 'Fees' },
-      { value: 'financial_taxes', label: 'Taxes' },
-    ],
-  },
-  {
-    group: 'transfers',
-    categories: [
-      { value: 'transfer_between_accounts', label: 'Transfer' },
-      { value: 'transfer_to_other', label: 'Transfer Out' },
-    ],
-  },
-];
+const RECAT_OPTIONS = CATEGORY_OPTIONS;
 
 // ── ObligationCategory → BankTransactionGroup mapping ───────────────────────
 const OBLIGATION_GROUP_MAP: Record<ObligationCategory, BankTransactionGroup> = {

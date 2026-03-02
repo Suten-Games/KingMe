@@ -11,7 +11,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '@/types/bankTransactionTypes';
-import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '@/types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import { parseCSVTransactions, detectRecurring, autoCategorize } from '../../src/utils/csvBankImport';
 
 // If you have a theme file:
@@ -63,20 +63,8 @@ function groupByDate(transactions: BankTransaction[]): Record<string, BankTransa
   return groups;
 }
 
-// ─── Quick category picker (most common ones) ────────────────────────────────
-const QUICK_CATEGORIES: BankTransactionCategory[] = [
-  'food_grocery', 'food_restaurant', 'food_delivery', 'food_coffee',
-  'transport_fuel', 'transport_rideshare',
-  'housing_rent', 'utilities_electric', 'utilities_internet', 'utilities_phone',
-  'subscription_streaming', 'subscription_software', 'subscription_gym',
-  'medical_pharmacy', 'medical_doctor',
-  'personal_clothing', 'personal_grooming',
-  'entertainment_events', 'entertainment_hobbies',
-  'financial_investment', 'financial_debt_payment',
-  'income_salary', 'income_freelance', 'income_transfer_in', 'income_refund',
-  'transfer_between_accounts',
-  'business_expense', 'smoking', 'other',
-];
+// ─── All categories from canonical source ────────────────────────────────────
+const ALL_CATEGORIES: BankTransactionCategory[] = CATEGORY_OPTIONS.flatMap(g => g.categories.map(c => c.value));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -1193,7 +1181,7 @@ export default function BankAccountDetailScreen() {
 
               {showCategoryPicker && (
                 <View style={s.categoryGrid}>
-                  {QUICK_CATEGORIES.map(cat => {
+                  {ALL_CATEGORIES.map(cat => {
                     const meta = TRANSACTION_CATEGORY_META[cat];
                     return (
                       <TouchableOpacity

@@ -1171,6 +1171,18 @@ export const useStore = create<AppState>((set, get) => ({
         const syncedSources = syncDriftIncomeSource(driftTrades, incomeSources, defaultAccount);
         merged.income = { ...merged.income, sources: syncedSources };
 
+        // One-time migration: recategorize custom_hoes → personal_companion
+        if (merged.bankTransactions?.some((t: any) => t.category === 'custom_hoes')) {
+          merged.bankTransactions = merged.bankTransactions.map((t: any) =>
+            t.category === 'custom_hoes' ? { ...t, category: 'personal_companion' } : t
+          );
+          if (merged.customCategories?.['custom_hoes']) {
+            const { custom_hoes: _, ...restCats } = merged.customCategories;
+            merged.customCategories = restCats;
+          }
+          console.log('[MIGRATE] Recategorized custom_hoes → personal_companion');
+        }
+
         set(merged);
         console.log('Profile loaded successfully');
       }

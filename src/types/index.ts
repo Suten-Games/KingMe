@@ -1,6 +1,6 @@
 // KingMe - Type Definitions
 
-import { BankTransaction, CustomCategoryDef } from "./bankTransactionTypes";
+import { BankTransaction, BankTransactionCategory, CustomCategoryDef } from "./bankTransactionTypes";
 
 export type AvatarType = 'male-medium' | 'female-medium';
 
@@ -175,6 +175,7 @@ export interface Obligation {
   payee?: string; // Who gets paid
   amount: number; // monthly
   category: ObligationCategory;
+  transactionCategory?: BankTransactionCategory; // For bank transaction matching
   isRecurring: boolean;
   bankAccountId?: string; // Which account pays this
   autoPay?: boolean;
@@ -329,12 +330,12 @@ export interface Debt {
   monthlyPayment: number;
   minimumPayment: number;
   bankAccountId?: string; // Which account the payment comes out of
+  transactionCategory?: BankTransactionCategory; // For bank transaction matching
   dueDate: number;
   isPaidThisMonth?: boolean;
   lastPaidDate?: string;
   payee?: string;
   balance?: number;
-
 }
 
 // ─── Paycheck Breakdown ──────────────────────────────────────────────────────

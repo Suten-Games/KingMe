@@ -10,110 +10,9 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
-import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '@/types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 
-// ── Reuse the same RECAT_OPTIONS from SpendingGapAlert ──────────────────────
-const RECAT_OPTIONS: { group: BankTransactionGroup; categories: { value: BankTransactionCategory; label: string }[] }[] = [
-  {
-    group: 'housing',
-    categories: [
-      { value: 'housing_mortgage', label: 'Mortgage' },
-      { value: 'housing_rent', label: 'Rent' },
-      { value: 'housing_maintenance', label: 'Home Maint.' },
-    ],
-  },
-  {
-    group: 'food',
-    categories: [
-      { value: 'food_grocery', label: 'Grocery' },
-      { value: 'food_restaurant', label: 'Restaurant' },
-      { value: 'food_delivery', label: 'Delivery' },
-      { value: 'food_coffee', label: 'Coffee' },
-    ],
-  },
-  {
-    group: 'transport',
-    categories: [
-      { value: 'transport_fuel', label: 'Fuel' },
-      { value: 'transport_rideshare', label: 'Rideshare' },
-      { value: 'transport_parking', label: 'Parking' },
-      { value: 'transport_maintenance', label: 'Auto Care' },
-    ],
-  },
-  {
-    group: 'utilities',
-    categories: [
-      { value: 'utilities_electric', label: 'Electric' },
-      { value: 'utilities_internet', label: 'Internet' },
-      { value: 'utilities_phone', label: 'Phone' },
-      { value: 'utilities_water', label: 'Water' },
-      { value: 'utilities_gas', label: 'Gas Utility' },
-      { value: 'utilities_other', label: 'Other Utility' },
-    ],
-  },
-  {
-    group: 'insurance',
-    categories: [
-      { value: 'insurance_auto', label: 'Auto Ins.' },
-      { value: 'insurance_health', label: 'Health Ins.' },
-      { value: 'insurance_home', label: 'Home Ins.' },
-      { value: 'insurance_life', label: 'Life Ins.' },
-      { value: 'insurance_other', label: 'Other Ins.' },
-    ],
-  },
-  {
-    group: 'subscriptions',
-    categories: [
-      { value: 'subscription_streaming', label: 'Streaming' },
-      { value: 'subscription_software', label: 'Software' },
-      { value: 'subscription_gym', label: 'Gym' },
-      { value: 'subscription_other', label: 'Other Sub' },
-    ],
-  },
-  {
-    group: 'medical',
-    categories: [
-      { value: 'medical_doctor', label: 'Doctor' },
-      { value: 'medical_pharmacy', label: 'Pharmacy' },
-      { value: 'medical_dental', label: 'Dental' },
-      { value: 'medical_other', label: 'Other Medical' },
-    ],
-  },
-  {
-    group: 'personal',
-    categories: [
-      { value: 'personal_clothing', label: 'Clothing' },
-      { value: 'personal_grooming', label: 'Grooming' },
-      { value: 'personal_education', label: 'Education' },
-      { value: 'personal_gifts', label: 'Gifts' },
-    ],
-  },
-  {
-    group: 'entertainment',
-    categories: [
-      { value: 'entertainment_events', label: 'Events' },
-      { value: 'entertainment_hobbies', label: 'Hobbies' },
-      { value: 'entertainment_travel', label: 'Travel' },
-    ],
-  },
-  {
-    group: 'financial',
-    categories: [
-      { value: 'financial_debt_payment', label: 'Debt Payment' },
-      { value: 'financial_investment', label: 'Investment' },
-      { value: 'financial_savings_transfer', label: 'Savings' },
-      { value: 'financial_fees', label: 'Fees' },
-      { value: 'financial_taxes', label: 'Taxes' },
-    ],
-  },
-  {
-    group: 'transfers',
-    categories: [
-      { value: 'transfer_between_accounts', label: 'Transfer' },
-      { value: 'transfer_to_other', label: 'Transfer Out' },
-    ],
-  },
-];
+const RECAT_OPTIONS = CATEGORY_OPTIONS;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -162,16 +61,94 @@ export default function CategorizePage() {
   const addCustomCategory = useStore(s => s.addCustomCategory);
 
   const [mode, setMode] = useState<'sort' | 'browse'>('sort');
+  const [filterGroup, setFilterGroup] = useState<BankTransactionGroup | 'all'>('other');
+  const [autoResult, setAutoResult] = useState<string | null>(null);
 
-  // Filter to expenses in the "other" group (includes 'other', 'business_expense', 'smoking')
-  const otherExpenses = useMemo(
+  // Resolve group for a transaction
+  const resolveGroup = useCallback((cat: BankTransactionCategory): BankTransactionGroup | null => {
+    const builtIn = TRANSACTION_CATEGORY_META[cat as keyof typeof TRANSACTION_CATEGORY_META];
+    if (builtIn) return builtIn.group;
+    const custom = customCategories[cat];
+    if (custom) return custom.group;
+    return null;
+  }, [customCategories]);
+
+  // Count uncategorized ("other" group) for the badge
+  const otherCount = useMemo(
+    () => bankTransactions.filter(t => t.type === 'expense' && resolveGroup(t.category) === 'other').length,
+    [bankTransactions, resolveGroup],
+  );
+
+  const filteredExpenses = useMemo(
     () => bankTransactions.filter(t => {
       if (t.type !== 'expense') return false;
-      const meta = TRANSACTION_CATEGORY_META[t.category as keyof typeof TRANSACTION_CATEGORY_META];
-      return meta?.group === 'other';
+      if (filterGroup === 'all') return true;
+      return resolveGroup(t.category) === filterGroup;
     }),
-    [bankTransactions],
+    [bankTransactions, filterGroup, resolveGroup],
   );
+
+  // Auto-categorize: learn from already-sorted transactions
+  const { patternMap, matchableCount } = useMemo(() => {
+    // Build pattern → category from all non-"other" expense transactions
+    const map = new Map<string, { category: BankTransactionCategory; count: number }>();
+    for (const t of bankTransactions) {
+      if (t.type !== 'expense') continue;
+      const grp = resolveGroup(t.category);
+      if (!grp || grp === 'other') continue;
+      const pattern = cleanPattern(t.description);
+      if (!pattern) continue;
+      const existing = map.get(pattern);
+      if (existing) {
+        existing.count++;
+      } else {
+        map.set(pattern, { category: t.category, count: 1 });
+      }
+    }
+    // Count how many "other" transactions match a known pattern
+    let matchable = 0;
+    for (const t of bankTransactions) {
+      if (t.type !== 'expense') continue;
+      const grp = resolveGroup(t.category);
+      if (grp !== 'other') continue;
+      const pattern = cleanPattern(t.description);
+      if (pattern && map.has(pattern)) matchable++;
+    }
+    return { patternMap: map, matchableCount: matchable };
+  }, [bankTransactions, resolveGroup]);
+
+  const runAutoCategorize = useCallback(() => {
+    let applied = 0;
+    for (const t of bankTransactions) {
+      if (t.type !== 'expense') continue;
+      const grp = resolveGroup(t.category);
+      if (grp !== 'other') continue;
+      const pattern = cleanPattern(t.description);
+      if (!pattern) continue;
+      const match = patternMap.get(pattern);
+      if (match) {
+        updateBankTransaction(t.id, { category: match.category });
+        applied++;
+      }
+    }
+    setAutoResult(applied > 0 ? `Auto-categorized ${applied} transaction${applied !== 1 ? 's' : ''}` : 'No matches found');
+    setTimeout(() => setAutoResult(null), 3000);
+  }, [bankTransactions, patternMap, resolveGroup, updateBankTransaction]);
+
+  const FILTER_OPTIONS: { value: BankTransactionGroup | 'all'; label: string; emoji: string }[] = [
+    { value: 'other', label: 'Unsorted', emoji: '📋' },
+    { value: 'all', label: 'All', emoji: '🔍' },
+    { value: 'housing', label: 'Housing', emoji: '🏠' },
+    { value: 'food', label: 'Food', emoji: '🍽️' },
+    { value: 'transport', label: 'Transport', emoji: '🚗' },
+    { value: 'utilities', label: 'Utilities', emoji: '💡' },
+    { value: 'insurance', label: 'Insurance', emoji: '🛡️' },
+    { value: 'subscriptions', label: 'Subs', emoji: '🔁' },
+    { value: 'medical', label: 'Medical', emoji: '🏥' },
+    { value: 'personal', label: 'Personal', emoji: '👕' },
+    { value: 'entertainment', label: 'Fun', emoji: '🎟️' },
+    { value: 'financial', label: 'Financial', emoji: '📈' },
+  ];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -183,6 +160,31 @@ export default function CategorizePage() {
         <Text style={styles.title}>Sort Transactions</Text>
         <View style={{ width: 50 }} />
       </View>
+
+      {/* Group filter */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
+        {FILTER_OPTIONS.map(opt => (
+          <TouchableOpacity
+            key={opt.value}
+            style={[styles.filterChip, filterGroup === opt.value && styles.filterChipActive]}
+            onPress={() => setFilterGroup(opt.value)}
+          >
+            <Text style={[styles.filterChipText, filterGroup === opt.value && styles.filterChipTextActive]}>
+              {opt.emoji} {opt.label}{opt.value === 'other' && otherCount > 0 ? ` (${otherCount})` : ''}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Auto-categorize */}
+      {matchableCount > 0 && (
+        <TouchableOpacity style={styles.autoBtn} onPress={runAutoCategorize}>
+          <Text style={styles.autoBtnText}>⚡ Auto-categorize {matchableCount} transaction{matchableCount !== 1 ? 's' : ''}</Text>
+        </TouchableOpacity>
+      )}
+      {autoResult && (
+        <Text style={styles.autoResult}>{autoResult}</Text>
+      )}
 
       {/* Segmented control */}
       <View style={styles.segmentRow}>
@@ -201,8 +203,8 @@ export default function CategorizePage() {
       </View>
 
       {mode === 'sort'
-        ? <SortMode transactions={otherExpenses} updateBankTransaction={updateBankTransaction} router={router} customCategories={customCategories} addCustomCategory={addCustomCategory} />
-        : <BrowseMode transactions={otherExpenses} updateBankTransaction={updateBankTransaction} customCategories={customCategories} addCustomCategory={addCustomCategory} />
+        ? <SortMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} router={router} customCategories={customCategories} addCustomCategory={addCustomCategory} />
+        : <BrowseMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} customCategories={customCategories} addCustomCategory={addCustomCategory} />
       }
     </View>
   );
@@ -859,6 +861,60 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#e8e0d0',
+  },
+
+  // Group filter
+  filterScroll: {
+    maxHeight: 38,
+    marginBottom: 8,
+  },
+  filterContent: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#1a1f2e',
+    borderWidth: 1,
+    borderColor: '#2a3050',
+  },
+  filterChipActive: {
+    backgroundColor: '#f4c43020',
+    borderColor: '#f4c430',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+  },
+  filterChipTextActive: {
+    color: '#f4c430',
+  },
+
+  // Auto-categorize
+  autoBtn: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: '#f4c43015',
+    borderWidth: 1,
+    borderColor: '#f4c43040',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  autoBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#f4c430',
+  },
+  autoResult: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4ade80',
+    textAlign: 'center',
+    marginBottom: 8,
   },
 
   // Segmented control

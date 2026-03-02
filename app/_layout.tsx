@@ -70,6 +70,7 @@ export default function RootLayout() {
           <Stack.Screen name="expenses" options={{ title: 'Daily Expenses' }} />
           <Stack.Screen name="business" options={{ headerShown: false }} />
           <Stack.Screen name="divorce-simulator" options={{ headerShown: false }} />
+          <Stack.Screen name="companionship" options={{ headerShown: false }} />
           <Stack.Screen name="badges" options={{ title: 'Badges' }} />
           <Stack.Screen name="watchlist" options={{ title: 'Watchlist', headerStyle: { backgroundColor: '#080c18' }, headerTintColor: '#f4c430' }} />
           <Stack.Screen name="goals" options={{ headerShown: false }} />

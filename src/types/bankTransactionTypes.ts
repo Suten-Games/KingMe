@@ -55,6 +55,9 @@ export type BankTransactionCategory =
   | 'personal_grooming'
   | 'personal_education'
   | 'personal_gifts'
+  | 'personal_companion'
+  | 'personal_spouse'
+  | 'personal_kids'
   // Entertainment
   | 'entertainment_events'
   | 'entertainment_hobbies'
@@ -179,6 +182,9 @@ export const TRANSACTION_CATEGORY_META: CategoryMetaMap & Partial<Record<`custom
   personal_grooming:       { label: 'Grooming',         emoji: '💈', group: 'personal' },
   personal_education:      { label: 'Education',        emoji: '📚', group: 'personal' },
   personal_gifts:          { label: 'Gifts',            emoji: '🎁', group: 'personal' },
+  personal_companion:      { label: 'Companion',         emoji: '💜', group: 'personal' },
+  personal_spouse:         { label: 'Spouse',            emoji: '💍', group: 'personal' },
+  personal_kids:           { label: 'Kids',              emoji: '👧', group: 'personal' },
   // Entertainment
   entertainment_events:    { label: 'Events',           emoji: '🎟️', group: 'entertainment' },
   entertainment_hobbies:   { label: 'Hobbies',          emoji: '🎮', group: 'entertainment' },
@@ -197,6 +203,29 @@ export const TRANSACTION_CATEGORY_META: CategoryMetaMap & Partial<Record<`custom
   smoking:                 { label: 'Smoking',          emoji: '🚬', group: 'other' },
   other:                   { label: 'Other',            emoji: '📋', group: 'other' },
 };
+
+/**
+ * Canonical category options for all pickers — auto-generated from TRANSACTION_CATEGORY_META
+ * Import this instead of duplicating category lists across pages.
+ */
+export type CategoryOptionGroup = {
+  group: BankTransactionGroup;
+  categories: { value: BankTransactionCategory; label: string }[];
+};
+
+const GROUP_ORDER: BankTransactionGroup[] = [
+  'housing', 'food', 'transport', 'utilities', 'insurance', 'subscriptions',
+  'medical', 'personal', 'entertainment', 'financial', 'income', 'transfers', 'other',
+];
+
+export const CATEGORY_OPTIONS: CategoryOptionGroup[] = (() => {
+  const grouped: Record<string, { value: BankTransactionCategory; label: string }[]> = {};
+  for (const [key, meta] of Object.entries(TRANSACTION_CATEGORY_META)) {
+    if (!grouped[meta.group]) grouped[meta.group] = [];
+    grouped[meta.group].push({ value: key as BankTransactionCategory, label: meta.label });
+  }
+  return GROUP_ORDER.filter(g => grouped[g]).map(g => ({ group: g, categories: grouped[g] }));
+})();
 
 /**
  * Group metadata for budget breakdown headers
