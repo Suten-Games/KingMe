@@ -169,8 +169,15 @@ export default function SpendingPage() {
       if (!groupMap[grp].catMap[cat]) groupMap[grp].catMap[cat] = { total: 0, items: [] };
     };
 
-    // 1) Bank transactions
+    // 1) Bank transactions — skip transfers & categories that duplicate Debt/Obligation objects
+    const EXCLUDED_CATS = new Set([
+      'transfer_between_accounts', 'transfer_to_other',   // account movements, not spending
+      'financial_debt_payment',                            // duplicates Debt objects below
+      'financial_investment', 'financial_savings_transfer', // account movements, not spending
+    ]);
+
     for (const t of filtered) {
+      if (EXCLUDED_CATS.has(t.category)) continue;
       const grp = resolveGroup(t.category, customCategories) || 'other';
       ensureCat(grp, t.category);
       const amt = Math.abs(t.amount);
@@ -222,8 +229,9 @@ export default function SpendingPage() {
       });
     }
 
-    // Exclude income group
+    // Exclude non-spending groups
     delete groupMap['income'];
+    delete groupMap['transfers'];
 
     const result: GroupBreakdown[] = Object.entries(groupMap)
       .map(([grp, data]) => {

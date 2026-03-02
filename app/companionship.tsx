@@ -138,10 +138,6 @@ export default function CompanionshipTracker() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-
-  // Import state
-  const [importSelected, setImportSelected] = useState<Set<string>>(new Set());
 
   // Profile form
   const [profileAlias, setProfileAlias] = useState('');
@@ -266,59 +262,31 @@ export default function CompanionshipTracker() {
     save({ ...data, expenses: data.expenses.filter(e => e.id !== id) });
   };
 
-  // ── Import from bank transactions ─────────────────────────
-  const importableTxs = useMemo(() => {
+  // ── Auto-sync companion transactions from bank ──────────────
+  useEffect(() => {
+    if (loading) return;
     const alreadyImported = new Set(data.importedTxIds || []);
-    return bankTransactions
-      .filter(t => t.category === 'personal_companion' && t.type === 'expense' && t.amount > 0 && !alreadyImported.has(t.id))
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [bankTransactions, data.importedTxIds]);
+    const newTxs = bankTransactions.filter(
+      t => t.category === 'personal_companion' && t.type === 'expense' && t.amount > 0 && !alreadyImported.has(t.id)
+    );
+    if (newTxs.length === 0) return;
 
-  const openImportModal = () => {
-    setImportSelected(new Set());
-    setShowImportModal(true);
-  };
+    const newExpenses: CompanionshipExpense[] = newTxs.map(tx => ({
+      id: `imp_${tx.id}`,
+      date: tx.date,
+      category: 'other',
+      amount: tx.amount,
+      description: tx.description,
+      notes: 'Auto-synced from bank transactions',
+      paymentMethod: 'card',
+    }));
 
-  const toggleImportItem = (id: string) => {
-    setImportSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllImports = () => {
-    if (importSelected.size === importableTxs.length) {
-      setImportSelected(new Set());
-    } else {
-      setImportSelected(new Set(importableTxs.map(t => t.id)));
-    }
-  };
-
-  const executeImport = () => {
-    if (importSelected.size === 0) return;
-    const newExpenses: CompanionshipExpense[] = [];
-    for (const tx of bankTransactions) {
-      if (!importSelected.has(tx.id)) continue;
-      newExpenses.push({
-        id: `imp_${tx.id}`,
-        date: tx.date,
-        category: 'gifts', // default — user can edit later
-        amount: tx.amount,
-        description: tx.description,
-        notes: 'Imported from bank transactions',
-        paymentMethod: 'card',
-      });
-    }
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     save({
       ...data,
       expenses: [...data.expenses, ...newExpenses],
-      importedTxIds: [...(data.importedTxIds || []), ...importSelected],
+      importedTxIds: [...(data.importedTxIds || []), ...newTxs.map(t => t.id)],
     });
-    setShowImportModal(false);
-  };
+  }, [bankTransactions, loading]);
 
   // ── Settings ──────────────────────────────────────────────
   const openSettings = () => {
@@ -546,16 +514,9 @@ export default function CompanionshipTracker() {
       <View style={st.section}>
         <View style={st.sectionHeader}>
           <Text style={st.sectionTitle}>💸 Expenses</Text>
-          <View style={{ flexDirection: 'row', gap: 14 }}>
-            {importableTxs.length > 0 && (
-              <TouchableOpacity onPress={openImportModal}>
-                <Text style={st.addBtn}>📥 Import ({importableTxs.length})</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={openAddExpense}>
-              <Text style={st.addBtn}>+ Add</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={openAddExpense}>
+            <Text style={st.addBtn}>+ Add</Text>
+          </TouchableOpacity>
         </View>
 
         {data.expenses.length === 0 ? (
@@ -759,63 +720,7 @@ export default function CompanionshipTracker() {
         </View>
       </Modal>
 
-      {/* Import Modal */}
-      <Modal visible={showImportModal} transparent animationType="slide" onRequestClose={() => setShowImportModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={[st.modalContent, { maxHeight: '80%' }]}>
-            <Text style={st.modalTitle}>Import from Bank Transactions</Text>
-            <Text style={st.modalSub}>
-              {importableTxs.length} transaction{importableTxs.length !== 1 ? 's' : ''} categorized as "Companion" available
-            </Text>
-
-            <TouchableOpacity style={st.importSelectAll} onPress={selectAllImports}>
-              <View style={[st.importCheck, importSelected.size === importableTxs.length && importableTxs.length > 0 && st.importCheckActive]}>
-                {importSelected.size === importableTxs.length && importableTxs.length > 0 && <Text style={st.importCheckMark}>✓</Text>}
-              </View>
-              <Text style={st.importSelectAllText}>Select all ({importableTxs.length})</Text>
-            </TouchableOpacity>
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              {importableTxs.map(tx => {
-                const selected = importSelected.has(tx.id);
-                return (
-                  <TouchableOpacity key={tx.id} style={st.importRow} onPress={() => toggleImportItem(tx.id)}>
-                    <View style={[st.importCheck, selected && st.importCheckActive]}>
-                      {selected && <Text style={st.importCheckMark}>✓</Text>}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.importDesc}>{tx.description}</Text>
-                      <Text style={st.importMeta}>{tx.date}</Text>
-                    </View>
-                    <Text style={st.importAmount}>${tx.amount.toFixed(2)}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {importSelected.size > 0 && (
-              <Text style={st.importSummary}>
-                {importSelected.size} selected · ${[...importSelected].reduce((s, id) => {
-                  const tx = bankTransactions.find(t => t.id === id);
-                  return s + (tx?.amount || 0);
-                }, 0).toFixed(0)} total
-              </Text>
-            )}
-
-            <View style={st.modalBtns}>
-              <TouchableOpacity style={st.modalCancel} onPress={() => setShowImportModal(false)}>
-                <Text style={st.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[st.modalSave, importSelected.size === 0 && { opacity: 0.4 }]}
-                onPress={executeImport}
-              >
-                <Text style={st.modalSaveText}>Import {importSelected.size > 0 ? `(${importSelected.size})` : ''}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Import modal removed — companion transactions auto-sync */}
     </ScrollView>
   );
 }
@@ -946,21 +851,4 @@ const st = StyleSheet.create({
   modalSave: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#c084fc', alignItems: 'center' },
   modalSaveText: { fontSize: 15, color: '#0a0e1a', fontWeight: '800' },
 
-  // Import modal
-  importSelectAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#2a2f3e', marginBottom: 6 },
-  importSelectAllText: { fontSize: 14, fontWeight: '700', color: '#e8e0d0' },
-  importRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1a1f2e',
-  },
-  importCheck: {
-    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#444',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  importCheckActive: { backgroundColor: '#c084fc', borderColor: '#c084fc' },
-  importCheckMark: { fontSize: 13, color: '#0a0e1a', fontWeight: '800' },
-  importDesc: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  importMeta: { fontSize: 11, color: '#888', marginTop: 1 },
-  importAmount: { fontSize: 14, fontWeight: '700', color: '#c084fc' },
-  importSummary: { fontSize: 13, fontWeight: '600', color: '#c084fc', textAlign: 'center', paddingVertical: 8 },
 });
