@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular } from '@expo-google-fonts/playfair-display';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WalletHeaderButton from '../../src/components/WalletHeaderButton';
 import {
   HomeIcon, IncomeIcon, AssetsIcon,
@@ -18,13 +19,14 @@ function TabBarHeader() {
     PlayfairDisplay_400Regular,
   });
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
     <LinearGradient
       colors={['#10162a', '#0c1020', '#080c18']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.header}
+      style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}
     >
       <View style={styles.headerInner}>
         {/* Logo + logotype — tap to go home */}
@@ -135,7 +137,6 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 14,
     paddingBottom: 14,
     paddingHorizontal: 20,
   },
