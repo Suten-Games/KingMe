@@ -75,6 +75,7 @@ export default function RootLayout() {
           <Stack.Screen name="goals" options={{ headerShown: false }} />
           <Stack.Screen name="categorize" options={{ headerShown: false }} />
           <Stack.Screen name="spending" options={{ headerShown: false }} />
+          <Stack.Screen name="protocol/[name]" options={{ headerShown: false }} />
         </Stack>
       </WalletProvider>
     </PrivyWrapper>

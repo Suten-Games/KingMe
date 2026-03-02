@@ -235,6 +235,7 @@ export default function AddAssetModal({
           type: 'crypto',
           quantity: qty, balance: qty, priceUSD: price,
           symbol: sym, logoURI: logo, mint,
+          coingeckoId: selectedToken?.coingeckoId || undefined,
           protocol: type === 'defi' ? (proto || 'Unknown') : proto,
           apy: apyNum,
           isStaked: type === 'defi' || (apyNum !== undefined && apyNum > 0),

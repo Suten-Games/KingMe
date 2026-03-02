@@ -12,7 +12,8 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      "expo-router"
     ],
     "scheme": "kingme",
     "extra": {

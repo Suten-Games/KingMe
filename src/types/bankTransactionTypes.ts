@@ -71,7 +71,8 @@ export type BankTransactionCategory =
   // Other
   | 'business_expense'
   | 'smoking'
-  | 'other';
+  | 'other'
+  | `custom_${string}`;
 
 /**
  * Category groupings for the budget breakdown view
@@ -110,13 +111,25 @@ export interface BankTransaction {
 }
 
 /**
- * Category metadata for display
+ * User-defined custom category definition
  */
-export const TRANSACTION_CATEGORY_META: Record<BankTransactionCategory, {
+export interface CustomCategoryDef {
   label: string;
   emoji: string;
   group: BankTransactionGroup;
-}> = {
+}
+
+/**
+ * Category metadata for display
+ */
+/** Built-in categories (excludes user-created custom_* keys) */
+export type BuiltInBankTransactionCategory = Exclude<BankTransactionCategory, `custom_${string}`>;
+
+/** Category metadata lookup type — returns undefined for custom_* keys */
+type CategoryMetaMap = Record<BuiltInBankTransactionCategory, { label: string; emoji: string; group: BankTransactionGroup }>;
+
+// Internal const satisfies all built-in keys; cast to allow indexing with any BankTransactionCategory
+export const TRANSACTION_CATEGORY_META: CategoryMetaMap & Partial<Record<`custom_${string}`, { label: string; emoji: string; group: BankTransactionGroup }>> = {
   // Income
   income_salary:           { label: 'Salary',           emoji: '💰', group: 'income' },
   income_freelance:        { label: 'Freelance',        emoji: '💻', group: 'income' },

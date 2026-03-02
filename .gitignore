@@ -51,3 +51,5 @@ ios/build/
 backups/
 
 .vercel
+
+.watchman-cookie-*

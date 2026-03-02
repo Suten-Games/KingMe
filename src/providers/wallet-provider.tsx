@@ -120,7 +120,7 @@ function detectWebWallets(): DetectedWallet[] {
         detected.push({
           id: entry.id,
           name: entry.name,
-          icon: entry.icon,
+          icon: adapter.icon || entry.icon,
           installed: true,
           adapter,
         });

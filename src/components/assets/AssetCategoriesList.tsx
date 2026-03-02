@@ -100,13 +100,16 @@ function ProtocolSubSection({
   onAssetPress,
   onAssetDelete,
   onSetTarget,
+  onProtocolPress,
 }: {
   group: ProtocolGroup;
   onAssetPress: (asset: Asset) => void;
   onAssetDelete: (asset: Asset) => void;
   onSetTarget?: (asset: Asset) => void;
+  onProtocolPress?: (protocolName: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const canNavigate = onProtocolPress && group.protocol !== '__tokens__';
 
   return (
     <View style={ps.container}>
@@ -120,7 +123,17 @@ function ProtocolSubSection({
         </View>
         <View style={ps.headerRight}>
           <Text style={ps.value}>${group.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
-          <Text style={ps.chevron}>{expanded ? '▲' : '▼'}</Text>
+          {canNavigate ? (
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation(); onProtocolPress(group.protocol); }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={ps.navBtn}
+            >
+              <Text style={ps.navChevron}>›</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={ps.chevron}>{expanded ? '▲' : '▼'}</Text>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -230,6 +243,7 @@ interface AssetCategoriesListProps {
   onAssetDelete: (asset: Asset) => void;
   onBankAccountPress?: (accountId: string) => void;
   onSetTarget?: (asset: Asset) => void;
+  onProtocolPress?: (protocolName: string) => void;
 }
 
 export default function AssetCategoriesList({
@@ -238,6 +252,7 @@ export default function AssetCategoriesList({
   onAssetDelete,
   onBankAccountPress,
   onSetTarget,
+  onProtocolPress,
 }: AssetCategoriesListProps) {
   const protocolGroups = useMemo(
     () => groupByProtocol(categorized.crypto),
@@ -336,6 +351,7 @@ export default function AssetCategoriesList({
                   onAssetPress={onAssetPress}
                   onAssetDelete={onAssetDelete}
                   onSetTarget={onSetTarget}
+                  onProtocolPress={onProtocolPress}
                 />
               ))}
             </View>
@@ -402,6 +418,11 @@ const ps = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   value: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
   chevron: { fontSize: 10, color: '#666' },
+  navBtn: {
+    backgroundColor: '#4ade8020', borderRadius: 10, width: 24, height: 24,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  navChevron: { fontSize: 16, fontWeight: '800', color: '#4ade80', marginTop: -1 },
 
   // Asset row
   assetRow: {

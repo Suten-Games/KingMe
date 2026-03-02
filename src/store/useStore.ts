@@ -21,6 +21,9 @@ import {
 import { EarnedBadge } from '@/types/badges';
 import { loadAllPlans, computePlanStats } from '../services/accumulationPlan';
 import { loadGoals } from '../services/goals';
+import { fetchAllMarketPrices } from '../services/marketPriceService';
+import { lookupToken } from '../utils/tokenRegistry';
+import type { CryptoAsset, StockAsset } from '../types';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -96,6 +99,10 @@ interface AppState extends UserProfile {
 
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
+
+  // Market price refresh (stocks via Yahoo, exchange crypto via CoinGecko)
+  lastPriceRefresh?: string;
+  refreshMarketPrices: () => Promise<void>;
 
   bankTransactions: BankTransaction[];
 
@@ -830,15 +837,26 @@ export const useStore = create<AppState>((set, get) => ({
   // Daily Expense actions
   addDailyExpense: (expense) =>
     set((state) => {
-      // Auto-deduct from crypto.com card balance when expense is positive (spent)
-      const newBalance = expense.amount > 0
-        ? state.cryptoCardBalance.currentBalance - expense.amount
-        : state.cryptoCardBalance.currentBalance + Math.abs(expense.amount); // refunds add back
+      const linkedId = state.settings.dailyExpenseAccountId;
+      const balanceDelta = expense.amount > 0 ? -expense.amount : Math.abs(expense.amount);
 
+      // If linked to a bank account, adjust that account's balance
+      if (linkedId) {
+        return {
+          dailyExpenses: [...(state.dailyExpenses || []), expense],
+          bankAccounts: state.bankAccounts.map((a) =>
+            a.id === linkedId
+              ? { ...a, currentBalance: a.currentBalance + balanceDelta }
+              : a
+          ),
+        };
+      }
+
+      // Fallback: adjust cryptoCardBalance
       return {
         dailyExpenses: [...(state.dailyExpenses || []), expense],
         cryptoCardBalance: {
-          currentBalance: newBalance,
+          currentBalance: state.cryptoCardBalance.currentBalance + balanceDelta,
           lastUpdated: new Date().toISOString(),
         },
       };
@@ -849,15 +867,29 @@ export const useStore = create<AppState>((set, get) => ({
       const expenseToRemove = (state.dailyExpenses || []).find((e) => e.id === expenseId);
       if (!expenseToRemove) return state;
 
-      // Restore the amount back to the card balance
-      const restoredBalance = expenseToRemove.amount > 0
-        ? state.cryptoCardBalance.currentBalance + expenseToRemove.amount
-        : state.cryptoCardBalance.currentBalance - Math.abs(expenseToRemove.amount);
+      const linkedId = state.settings.dailyExpenseAccountId;
+      // Restore: reverse the original deduction
+      const restoreDelta = expenseToRemove.amount > 0
+        ? expenseToRemove.amount
+        : -Math.abs(expenseToRemove.amount);
+
+      const filtered = (state.dailyExpenses || []).filter((e) => e.id !== expenseId);
+
+      if (linkedId) {
+        return {
+          dailyExpenses: filtered,
+          bankAccounts: state.bankAccounts.map((a) =>
+            a.id === linkedId
+              ? { ...a, currentBalance: a.currentBalance + restoreDelta }
+              : a
+          ),
+        };
+      }
 
       return {
-        dailyExpenses: (state.dailyExpenses || []).filter((e) => e.id !== expenseId),
+        dailyExpenses: filtered,
         cryptoCardBalance: {
-          currentBalance: restoredBalance,
+          currentBalance: state.cryptoCardBalance.currentBalance + restoreDelta,
           lastUpdated: new Date().toISOString(),
         },
       };
@@ -1033,14 +1065,26 @@ export const useStore = create<AppState>((set, get) => ({
 
   addCardDeposit: (amount, description) =>
     set((state) => {
+      const linkedId = state.settings.dailyExpenseAccountId;
       // Create a "transfer" expense entry for the deposit (negative amount = money in)
       const deposit: DailyExpense = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         category: 'transfer',
-        description: description || 'Card top-up from USDC',
+        description: description || 'Top-up from USDC',
         amount: -amount, // negative = received
       };
+
+      if (linkedId) {
+        return {
+          dailyExpenses: [...(state.dailyExpenses || []), deposit],
+          bankAccounts: state.bankAccounts.map((a) =>
+            a.id === linkedId
+              ? { ...a, currentBalance: a.currentBalance + amount }
+              : a
+          ),
+        };
+      }
 
       return {
         dailyExpenses: [...(state.dailyExpenses || []), deposit],
@@ -1587,11 +1631,123 @@ export const useStore = create<AppState>((set, get) => ({
       // Save immediately
       await get().saveProfile();
 
+      // Chain: refresh stock/exchange crypto prices after wallet sync
+      get().refreshMarketPrices().catch(console.error);
+
     } catch (error: any) {
       console.error('[SYNC] Error:', error);
       set({ isLoadingAssets: false });
       throw error;
     }
+  },
+
+  // ─── Market Price Refresh (Stocks + Exchange Crypto) ─────────────────────
+  refreshMarketPrices: async () => {
+    const { assets } = get();
+    const stockTickers: string[] = [];
+    const coingeckoMap: Record<string, string[]> = {}; // cgId → [assetId, ...]
+
+    for (const asset of assets) {
+      const meta = asset.metadata as any;
+
+      // Stocks / brokerage with a ticker
+      if ((asset.type === 'stocks' || asset.type === 'brokerage') && meta?.ticker) {
+        stockTickers.push(meta.ticker.toUpperCase());
+        continue;
+      }
+
+      // Crypto / defi that is NOT auto-synced and has NO Solana mint → use CoinGecko
+      const isCryptoLike = asset.type === 'crypto' || asset.type === 'defi';
+      if (isCryptoLike && !asset.isAutoSynced && !meta?.mint) {
+        let cgId: string | undefined = meta?.coingeckoId;
+
+        // Fallback: resolve via token registry if not saved on the asset
+        if (!cgId && meta?.symbol) {
+          const token = lookupToken(meta.symbol);
+          if (token?.coingeckoId) cgId = token.coingeckoId;
+        }
+
+        if (cgId) {
+          if (!coingeckoMap[cgId]) coingeckoMap[cgId] = [];
+          coingeckoMap[cgId].push(asset.id);
+        }
+      }
+    }
+
+    const coingeckoIds = Object.keys(coingeckoMap);
+
+    if (stockTickers.length === 0 && coingeckoIds.length === 0) {
+      console.log('[MARKET] No stock/exchange-crypto assets to refresh');
+      return;
+    }
+
+    console.log(`[MARKET] Refreshing: ${stockTickers.length} stocks, ${coingeckoIds.length} CoinGecko`);
+
+    const result = await fetchAllMarketPrices({ stockTickers, coingeckoIds });
+
+    const updatedAssets = assets.map((asset) => {
+      const meta = asset.metadata as any;
+
+      // ── Stock / Brokerage price update ──
+      if ((asset.type === 'stocks' || asset.type === 'brokerage') && meta?.ticker) {
+        const newPrice = result.stocks[meta.ticker.toUpperCase()];
+        if (newPrice && newPrice > 0) {
+          const shares = meta.shares || meta.quantity || 0;
+          const newValue = shares * newPrice;
+          const apy = meta.apy || meta.dividendYield || 0;
+          const newIncome = apy > 0 ? newValue * (apy / 100) : asset.annualIncome;
+          return {
+            ...asset,
+            value: newValue > 0 ? newValue : asset.value,
+            annualIncome: newIncome,
+            metadata: {
+              ...meta,
+              currentPrice: newPrice,
+              priceUSD: newPrice,
+            },
+          };
+        }
+      }
+
+      // ── CoinGecko crypto price update ──
+      const isCryptoLike = asset.type === 'crypto' || asset.type === 'defi';
+      if (isCryptoLike && !asset.isAutoSynced && !meta?.mint) {
+        let cgId: string | undefined = meta?.coingeckoId;
+        if (!cgId && meta?.symbol) {
+          const token = lookupToken(meta.symbol);
+          if (token?.coingeckoId) cgId = token.coingeckoId;
+        }
+        if (cgId) {
+          const newPrice = result.crypto[cgId];
+          if (newPrice && newPrice > 0) {
+            const qty = meta.quantity || meta.balance || 0;
+            const newValue = qty * newPrice;
+            const apy = meta.apy || 0;
+            const newIncome = apy > 0 ? newValue * (apy / 100) : asset.annualIncome;
+            return {
+              ...asset,
+              value: newValue > 0 ? newValue : asset.value,
+              annualIncome: newIncome,
+              metadata: {
+                ...meta,
+                priceUSD: newPrice,
+                coingeckoId: cgId, // persist resolved cgId for future refreshes
+              },
+            };
+          }
+        }
+      }
+
+      return asset;
+    });
+
+    set({
+      assets: updatedAssets,
+      lastPriceRefresh: new Date().toISOString(),
+    } as any);
+
+    await get().saveProfile();
+    console.log('[MARKET] Price refresh complete');
   },
 
   resetStore: () => set(initialState),

@@ -448,6 +448,7 @@ export default function AssetsScreen() {
           onAssetDelete={handleRemoveAsset}
           onBankAccountPress={handleBankAccountPress}
           onSetTarget={handleSetTarget}
+          onProtocolPress={(name) => router.push(`/protocol/${name}`)}
         />
 
         {/* Accumulation Plans — for held crypto with targets */}

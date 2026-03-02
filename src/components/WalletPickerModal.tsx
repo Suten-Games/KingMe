@@ -5,11 +5,18 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking, Image } from 'react-native';
 import { useWallet, DetectedWallet } from '../providers/wallet-provider';
 
 // Export type for cross-platform compatibility with native provider
 export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave';
+
+function WalletIcon({ icon, size = 26 }: { icon: string; size?: number }) {
+  if (icon.startsWith('data:') || icon.startsWith('http')) {
+    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} resizeMode="contain" />;
+  }
+  return <Text style={{ fontSize: size }}>{icon}</Text>;
+}
 
 export default function WalletPickerModal() {
   const { detectedWallets, showPicker, setShowPicker, connect, connecting } = useWallet();
@@ -49,7 +56,7 @@ export default function WalletPickerModal() {
                 onPress={() => handleSelect(wallet)}
                 disabled={connecting}
               >
-                <Text style={s.walletIcon}>{wallet.icon}</Text>
+                <WalletIcon icon={wallet.icon} />
                 <Text style={s.walletName}>{wallet.name}</Text>
                 <Text style={s.walletArrow}>→</Text>
               </TouchableOpacity>
@@ -82,7 +89,7 @@ export default function WalletPickerModal() {
 function InstallLink({ name, url, icon }: { name: string; url: string; icon: string }) {
   return (
     <TouchableOpacity style={s.installRow} onPress={() => Linking.openURL(url)}>
-      <Text style={s.installIcon}>{icon}</Text>
+      <WalletIcon icon={icon} size={20} />
       <Text style={s.installName}>{name}</Text>
       <Text style={s.installAction}>Install →</Text>
     </TouchableOpacity>

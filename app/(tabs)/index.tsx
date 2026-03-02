@@ -23,6 +23,7 @@ import AccumulationAlerts from '@/components/AccumulationAlerts';
 import GoalsStrip from '@/components/GoalsStrip';
 import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 import WindfallAlertCard from '@/components/WindfallAlertCard';
+import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -88,6 +89,9 @@ export default function HomeScreen() {
   const debts               = useStore((state) => state.debts);
   const assets              = useStore((state) => state.assets);
   const paycheckDeductions  = useStore((state) => state.paycheckDeductions || []);
+  const monthlyDiscretionary = useStore((state) => state.monthlyDiscretionary || 0);
+  const bankTransactions    = useStore((state) => state.bankTransactions || []);
+  const customCategories    = useStore((state) => state.customCategories || {});
   const [selectedScenario, setSelectedScenario] = useState<WhatIfScenario | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [infoModal, setInfoModal] = useState<'freedom' | 'runway' | null>(null);
@@ -110,15 +114,25 @@ export default function HomeScreen() {
   const nextLevel = getNextLevel(freedom.days);
 
   const cashFlow = useMemo(
-    () => analyzeAllAccounts(bankAccounts, incomeSources, obligations, debts, assets, paycheckDeductions),
-    [bankAccounts, incomeSources, obligations, debts, assets, paycheckDeductions]
+    () => analyzeAllAccounts(bankAccounts, incomeSources, obligations, debts, assets, paycheckDeductions, monthlyDiscretionary, bankTransactions, customCategories),
+    [bankAccounts, incomeSources, obligations, debts, assets, paycheckDeductions, monthlyDiscretionary, bankTransactions, customCategories]
   );
 
   const wallets = useStore((state) => state.wallets);
 
 
+  const lastPriceRefresh = useStore(s => s.lastPriceRefresh);
+  const refreshMarketPrices = useStore(s => s.refreshMarketPrices);
+
   useEffect(() => { checkThesisAlerts(); const i = setInterval(() => checkThesisAlerts(), 86400000); return () => clearInterval(i); }, []);
   useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/intro'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
+
+  // Auto-refresh stock/crypto prices if stale (>5min) or never fetched
+  useEffect(() => {
+    const STALE_MS = 5 * 60 * 1000;
+    const isStale = !lastPriceRefresh || (Date.now() - new Date(lastPriceRefresh).getTime() > STALE_MS);
+    if (isStale) refreshMarketPrices().catch(console.error);
+  }, []);
 
   if (!onboardingComplete) {
     return (<View style={styles.loadingContainer}><Text style={styles.loadingText}>Loading...</Text></View>);
@@ -151,7 +165,7 @@ export default function HomeScreen() {
   };
 
   const monthlySurplus = cashFlow.totalMonthlyNet;
-  const monthlyOut = cashFlow.totalMonthlyObligations + cashFlow.totalMonthlyDebtPayments;
+  const monthlyOut = cashFlow.totalMonthlyOut;
   const runwayMonths = monthlyOut > 0 ? cashFlow.liquidAssets / monthlyOut : Infinity;
   const runwayLabel = runwayMonths === Infinity ? '∞' : runwayMonths >= 12 ? `${(runwayMonths / 12).toFixed(1)}y` : `${runwayMonths.toFixed(1)}m`;
   const healthColor = HEALTH_COLORS[cashFlow.healthStatus] || HEALTH_COLORS.stable;
@@ -220,11 +234,11 @@ export default function HomeScreen() {
     const totalPassiveIncome = cryptoYield + dividendYield + rentalNet + bizDistributions;
     const monthlyObligations = cashFlow.totalMonthlyObligations;
     const monthlyDebt = cashFlow.totalMonthlyDebtPayments;
-    const annualExpenses = (monthlyObligations + monthlyDebt) * 12;
+    const annualExpenses = cashFlow.totalMonthlyOut * 12;
 
     // Runway: liquidAssets / monthlyOut (bank + all non-retirement assets)
     const runwayLiquid = cashFlow.liquidAssets;
-    const runwayBurn = monthlyObligations + monthlyDebt;
+    const runwayBurn = cashFlow.totalMonthlyOut;
 
     // Freedom: liquidAssets / (dailyNeeds - dailyAssetIncome)
     // Freedom liquid = crypto + defi + stocks + retirement (after penalty)
@@ -265,9 +279,10 @@ export default function HomeScreen() {
     <View style={styles.content}>
       <SetupChecklist />
       <CashFlowSummary cashFlow={cashFlow} />
+      <SpendingGapAlert cashFlow={cashFlow} />
 
-      
-      
+
+
       <PositionAlertCards  />
             {windfallAlerts
         .filter((a: any) => !a.dismissedAt)
@@ -586,6 +601,8 @@ export default function HomeScreen() {
           colors={['#1a2a50', '#121830']} accent="#60a5fa" onPress={() => router.push('/trading')} />
         <ToolCard emoji="💸" title="Daily Expenses" sub="Log daily spending"
           colors={['#402a1a', '#281810']} accent="#fb923c" onPress={() => router.push('/expenses')} />
+        <ToolCard emoji="🧾" title="View All Spending" sub="Full breakdown with editing"
+          colors={['#3a1a1a', '#281018']} accent="#f87171" onPress={() => router.push('/spending')} />
         <ToolCard emoji="👤" title="Profile & Settings" sub="Accounts and backup"
           colors={['#2a1a40', '#181028']} accent="#a78bfa" onPress={() => router.push('/profile')} />
       </View>
@@ -671,7 +688,7 @@ function ToolCard({ emoji, title, sub, colors, accent, onPress }: {
 
 // ─── Phase insight ───────────────────────────────────────────────────────────
 function getInsight(cf: ReturnType<typeof analyzeAllAccounts>, freedom: any) {
-  const monthlyBurn = cf.totalMonthlyObligations + cf.totalMonthlyDebtPayments;
+  const monthlyBurn = cf.totalMonthlyOut;
   const runwayMonths = monthlyBurn > 0 ? cf.liquidAssets / monthlyBurn : Infinity;
   const surplus = cf.totalMonthlyNet;
   const fmtK = (n: number) => n >= 1000 ? `$${(n / 1000).toFixed(0)}K` : `$${n.toFixed(0)}`;

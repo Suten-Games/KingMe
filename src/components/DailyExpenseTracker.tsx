@@ -2,7 +2,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import type { DailyExpense, DailyExpenseCategory } from '../types';
+import type { DailyExpense, DailyExpenseCategory, BankAccount } from '../types';
 
 // ─── category labels ──────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<DailyExpenseCategory, { label: string; emoji: string }> = {
@@ -53,16 +53,33 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const dailyExpenses         = useStore((s) => s.dailyExpenses || []);
   const expenseTrackingMode   = useStore((s) => s.expenseTrackingMode || 'estimate');
   const cryptoCardBalance     = useStore((s) => s.cryptoCardBalance);
+  const bankAccounts          = useStore((s) => s.bankAccounts);
+  const settings              = useStore((s) => s.settings);
   const addDailyExpense       = useStore((s) => s.addDailyExpense);
   const removeDailyExpense    = useStore((s) => s.removeDailyExpense);
   const updateDailyExpense    = useStore((s) => s.updateDailyExpense);
   const setExpenseTrackingMode = useStore((s) => s.setExpenseTrackingMode);
   const setCryptoCardBalance  = useStore((s) => s.setCryptoCardBalance);
   const addCardDeposit        = useStore((s) => s.addCardDeposit);
+  const updateSettings        = useStore((s) => s.updateSettings);
+  const updateBankAccount     = useStore((s) => s.updateBankAccount);
+
+  // Linked account resolution
+  const linkedAccount = useMemo(() => {
+    if (!settings.dailyExpenseAccountId) return null;
+    return bankAccounts.find((a) => a.id === settings.dailyExpenseAccountId) || null;
+  }, [settings.dailyExpenseAccountId, bankAccounts]);
+
+  const activeBalance = linkedAccount
+    ? linkedAccount.currentBalance
+    : cryptoCardBalance.currentBalance;
+
+  const activeAccountName = linkedAccount ? linkedAccount.name : 'Crypto.com Card';
 
   const [showModal, setShowModal]           = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
   const [editingExpense, setEditingExpense] = useState<DailyExpense | null>(null);
   const [date, setDate]                 = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   const [category, setCategory]         = useState<DailyExpenseCategory>('daily_spend');
@@ -204,22 +221,52 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
           ══════════════════════════════════════════════════════════════════════ */}
       {expenseTrackingMode === 'manual' && (
         <>
-          {/* Card Balance */}
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceHeader}>
-              <Text style={styles.balanceTitle}>💳 Crypto.com Card</Text>
-              <TouchableOpacity onPress={() => { setBalanceInput(cryptoCardBalance.currentBalance.toString()); setShowBalanceModal(true); }}>
-                <Text style={styles.balanceEditBtn}>Edit</Text>
+          {/* Card Balance / Account Picker */}
+          {!linkedAccount && !settings.dailyExpenseAccountId ? (
+            <View style={styles.balanceCard}>
+              <Text style={styles.balanceTitle}>Link a Bank Account</Text>
+              <Text style={[styles.balanceSubtext, { marginTop: 4, marginBottom: 12 }]}>
+                Choose which account your daily expenses deduct from
+              </Text>
+              {bankAccounts.length === 0 ? (
+                <Text style={styles.balanceSubtext}>No bank accounts yet. Add one in Settings.</Text>
+              ) : (
+                bankAccounts.map((acct) => (
+                  <TouchableOpacity
+                    key={acct.id}
+                    style={styles.accountPickerRow}
+                    onPress={() => updateSettings({ dailyExpenseAccountId: acct.id })}
+                  >
+                    <Text style={styles.accountPickerName}>{acct.name}</Text>
+                    <Text style={styles.accountPickerBalance}>${acct.currentBalance.toFixed(2)}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          ) : (
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceHeader}>
+                <Text style={styles.balanceTitle}>{linkedAccount ? '🏦' : '💳'} {activeAccountName}</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity onPress={() => setShowAccountPicker(true)}>
+                    <Text style={styles.balanceEditBtn}>Change</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { setBalanceInput(activeBalance.toString()); setShowBalanceModal(true); }}>
+                    <Text style={styles.balanceEditBtn}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={styles.balanceAmount}>${activeBalance.toFixed(2)}</Text>
+              {!linkedAccount && (
+                <Text style={styles.balanceSubtext}>
+                  Updated {new Date(cryptoCardBalance.lastUpdated).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </Text>
+              )}
+              <TouchableOpacity style={styles.depositButton} onPress={() => setShowDepositModal(true)}>
+                <Text style={styles.depositButtonText}>+ Top Up</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.balanceAmount}>${cryptoCardBalance.currentBalance.toFixed(2)}</Text>
-            <Text style={styles.balanceSubtext}>
-              Updated {new Date(cryptoCardBalance.lastUpdated).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-            </Text>
-            <TouchableOpacity style={styles.depositButton} onPress={() => setShowDepositModal(true)}>
-              <Text style={styles.depositButtonText}>+ Top Up from USDC</Text>
-            </TouchableOpacity>
-          </View>
+          )}
 
           {/* Summary */}
           <View style={styles.summaryBox}>
@@ -402,8 +449,8 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
       <Modal visible={showDepositModal} animationType="slide" transparent={true} onRequestClose={() => setShowDepositModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Top Up Card</Text>
-            <Text style={styles.helperText}>Transfer USDC from your crypto accounts to your crypto.com card</Text>
+            <Text style={styles.modalTitle}>Top Up {activeAccountName}</Text>
+            <Text style={styles.helperText}>Add funds to {activeAccountName}</Text>
 
             <Text style={styles.label}>Amount</Text>
             <View style={styles.inputRow}>
@@ -444,8 +491,8 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
       <Modal visible={showBalanceModal} animationType="slide" transparent={true} onRequestClose={() => setShowBalanceModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Card Balance</Text>
-            <Text style={styles.helperText}>Manually sync the balance from your crypto.com app</Text>
+            <Text style={styles.modalTitle}>Edit Balance</Text>
+            <Text style={styles.helperText}>Manually set the balance for {activeAccountName}</Text>
 
             <Text style={styles.label}>Current Balance</Text>
             <View style={styles.inputRow}>
@@ -468,7 +515,11 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                 style={[styles.modalAddBtn, !balanceInput && styles.modalBtnDisabled]}
                 onPress={() => {
                   if (balanceInput) {
-                    setCryptoCardBalance(parseFloat(balanceInput));
+                    if (linkedAccount) {
+                      updateBankAccount(linkedAccount.id, { currentBalance: parseFloat(balanceInput) });
+                    } else {
+                      setCryptoCardBalance(parseFloat(balanceInput));
+                    }
                     setBalanceInput('');
                     setShowBalanceModal(false);
                   }
@@ -477,6 +528,55 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
               >
                 <Text style={styles.modalAddText}>Update</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ═══════════════ ACCOUNT PICKER MODAL ═══════════════ */}
+      <Modal visible={showAccountPicker} animationType="slide" transparent={true} onRequestClose={() => setShowAccountPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Link Account</Text>
+            <Text style={styles.helperText}>Choose which bank account expenses deduct from</Text>
+
+            <ScrollView style={{ marginTop: 12 }}>
+              {bankAccounts.map((acct) => (
+                <TouchableOpacity
+                  key={acct.id}
+                  style={[
+                    styles.accountPickerRow,
+                    acct.id === settings.dailyExpenseAccountId && styles.accountPickerRowActive,
+                  ]}
+                  onPress={() => {
+                    updateSettings({ dailyExpenseAccountId: acct.id });
+                    setShowAccountPicker(false);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.accountPickerName}>{acct.name}</Text>
+                    <Text style={styles.accountPickerInstitution}>{acct.institution}</Text>
+                  </View>
+                  <Text style={styles.accountPickerBalance}>${acct.currentBalance.toFixed(2)}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowAccountPicker(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              {settings.dailyExpenseAccountId && (
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { borderColor: '#ff6b6b' }]}
+                  onPress={() => {
+                    updateSettings({ dailyExpenseAccountId: undefined });
+                    setShowAccountPicker(false);
+                  }}
+                >
+                  <Text style={[styles.modalCancelText, { color: '#ff6b6b' }]}>Unlink</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -623,6 +723,23 @@ const styles = StyleSheet.create({
   categoryEmoji: { fontSize: 16 },
   categoryText: { fontSize: 12, color: '#666' },
   categoryTextActive: { color: '#4ade80', fontWeight: 'bold' },
+
+  // ── Account picker ──────────────────────────────────────────────────────
+  accountPickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1a1f2e',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#2a2f3e',
+  },
+  accountPickerRowActive: { borderColor: '#4ade80', backgroundColor: '#1a2f1e' },
+  accountPickerName: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  accountPickerInstitution: { fontSize: 12, color: '#666', marginTop: 2 },
+  accountPickerBalance: { fontSize: 16, fontWeight: 'bold', color: '#4ade80' },
 
   // buttons
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 22, marginBottom: 16 },

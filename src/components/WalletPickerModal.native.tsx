@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Image } from 'react-native';
 
 export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave';
 
@@ -18,10 +18,17 @@ interface Props {
   externalWalletsAvailable?: boolean;
 }
 
+function WalletIcon({ icon, size = 26 }: { icon: string; size?: number }) {
+  if (icon.startsWith('data:') || icon.startsWith('http')) {
+    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} resizeMode="contain" />;
+  }
+  return <Text style={{ fontSize: size }}>{icon}</Text>;
+}
+
 const WALLET_OPTIONS: { id: WalletOption; name: string; icon: string; section: 'wallet' | 'social' }[] = [
-  { id: 'phantom',   name: 'Phantom',   icon: '👻', section: 'wallet' },
-  { id: 'jupiter',   name: 'Jupiter',   icon: '🪐', section: 'wallet' },
-  { id: 'solflare',  name: 'Solflare',  icon: '🔆', section: 'wallet' },
+  { id: 'phantom',   name: 'Phantom',   icon: 'https://phantom.app/img/logo_v2.svg', section: 'wallet' },
+  { id: 'jupiter',   name: 'Jupiter',   icon: 'https://jup.ag/favicon.ico', section: 'wallet' },
+  { id: 'solflare',  name: 'Solflare',  icon: 'https://solflare.com/favicon.ico', section: 'wallet' },
   { id: 'google',    name: 'Continue with Google', icon: '🔵', section: 'social' },
   { id: 'apple',     name: 'Continue with Apple',  icon: '🍎', section: 'social' },
 ];
@@ -58,7 +65,7 @@ export default function WalletPickerModal({
                       onPress={() => onSelect(option.id)}
                       disabled={connecting}
                     >
-                      <Text style={s.walletIcon}>{option.icon}</Text>
+                      <WalletIcon icon={option.icon} />
                       <Text style={s.walletName}>{option.name}</Text>
                       {isConnecting ? (
                         <ActivityIndicator size="small" color="#f4c430" />
@@ -84,7 +91,7 @@ export default function WalletPickerModal({
                   onPress={() => onSelect(option.id)}
                   disabled={connecting}
                 >
-                  <Text style={s.walletIcon}>{option.icon}</Text>
+                  <WalletIcon icon={option.icon} />
                   <Text style={s.walletName}>{option.name}</Text>
                   {isConnecting ? (
                     <ActivityIndicator size="small" color="#60a5fa" />

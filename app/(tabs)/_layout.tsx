@@ -1,6 +1,6 @@
 // app/(tabs)/_layout.tsx
-import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular } from '@expo-google-fonts/playfair-display';
@@ -17,6 +17,7 @@ function TabBarHeader() {
     PlayfairDisplay_700Bold,
     PlayfairDisplay_400Regular,
   });
+  const router = useRouter();
 
   return (
     <LinearGradient
@@ -26,23 +27,29 @@ function TabBarHeader() {
       style={styles.header}
     >
       <View style={styles.headerInner}>
-        {/* Logo */}
-        <Image
-          source={require('../../src/assets/images/kingmelogo.jpg')}
-          style={styles.headerLogo}
-          resizeMode="cover"
-        />
+        {/* Logo + logotype — tap to go home */}
+        <TouchableOpacity
+          style={styles.headerBrand}
+          activeOpacity={0.7}
+          onPress={() => router.replace('/')}
+        >
+          <Image
+            source={require('../../src/assets/images/kingmelogo.jpg')}
+            style={styles.headerLogo}
+            resizeMode="cover"
+          />
 
-        {/* Logotype */}
-        <View style={styles.logotypeWrap}>
           <MaskedView
             maskElement={
-              <Text style={[
-                styles.headerTitle,
-                fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' }
-              ]}>
-                KingMe
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.headerMark}>♚</Text>
+                <Text style={[
+                  styles.headerTitle,
+                  fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' }
+                ]}>
+                  KingMe
+                </Text>
+              </View>
             }
           >
             <LinearGradient
@@ -50,16 +57,18 @@ function TabBarHeader() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Text style={[
-                styles.headerTitle,
-                fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' },
-                { opacity: 0 }
-              ]}>
-                KingMe
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0 }}>
+                <Text style={styles.headerMark}>♚</Text>
+                <Text style={[
+                  styles.headerTitle,
+                  fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' }
+                ]}>
+                  KingMe
+                </Text>
+              </View>
             </LinearGradient>
           </MaskedView>
-        </View>
+        </TouchableOpacity>
 
         <WalletHeaderButton />
       </View>
@@ -126,7 +135,7 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 50,
+    paddingTop: 14,
     paddingBottom: 14,
     paddingHorizontal: 20,
   },
@@ -135,6 +144,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
   headerLogo: {
     width: 40,
     height: 40,
@@ -142,15 +157,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f4c43040',
   },
-  logotypeWrap: {
-    flex: 1,
-  },
   headerTitle: {
     fontSize: 28,
     fontFamily: 'Inter_800ExtraBold', // fallback until Playfair loads
     color: '#f4c430',                 // fallback color (masked out when font loads)
-    letterSpacing: 0.5,
+    letterSpacing: 1.5,
     lineHeight: 34,
+  },
+  headerMark: {
+    fontSize: 32,
+    color: '#f4c430',
+    lineHeight: 38,
   },
   headerAccent: {
     height: 1.5,

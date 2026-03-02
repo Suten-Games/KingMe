@@ -63,7 +63,7 @@ export default function CashFlowSummary({ cashFlow }: CashFlowSummaryProps) {
         <View style={styles.panel}>
           <Text style={styles.message}>{cashFlow.healthMessage}</Text>
 
-          {/* In / Out / Net row */}
+          {/* In / Bills & Debt / Variable / Net row */}
           <View style={styles.numbersRow}>
             <View style={styles.numberCard}>
               <Text style={styles.numberLabel}>Monthly In</Text>
@@ -72,10 +72,22 @@ export default function CashFlowSummary({ cashFlow }: CashFlowSummaryProps) {
               </Text>
             </View>
             <View style={styles.numberCard}>
-              <Text style={styles.numberLabel}>Monthly Out</Text>
+              <Text style={styles.numberLabel}>Bills & Debt</Text>
               <Text style={[styles.numberValue, { color: '#ff6b6b' }]}>
-                ${(cashFlow.totalMonthlyObligations + cashFlow.totalMonthlyDebtPayments).toLocaleString()}
+                -${(cashFlow.totalMonthlyObligations + cashFlow.totalMonthlyDebtPayments).toLocaleString()}
               </Text>
+            </View>
+            <View style={[styles.numberCard, cashFlow.totalMonthlyDiscretionary === 0 && styles.numberCardDashed]}>
+              <Text style={styles.numberLabel}>
+                {cashFlow.variableSpending.autoEstimate > 0 ? 'Variable' : 'Variable'}
+              </Text>
+              {cashFlow.totalMonthlyDiscretionary > 0 ? (
+                <Text style={[styles.numberValue, { color: '#ff9f43' }]}>
+                  -${cashFlow.totalMonthlyDiscretionary.toLocaleString()}
+                </Text>
+              ) : (
+                <Text style={[styles.numberValue, { color: '#666' }]}>--</Text>
+              )}
             </View>
             <View style={styles.numberCard}>
               <Text style={styles.numberLabel}>Net</Text>
@@ -187,7 +199,8 @@ const styles = StyleSheet.create({
   message: { fontSize: 14, color: '#c0c0c0', marginBottom: 14, lineHeight: 20 },
 
   numbersRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  numberCard: { flex: 1, backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, alignItems: 'center' },
+  numberCard: { flex: 1, backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, alignItems: 'center' } as any,
+  numberCardDashed: { borderWidth: 1, borderColor: '#ff9f4350', borderStyle: 'dashed' as const, backgroundColor: '#1a1f2e80' },
   numberLabel: { fontSize: 11, color: '#666', marginBottom: 4 },
   numberValue: { fontSize: 16, fontWeight: 'bold' },
 

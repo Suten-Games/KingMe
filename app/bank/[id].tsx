@@ -1201,9 +1201,9 @@ export default function BankAccountDetailScreen() {
                         style={[s.categoryPill, formCategory === cat && s.categoryPillActive]}
                         onPress={() => { setFormCategory(cat); setShowCategoryPicker(false); }}
                       >
-                        <Text style={s.categoryPillEmoji}>{meta.emoji}</Text>
+                        <Text style={s.categoryPillEmoji}>{meta?.emoji}</Text>
                         <Text style={[s.categoryPillText, formCategory === cat && s.categoryPillTextActive]}>
-                          {meta.label}
+                          {meta?.label}
                         </Text>
                       </TouchableOpacity>
                     );

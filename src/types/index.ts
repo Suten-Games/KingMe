@@ -1,6 +1,6 @@
 // KingMe - Type Definitions
 
-import { BankTransaction } from "./bankTransactionTypes";
+import { BankTransaction, CustomCategoryDef } from "./bankTransactionTypes";
 
 export type AvatarType = 'male-medium' | 'female-medium';
 
@@ -80,6 +80,7 @@ export interface CryptoAsset {
   isStaked?: boolean;  // ✅ CHANGE: made optional
   walletAddress?: string; // ✅ CHANGE: made optional - which connected wallet
   description?: string;  // ✅ ADD: for manual entries
+  coingeckoId?: string;  // for CoinGecko price lookups (e.g. 'bitcoin-cash')
 }
 
 // Real estate (manual entry, post-hackathon module)
@@ -485,6 +486,7 @@ export interface UserSettings {
   syncFrequency: 'realtime' | 'hourly' | 'daily';
   darkMode: boolean;
   defaultExpandAssetSections: boolean;
+  dailyExpenseAccountId?: string;
 }
 
 export interface UserProfile {
@@ -508,6 +510,8 @@ export interface UserProfile {
   investmentTheses: InvestmentThesis[];
   whatIfScenarios: WhatIfScenario[],
   thesisAlerts: ThesisAlert[];
+  monthlyDiscretionary: number; // estimated monthly variable spending (groceries, gas, dining, etc.)
+  customCategories: Record<string, CustomCategoryDef>; // user-created categories keyed by custom_* slug
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp
   onboardingComplete: boolean;

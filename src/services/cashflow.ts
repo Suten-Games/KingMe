@@ -2,6 +2,8 @@
 // Analyzes cash flow per bank account using actual store types
 
 import type { BankAccount, IncomeSource, Obligation, Debt, Asset, PaycheckDeduction, RealEstateAsset } from '../types';
+import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '../types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 
 export interface CashFlowAnalysis {
   account: BankAccount;
@@ -15,11 +17,41 @@ export interface CashFlowAnalysis {
   warnings: string[];
 }
 
+export interface VariableSpendingGroup {
+  group: BankTransactionGroup;
+  label: string;
+  emoji: string;
+  color: string;
+  monthly: number;            // average monthly spend in this group
+  coaching?: string;          // coaching question for reducing this category
+}
+
+export interface UncategorizedGroup {
+  pattern: string;          // cleaned description used for grouping
+  sampleDescription: string; // original description from first occurrence
+  count: number;            // how many transactions match
+  total: number;            // total amount across all matches
+  monthly: number;          // average per month
+  transactionIds: string[]; // IDs for batch re-categorization
+}
+
+export interface VariableSpendingAnalysis {
+  autoEstimate: number;                // auto-calculated monthly variable spending
+  monthsAnalyzed: number;              // how many months of data used
+  groups: VariableSpendingGroup[];     // per-group breakdown, sorted by spend desc
+  effectiveDiscretionary: number;      // what's actually used: user override > auto-estimate
+  uncategorized: UncategorizedGroup[]; // "other" transactions grouped by description, sorted by total desc
+}
+
 export interface OverallCashFlow {
   totalMonthlyIncome: number;
   totalMonthlyObligations: number;
   totalMonthlyDebtPayments: number;
+  totalMonthlyDiscretionary: number;  // effective discretionary (user override or auto-estimate)
+  spendingGap: number;                // detected gap from bank transactions (0 if none)
+  totalMonthlyOut: number;            // obligations + debts + discretionary (full picture)
   totalMonthlyNet: number;
+  variableSpending: VariableSpendingAnalysis; // auto-calculated breakdown from bank transactions
   totalBalance: number; // Bank accounts only (kept for backwards compatibility)
   liquidAssets: number; // Bank accounts + liquid non-retirement assets
   totalDailyLiving: number; // Daily living allowance * 30
@@ -151,6 +183,132 @@ export function getMonthlyPreTaxDeductions(assets: Asset[]): { contributions: nu
   return { contributions, employerMatch };
 }
 
+// Groups that represent variable/discretionary spending (not tracked as obligations)
+const VARIABLE_GROUPS: Set<BankTransactionGroup> = new Set([
+  'food', 'transport', 'medical', 'personal', 'entertainment', 'other',
+]);
+
+// Coaching prompts per group — questions to help reduce spending
+const GROUP_COACHING: Partial<Record<BankTransactionGroup, string>> = {
+  food:          'Could meal prepping or cooking one more night/week help?',
+  transport:     'Any carpooling, route optimization, or work-from-home days possible?',
+  medical:       'Worth checking if a different pharmacy or plan saves on copays?',
+  personal:      'Could a no-buy month or capsule wardrobe approach work?',
+  entertainment: 'Any subscriptions or outings you could swap for free alternatives?',
+  other:         'Anything here that could be reduced or eliminated?',
+};
+
+/**
+ * Analyze bank transactions to compute average monthly variable spending by category.
+ * Only counts non-recurring expenses in discretionary groups.
+ */
+export function computeVariableSpending(
+  bankTransactions: BankTransaction[],
+  monthlyDiscretionary: number,
+  customCategories: Record<string, CustomCategoryDef> = {},
+): VariableSpendingAnalysis {
+  const empty: VariableSpendingAnalysis = {
+    autoEstimate: 0,
+    monthsAnalyzed: 0,
+    groups: [],
+    effectiveDiscretionary: monthlyDiscretionary,
+    uncategorized: [],
+  };
+
+  if (bankTransactions.length === 0) return empty;
+
+  // Filter to expense transactions in variable groups.
+  // Include ALL expenses in variable groups — even if flagged isRecurring,
+  // because groceries/gas/dining recur but are still variable spending.
+  // The isRecurring flag is for obligation-matching (rent, subscriptions),
+  // which fall in non-variable groups and are already excluded.
+  // Resolve category → group, checking built-in meta first, then custom categories
+  const resolveGroup = (cat: BankTransactionCategory): BankTransactionGroup | null => {
+    const builtIn = TRANSACTION_CATEGORY_META[cat as keyof typeof TRANSACTION_CATEGORY_META];
+    if (builtIn) return builtIn.group;
+    const custom = customCategories[cat];
+    if (custom) return custom.group;
+    return null;
+  };
+
+  const variableTxns = bankTransactions.filter(t => {
+    if (t.type !== 'expense') return false;
+    const grp = resolveGroup(t.category);
+    if (!grp) return false;
+    return VARIABLE_GROUPS.has(grp);
+  });
+
+  if (variableTxns.length === 0) return empty;
+
+  // Group by month and by category group
+  const monthTotals: Record<string, number> = {};
+  const groupTotals: Record<BankTransactionGroup, number> = {} as any;
+
+  for (const t of variableTxns) {
+    const monthKey = t.date.substring(0, 7); // YYYY-MM
+    const amt = Math.abs(t.amount);
+    monthTotals[monthKey] = (monthTotals[monthKey] || 0) + amt;
+
+    const grp = resolveGroup(t.category)!;
+    groupTotals[grp] = (groupTotals[grp] || 0) + amt;
+  }
+
+  const monthsAnalyzed = Object.keys(monthTotals).length;
+  const totalSpending = Object.values(monthTotals).reduce((s, v) => s + v, 0);
+  const autoEstimate = Math.round(totalSpending / monthsAnalyzed);
+
+  // Build per-group breakdown
+  const groups: VariableSpendingGroup[] = Object.entries(groupTotals)
+    .map(([grp, total]) => {
+      const meta = TRANSACTION_GROUP_META[grp as BankTransactionGroup];
+      return {
+        group: grp as BankTransactionGroup,
+        label: meta.label,
+        emoji: meta.emoji,
+        color: meta.color,
+        monthly: Math.round(total / monthsAnalyzed),
+        coaching: GROUP_COACHING[grp as BankTransactionGroup],
+      };
+    })
+    .filter(g => g.monthly > 0)
+    .sort((a, b) => b.monthly - a.monthly);
+
+  // Build uncategorized groups — "other" category transactions grouped by description
+  const otherTxns = variableTxns.filter(t => t.category === 'other');
+  const descGroups: Record<string, { txns: BankTransaction[]; sample: string }> = {};
+  for (const t of otherTxns) {
+    // Clean description for grouping: strip numbers, dates, references
+    const pattern = t.description
+      .replace(/\d{2}\/\d{2}/g, '')
+      .replace(/#\d+/g, '')
+      .replace(/\d{4,}/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 35)
+      .toLowerCase();
+    if (!pattern) continue;
+    if (!descGroups[pattern]) descGroups[pattern] = { txns: [], sample: t.description };
+    descGroups[pattern].txns.push(t);
+  }
+
+  const uncategorized: UncategorizedGroup[] = Object.entries(descGroups)
+    .map(([pattern, { txns, sample }]) => ({
+      pattern,
+      sampleDescription: sample.substring(0, 50),
+      count: txns.length,
+      total: txns.reduce((s, t) => s + Math.abs(t.amount), 0),
+      monthly: Math.round(txns.reduce((s, t) => s + Math.abs(t.amount), 0) / monthsAnalyzed),
+      transactionIds: txns.map(t => t.id),
+    }))
+    .filter(g => g.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  // Effective = user override if set, otherwise auto-estimate
+  const effectiveDiscretionary = monthlyDiscretionary > 0 ? monthlyDiscretionary : autoEstimate;
+
+  return { autoEstimate, monthsAnalyzed, groups, effectiveDiscretionary, uncategorized };
+}
+
 /**
  * Full cash flow analysis across ALL accounts
  */
@@ -160,7 +318,10 @@ export function analyzeAllAccounts(
   obligations: Obligation[],
   debts: Debt[],
   assets: Asset[] = [],
-  paycheckDeductions: PaycheckDeduction[] = []
+  paycheckDeductions: PaycheckDeduction[] = [],
+  monthlyDiscretionary: number = 0,
+  bankTransactions: BankTransaction[] = [],
+  customCategories: Record<string, CustomCategoryDef> = {},
 ): OverallCashFlow {
   const accounts = bankAccounts.map(account =>
     analyzeAccount(account, incomeSources, obligations, debts)
@@ -169,7 +330,16 @@ export function analyzeAllAccounts(
   const totalMonthlyIncome = accounts.reduce((sum, a) => sum + a.monthlyIncome, 0);
   const totalMonthlyObligations = accounts.reduce((sum, a) => sum + a.monthlyObligations, 0);
   const totalMonthlyDebtPayments = debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
-  const totalMonthlyNet = totalMonthlyIncome - totalMonthlyObligations - totalMonthlyDebtPayments;
+
+  // Compute variable spending from bank transaction history
+  const variableSpending = computeVariableSpending(bankTransactions, monthlyDiscretionary, customCategories);
+  const effectiveDiscretionary = variableSpending.effectiveDiscretionary;
+
+  const totalMonthlyOut = totalMonthlyObligations + totalMonthlyDebtPayments + effectiveDiscretionary;
+  const totalMonthlyNet = totalMonthlyIncome - totalMonthlyOut;
+
+  // Spending gap: auto-estimate vs what user has set (0 means not set)
+  const spendingGap = variableSpending.autoEstimate;
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (typeof a.currentBalance === 'number' && !isNaN(a.currentBalance) ? a.currentBalance : 0), 0);
 
   // Calculate liquid assets: bank balances + non-retirement liquid assets
@@ -252,7 +422,7 @@ export function analyzeAllAccounts(
       'Hold off on new asset purchases for now',
     ];
   } else {
-    const totalMonthlyOutflow = totalMonthlyObligations + totalMonthlyDebtPayments;
+    const totalMonthlyOutflow = totalMonthlyOut;
     const monthsOfRunway = totalMonthlyOutflow > 0 ? liquidAssets / totalMonthlyOutflow : Infinity;
 
     if (monthsOfRunway < 3) {
@@ -282,6 +452,10 @@ export function analyzeAllAccounts(
     }
   }
 
+  if (monthlyDiscretionary === 0 && variableSpending.autoEstimate === 0 && totalMonthlyObligations > 0) {
+    recommendations.unshift('⚠️ Import bank transactions or set a variable spending estimate for accurate cash flow');
+  }
+
   if (unassignedObligations.length > 0) {
     recommendations.unshift(`⚠️ ${unassignedObligations.length} obligation(s) not assigned to an account`);
   }
@@ -289,8 +463,11 @@ export function analyzeAllAccounts(
   return {
     totalMonthlyIncome,
     totalMonthlyObligations,
-    totalMonthlyNet,
     totalMonthlyDebtPayments,
+    totalMonthlyDiscretionary: effectiveDiscretionary,
+    spendingGap,
+    totalMonthlyOut,
+    totalMonthlyNet,
     totalBalance,
     liquidAssets,
     totalDailyLiving,
@@ -298,6 +475,7 @@ export function analyzeAllAccounts(
     totalEmployerMatch,
     unassignedObligations,
     accounts,
+    variableSpending,
     healthStatus,
     healthMessage,
     recommendations,

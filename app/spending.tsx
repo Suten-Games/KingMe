@@ -1,17 +1,134 @@
 // app/spending.tsx
 // Full-page spending breakdown — every expense group with per-category drilldown and transactions.
+// Includes obligations/debts as recurring items + edit modal for bank transactions.
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  Modal, TextInput, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '@/types/bankTransactionTypes';
+import type { ObligationCategory } from '@/types';
 
 const fmt = (n: number) => '$' + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+// ── Category picker options (same as categorize.tsx) ────────────────────────
+const RECAT_OPTIONS: { group: BankTransactionGroup; categories: { value: BankTransactionCategory; label: string }[] }[] = [
+  {
+    group: 'housing',
+    categories: [
+      { value: 'housing_mortgage', label: 'Mortgage' },
+      { value: 'housing_rent', label: 'Rent' },
+      { value: 'housing_maintenance', label: 'Home Maint.' },
+    ],
+  },
+  {
+    group: 'food',
+    categories: [
+      { value: 'food_grocery', label: 'Grocery' },
+      { value: 'food_restaurant', label: 'Restaurant' },
+      { value: 'food_delivery', label: 'Delivery' },
+      { value: 'food_coffee', label: 'Coffee' },
+    ],
+  },
+  {
+    group: 'transport',
+    categories: [
+      { value: 'transport_fuel', label: 'Fuel' },
+      { value: 'transport_rideshare', label: 'Rideshare' },
+      { value: 'transport_parking', label: 'Parking' },
+      { value: 'transport_maintenance', label: 'Auto Care' },
+    ],
+  },
+  {
+    group: 'utilities',
+    categories: [
+      { value: 'utilities_electric', label: 'Electric' },
+      { value: 'utilities_internet', label: 'Internet' },
+      { value: 'utilities_phone', label: 'Phone' },
+      { value: 'utilities_water', label: 'Water' },
+      { value: 'utilities_gas', label: 'Gas Utility' },
+      { value: 'utilities_other', label: 'Other Utility' },
+    ],
+  },
+  {
+    group: 'insurance',
+    categories: [
+      { value: 'insurance_auto', label: 'Auto Ins.' },
+      { value: 'insurance_health', label: 'Health Ins.' },
+      { value: 'insurance_home', label: 'Home Ins.' },
+      { value: 'insurance_life', label: 'Life Ins.' },
+      { value: 'insurance_other', label: 'Other Ins.' },
+    ],
+  },
+  {
+    group: 'subscriptions',
+    categories: [
+      { value: 'subscription_streaming', label: 'Streaming' },
+      { value: 'subscription_software', label: 'Software' },
+      { value: 'subscription_gym', label: 'Gym' },
+      { value: 'subscription_other', label: 'Other Sub' },
+    ],
+  },
+  {
+    group: 'medical',
+    categories: [
+      { value: 'medical_doctor', label: 'Doctor' },
+      { value: 'medical_pharmacy', label: 'Pharmacy' },
+      { value: 'medical_dental', label: 'Dental' },
+      { value: 'medical_other', label: 'Other Medical' },
+    ],
+  },
+  {
+    group: 'personal',
+    categories: [
+      { value: 'personal_clothing', label: 'Clothing' },
+      { value: 'personal_grooming', label: 'Grooming' },
+      { value: 'personal_education', label: 'Education' },
+      { value: 'personal_gifts', label: 'Gifts' },
+    ],
+  },
+  {
+    group: 'entertainment',
+    categories: [
+      { value: 'entertainment_events', label: 'Events' },
+      { value: 'entertainment_hobbies', label: 'Hobbies' },
+      { value: 'entertainment_travel', label: 'Travel' },
+    ],
+  },
+  {
+    group: 'financial',
+    categories: [
+      { value: 'financial_debt_payment', label: 'Debt Payment' },
+      { value: 'financial_investment', label: 'Investment' },
+      { value: 'financial_savings_transfer', label: 'Savings' },
+      { value: 'financial_fees', label: 'Fees' },
+      { value: 'financial_taxes', label: 'Taxes' },
+    ],
+  },
+  {
+    group: 'transfers',
+    categories: [
+      { value: 'transfer_between_accounts', label: 'Transfer' },
+      { value: 'transfer_to_other', label: 'Transfer Out' },
+    ],
+  },
+];
+
+// ── ObligationCategory → BankTransactionGroup mapping ───────────────────────
+const OBLIGATION_GROUP_MAP: Record<ObligationCategory, BankTransactionGroup> = {
+  housing: 'housing',
+  utilities: 'utilities',
+  insurance: 'insurance',
+  debt_service: 'financial',
+  daily_living: 'personal',
+  retirement: 'financial',
+  other: 'other',
+};
 
 // ── Resolve category → group, checking built-in then custom ──────────────
 function resolveGroup(
@@ -34,7 +151,7 @@ function resolveCategoryMeta(
   if (builtIn) return builtIn;
   const custom = customCategories[cat];
   if (custom) return custom;
-  return { label: cat, emoji: '📋' };
+  return { label: cat, emoji: '\u{1F4CB}' };
 }
 
 // ── Build unique month list from transactions ────────────────────────────
@@ -57,12 +174,22 @@ function monthLabel(ym: string): string {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
+// A "display item" in the drilldown — either a real bank transaction or a synthetic recurring entry
+interface DisplayItem {
+  id: string;
+  description: string;
+  amount: number;
+  date: string;
+  isRecurring: boolean;
+  bankTransaction?: BankTransaction; // present only for real txns (editable)
+}
+
 interface CategoryBreakdown {
   category: BankTransactionCategory;
   label: string;
   emoji: string;
   total: number;
-  transactions: BankTransaction[];
+  items: DisplayItem[];
 }
 
 interface GroupBreakdown {
@@ -79,6 +206,39 @@ export default function SpendingPage() {
   const insets = useSafeAreaInsets();
   const bankTransactions = useStore(s => s.bankTransactions) || [];
   const customCategories = useStore(s => s.customCategories) || {};
+  const obligations = useStore(s => s.obligations) || [];
+  const debts = useStore(s => s.debts) || [];
+  const updateBankTransaction = useStore(s => s.updateBankTransaction);
+
+  // Edit modal state
+  const [editingTx, setEditingTx] = useState<BankTransaction | null>(null);
+  const [editDesc, setEditDesc] = useState('');
+  const [editCategory, setEditCategory] = useState<BankTransactionCategory>('other');
+
+  const openEdit = useCallback((tx: BankTransaction) => {
+    setEditingTx(tx);
+    setEditDesc(tx.description);
+    setEditCategory(tx.category);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (!editingTx) return;
+    updateBankTransaction(editingTx.id, {
+      description: editDesc.trim() || editingTx.description,
+      category: editCategory,
+    });
+    setEditingTx(null);
+  }, [editingTx, editDesc, editCategory, updateBankTransaction]);
+
+  // Custom categories grouped for the picker
+  const customByGroup = useMemo(() => {
+    const map: Record<string, { key: string; label: string; emoji: string }[]> = {};
+    for (const [key, def] of Object.entries(customCategories)) {
+      if (!map[def.group]) map[def.group] = [];
+      map[def.group].push({ key, label: def.label, emoji: def.emoji });
+    }
+    return map;
+  }, [customCategories]);
 
   // Only expense transactions
   const expenses = useMemo(
@@ -95,19 +255,72 @@ export default function SpendingPage() {
     return expenses.filter(t => t.date.startsWith(selectedMonth));
   }, [expenses, selectedMonth]);
 
-  // Group by category group, then by category
-  const groupBreakdowns = useMemo(() => {
-    const groupMap: Record<string, { total: number; catMap: Record<string, { total: number; txns: BankTransaction[] }> }> = {};
+  // Number of months covered by transaction data (for scaling recurring costs in "all time")
+  const monthCount = Math.max(months.length, 1);
 
+  // Group by category group, then by category — now includes obligations & debts
+  const groupBreakdowns = useMemo(() => {
+    const groupMap: Record<string, { total: number; catMap: Record<string, { total: number; items: DisplayItem[] }> }> = {};
+
+    const ensureGroup = (grp: string) => {
+      if (!groupMap[grp]) groupMap[grp] = { total: 0, catMap: {} };
+    };
+    const ensureCat = (grp: string, cat: string) => {
+      ensureGroup(grp);
+      if (!groupMap[grp].catMap[cat]) groupMap[grp].catMap[cat] = { total: 0, items: [] };
+    };
+
+    // 1) Bank transactions
     for (const t of filtered) {
       const grp = resolveGroup(t.category, customCategories) || 'other';
-      if (!groupMap[grp]) groupMap[grp] = { total: 0, catMap: {} };
-      groupMap[grp].total += Math.abs(t.amount);
+      ensureCat(grp, t.category);
+      const amt = Math.abs(t.amount);
+      groupMap[grp].total += amt;
+      groupMap[grp].catMap[t.category].total += amt;
+      groupMap[grp].catMap[t.category].items.push({
+        id: t.id,
+        description: t.description,
+        amount: t.amount,
+        date: t.date,
+        isRecurring: false,
+        bankTransaction: t,
+      });
+    }
 
-      const cat = t.category;
-      if (!groupMap[grp].catMap[cat]) groupMap[grp].catMap[cat] = { total: 0, txns: [] };
-      groupMap[grp].catMap[cat].total += Math.abs(t.amount);
-      groupMap[grp].catMap[cat].txns.push(t);
+    // 2) Obligations — monthly costs, always included
+    for (const ob of obligations) {
+      const grp = OBLIGATION_GROUP_MAP[ob.category] || 'other';
+      const syntheticCat = `_obligation_${ob.category}`;
+      ensureCat(grp, syntheticCat);
+      // For "all time", scale by monthCount so proportions are fair against bank txn totals
+      const amt = selectedMonth === 'all' ? ob.amount * monthCount : ob.amount;
+      groupMap[grp].total += amt;
+      groupMap[grp].catMap[syntheticCat].total += amt;
+      groupMap[grp].catMap[syntheticCat].items.push({
+        id: `ob_${ob.id}`,
+        description: ob.name,
+        amount: ob.amount,
+        date: '',
+        isRecurring: true,
+      });
+    }
+
+    // 3) Debts — monthly payments → financial group
+    for (const d of debts) {
+      if (!d.monthlyPayment) continue;
+      const grp: BankTransactionGroup = 'financial';
+      const syntheticCat = '_debt_payment';
+      ensureCat(grp, syntheticCat);
+      const amt = selectedMonth === 'all' ? d.monthlyPayment * monthCount : d.monthlyPayment;
+      groupMap[grp].total += amt;
+      groupMap[grp].catMap[syntheticCat].total += amt;
+      groupMap[grp].catMap[syntheticCat].items.push({
+        id: `debt_${d.id}`,
+        description: d.name,
+        amount: d.monthlyPayment,
+        date: '',
+        isRecurring: true,
+      });
     }
 
     // Exclude income group
@@ -116,15 +329,36 @@ export default function SpendingPage() {
     const result: GroupBreakdown[] = Object.entries(groupMap)
       .map(([grp, data]) => {
         const meta = TRANSACTION_GROUP_META[grp as BankTransactionGroup];
+        if (!meta) return null;
         const categories: CategoryBreakdown[] = Object.entries(data.catMap)
           .map(([cat, catData]) => {
-            const catMeta = resolveCategoryMeta(cat as BankTransactionCategory, customCategories);
+            // Synthetic obligation/debt categories get friendly labels
+            let label: string;
+            let emoji: string;
+            if (cat === '_debt_payment') {
+              label = 'Debt Payments';
+              emoji = '\u{1F4B3}';
+            } else if (cat.startsWith('_obligation_')) {
+              const obCat = cat.replace('_obligation_', '') as ObligationCategory;
+              const groupForOb = OBLIGATION_GROUP_MAP[obCat];
+              const groupMeta = TRANSACTION_GROUP_META[groupForOb];
+              label = groupMeta ? `${groupMeta.label} (recurring)` : 'Recurring';
+              emoji = '\u{1F501}';
+            } else {
+              const catMeta = resolveCategoryMeta(cat as BankTransactionCategory, customCategories);
+              label = catMeta.label;
+              emoji = catMeta.emoji;
+            }
             return {
               category: cat as BankTransactionCategory,
-              label: catMeta.label,
-              emoji: catMeta.emoji,
+              label,
+              emoji,
               total: catData.total,
-              transactions: catData.txns.sort((a, b) => b.date.localeCompare(a.date)),
+              items: catData.items.sort((a, b) => {
+                // Recurring items at bottom, then by date desc
+                if (a.isRecurring !== b.isRecurring) return a.isRecurring ? 1 : -1;
+                return b.date.localeCompare(a.date);
+              }),
             };
           })
           .sort((a, b) => b.total - a.total);
@@ -138,10 +372,11 @@ export default function SpendingPage() {
           categories,
         };
       })
-      .sort((a, b) => b.total - a.total);
+      .filter(Boolean)
+      .sort((a, b) => b!.total - a!.total) as GroupBreakdown[];
 
     return result;
-  }, [filtered, customCategories]);
+  }, [filtered, customCategories, obligations, debts, selectedMonth, monthCount]);
 
   const grandTotal = useMemo(
     () => groupBreakdowns.reduce((s, g) => s + g.total, 0),
@@ -149,8 +384,9 @@ export default function SpendingPage() {
   );
 
   const hasOther = groupBreakdowns.some(g => g.group === 'other');
+  const hasData = expenses.length > 0 || obligations.length > 0 || debts.length > 0;
 
-  if (expenses.length === 0) {
+  if (!hasData) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
@@ -161,7 +397,7 @@ export default function SpendingPage() {
           <View style={{ width: 50 }} />
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📊</Text>
+          <Text style={styles.emptyEmoji}>{'\u{1F4CA}'}</Text>
           <Text style={styles.emptyText}>No expense transactions yet</Text>
           <Text style={styles.emptySubtext}>Import bank transactions to see your spending breakdown</Text>
         </View>
@@ -207,7 +443,7 @@ export default function SpendingPage() {
           <Text style={styles.totalSub}>
             {selectedMonth === 'all'
               ? `${filtered.length} transactions`
-              : `${monthLabel(selectedMonth)} · ${filtered.length} transactions`}
+              : `${monthLabel(selectedMonth)} \u00B7 ${filtered.length} transactions`}
           </Text>
         </View>
 
@@ -217,6 +453,7 @@ export default function SpendingPage() {
             key={group.group}
             group={group}
             grandTotal={grandTotal}
+            onEditTx={openEdit}
           />
         ))}
 
@@ -227,15 +464,100 @@ export default function SpendingPage() {
             onPress={() => router.push('/categorize')}
             activeOpacity={0.7}
           >
-            <Text style={styles.ctaBtnEmoji}>🗂️</Text>
+            <Text style={styles.ctaBtnEmoji}>{'\u{1F5C2}\uFE0F'}</Text>
             <View style={styles.ctaBtnContent}>
               <Text style={styles.ctaBtnText}>Sort uncategorized transactions</Text>
               <Text style={styles.ctaBtnSub}>Drag & drop to categorize "Other" items</Text>
             </View>
-            <Text style={styles.ctaBtnArrow}>›</Text>
+            <Text style={styles.ctaBtnArrow}>{'\u203A'}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Edit Transaction Modal */}
+      <Modal visible={!!editingTx} transparent animationType="slide" onRequestClose={() => setEditingTx(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Edit Transaction</Text>
+
+            <Text style={styles.modalLabel}>Description</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editDesc}
+              onChangeText={setEditDesc}
+              placeholderTextColor="#555"
+              autoFocus={Platform.OS === 'web'}
+              {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
+            />
+
+            <Text style={styles.modalLabel}>Category</Text>
+            <ScrollView style={styles.modalPickerScroll} contentContainerStyle={styles.modalPickerContent}>
+              {RECAT_OPTIONS.map(optGroup => {
+                const meta = TRANSACTION_GROUP_META[optGroup.group];
+                const customInGroup = customByGroup[optGroup.group] || [];
+                return (
+                  <View key={optGroup.group}>
+                    <Text style={[styles.modalGroupLabel, { color: meta.color }]}>
+                      {meta.emoji} {meta.label}
+                    </Text>
+                    <View style={styles.modalPillRow}>
+                      {optGroup.categories.map(cat => (
+                        <TouchableOpacity
+                          key={cat.value}
+                          style={[
+                            styles.modalPill,
+                            { borderColor: meta.color + '40' },
+                            editCategory === cat.value && { borderColor: '#f4c430', backgroundColor: '#f4c43020' },
+                          ]}
+                          onPress={() => setEditCategory(cat.value)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.modalPillText,
+                            { color: meta.color },
+                            editCategory === cat.value && { color: '#f4c430' },
+                          ]}>
+                            {cat.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                      {customInGroup.map(c => (
+                        <TouchableOpacity
+                          key={c.key}
+                          style={[
+                            styles.modalPill,
+                            { borderColor: meta.color + '40' },
+                            editCategory === c.key && { borderColor: '#f4c430', backgroundColor: '#f4c43020' },
+                          ]}
+                          onPress={() => setEditCategory(c.key as BankTransactionCategory)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[
+                            styles.modalPillText,
+                            { color: meta.color },
+                            editCategory === c.key && { color: '#f4c430' },
+                          ]}>
+                            {c.emoji} {c.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSave}>
+                <Text style={styles.modalSaveBtnText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditingTx(null)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -244,7 +566,7 @@ export default function SpendingPage() {
 // GROUP CARD — expandable with category drilldown
 // ═══════════════════════════════════════════════════════════════════════════
 
-function GroupCard({ group, grandTotal }: { group: GroupBreakdown; grandTotal: number }) {
+function GroupCard({ group, grandTotal, onEditTx }: { group: GroupBreakdown; grandTotal: number; onEditTx: (tx: BankTransaction) => void }) {
   const [expanded, setExpanded] = useState(false);
   const pct = grandTotal > 0 ? Math.round((group.total / grandTotal) * 100) : 0;
 
@@ -277,7 +599,7 @@ function GroupCard({ group, grandTotal }: { group: GroupBreakdown; grandTotal: n
       {expanded && (
         <View style={styles.groupBody}>
           {group.categories.map(cat => (
-            <CategoryRow key={cat.category} cat={cat} groupColor={group.color} groupTotal={group.total} />
+            <CategoryRow key={cat.category} cat={cat} groupColor={group.color} groupTotal={group.total} onEditTx={onEditTx} />
           ))}
         </View>
       )}
@@ -286,12 +608,13 @@ function GroupCard({ group, grandTotal }: { group: GroupBreakdown; grandTotal: n
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CATEGORY ROW — expandable with individual transactions
+// CATEGORY ROW — expandable with individual transactions + recurring items
 // ═══════════════════════════════════════════════════════════════════════════
 
-function CategoryRow({ cat, groupColor, groupTotal }: { cat: CategoryBreakdown; groupColor: string; groupTotal: number }) {
+function CategoryRow({ cat, groupColor, groupTotal, onEditTx }: { cat: CategoryBreakdown; groupColor: string; groupTotal: number; onEditTx: (tx: BankTransaction) => void }) {
   const [expanded, setExpanded] = useState(false);
   const pct = groupTotal > 0 ? Math.round((cat.total / groupTotal) * 100) : 0;
+  const itemCount = cat.items.length;
 
   return (
     <View style={styles.catRow}>
@@ -303,7 +626,7 @@ function CategoryRow({ cat, groupColor, groupTotal }: { cat: CategoryBreakdown; 
         <View style={styles.catLeft}>
           <Text style={styles.catEmoji}>{cat.emoji}</Text>
           <Text style={styles.catLabel}>{cat.label}</Text>
-          <Text style={styles.catCount}>{cat.transactions.length}x</Text>
+          <Text style={styles.catCount}>{itemCount}x</Text>
         </View>
         <Text style={[styles.catAmount, { color: groupColor }]}>{fmt(cat.total)}</Text>
       </TouchableOpacity>
@@ -313,17 +636,34 @@ function CategoryRow({ cat, groupColor, groupTotal }: { cat: CategoryBreakdown; 
         <View style={[styles.catBarFill, { width: `${Math.min(pct, 100)}%` as any, backgroundColor: groupColor + '80' }]} />
       </View>
 
-      {/* Expanded transactions */}
+      {/* Expanded items */}
       {expanded && (
         <View style={styles.txList}>
-          {cat.transactions.map(t => (
-            <View key={t.id} style={styles.txRow}>
-              <View style={styles.txLeft}>
-                <Text style={styles.txDate}>{t.date}</Text>
-                <Text style={styles.txDesc} numberOfLines={1}>{t.description}</Text>
+          {cat.items.map(item => (
+            item.isRecurring ? (
+              // Recurring obligation/debt row — not tappable for editing
+              <View key={item.id} style={styles.txRow}>
+                <View style={styles.txLeft}>
+                  <Text style={styles.recurringBadge}>Recurring</Text>
+                  <Text style={styles.txDescRecurring} numberOfLines={1}>{'\u{1F501}'} {item.description}</Text>
+                </View>
+                <Text style={styles.txAmountRecurring}>{fmt(item.amount)}/mo</Text>
               </View>
-              <Text style={styles.txAmount}>{fmt(t.amount)}</Text>
-            </View>
+            ) : (
+              // Bank transaction row — tappable for editing
+              <TouchableOpacity
+                key={item.id}
+                style={styles.txRow}
+                onPress={() => item.bankTransaction && onEditTx(item.bankTransaction)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.txLeft}>
+                  <Text style={styles.txDate}>{item.date}</Text>
+                  <Text style={styles.txDesc} numberOfLines={1}>{item.description}</Text>
+                </View>
+                <Text style={styles.txAmount}>{fmt(item.amount)}</Text>
+              </TouchableOpacity>
+            )
           ))}
         </View>
       )}
@@ -532,7 +872,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  // Transaction list
+  // Transaction / item list
   txList: {
     backgroundColor: '#0c102060',
     borderRadius: 8,
@@ -568,6 +908,28 @@ const styles = StyleSheet.create({
     color: '#f87171',
   },
 
+  // Recurring obligation/debt items
+  recurringBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0a0e1a',
+    backgroundColor: '#818cf880',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  txDescRecurring: {
+    fontSize: 12,
+    color: '#888',
+    flex: 1,
+  },
+  txAmountRecurring: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+  },
+
   // Uncategorized CTA
   ctaBtn: {
     flexDirection: 'row',
@@ -597,5 +959,98 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '300',
     color: '#f4c430',
+  },
+
+  // Edit modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#00000080',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#0f1322',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#e8e0d0',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: '#0c1020',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a3050',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#fff',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as any,
+  },
+  modalPickerScroll: {
+    maxHeight: 280,
+    marginTop: 4,
+  },
+  modalPickerContent: {
+    paddingBottom: 8,
+  },
+  modalGroupLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  modalPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  modalPill: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#0c1020',
+  },
+  modalPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalActions: {
+    marginTop: 20,
+    gap: 8,
+  },
+  modalSaveBtn: {
+    backgroundColor: '#f4c430',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  modalSaveBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0a0e1a',
+  },
+  modalCancelBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 14,
+    color: '#666',
   },
 });
