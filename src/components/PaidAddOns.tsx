@@ -53,6 +53,15 @@ const ADD_ONS: AddOn[] = [
     hideable: true,
   },
   {
+    id: 'bank_consolidation',
+    name: 'Bank Consolidation',
+    emoji: '🏦',
+    description: 'Analyze whether consolidating accounts saves money — fees, activity, complexity',
+    price: '$2.99',
+    route: '/bank-consolidation',
+    hideable: true,
+  },
+  {
     id: 'tax_optimizer',
     name: 'Tax Loss Harvesting',
     emoji: '🧾',

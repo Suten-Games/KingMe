@@ -279,8 +279,9 @@ export default function HomeScreen() {
   const dashboardBody = (
     <View style={styles.content}>
       <SetupChecklist />
-      <CashFlowSummary cashFlow={cashFlow} />
-      <SpendingGapAlert cashFlow={cashFlow} />
+      <CashFlowSummary cashFlow={cashFlow}>
+        <SpendingGapAlert cashFlow={cashFlow} />
+      </CashFlowSummary>
 
 
 

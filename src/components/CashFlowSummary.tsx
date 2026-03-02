@@ -1,14 +1,15 @@
 // app/components/CashFlowSummary.tsx - Cash flow analysis component
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { OverallCashFlow } from '../../src/services/cashflow';
 
 interface CashFlowSummaryProps {
   cashFlow: OverallCashFlow;
+  children?: ReactNode;
 }
 
-export default function CashFlowSummary({ cashFlow }: CashFlowSummaryProps) {
+export default function CashFlowSummary({ cashFlow, children }: CashFlowSummaryProps) {
   const defaultExpanded = useStore((s) => s.settings?.defaultExpandAssetSections ?? false);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -166,6 +167,9 @@ export default function CashFlowSummary({ cashFlow }: CashFlowSummaryProps) {
               ))}
             </View>
           )}
+
+          {/* Nested children (e.g. SpendingGapAlert) */}
+          {children}
         </View>
       )}
     </>

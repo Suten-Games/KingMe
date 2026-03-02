@@ -101,6 +101,14 @@ function getEntrySignal(ext: WatchlistExt, currentPrice: number): EntrySignal {
     level: 'watching', label: 'Running hot — wait for pullback', emoji: '🔴',
     color: '#f87171', bgColor: '#f8717115',
   };
+  if (dropFromAdd >= 25) return {
+    level: 'strong', label: `Up ${dropFromAdd.toFixed(0)}% — strong move`, emoji: '🚀',
+    color: '#4ade80', bgColor: '#4ade8020',
+  };
+  if (dropFromAdd >= 10) return {
+    level: 'interesting', label: `Up ${dropFromAdd.toFixed(0)}% since added`, emoji: '📈',
+    color: '#f4c430', bgColor: '#f4c43020',
+  };
   return {
     level: 'none', label: 'Tracking', emoji: '📊',
     color: '#888', bgColor: '#88888815',
