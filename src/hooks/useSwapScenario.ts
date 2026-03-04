@@ -88,6 +88,26 @@ export function useSwapScenario() {
 
     if (!onChain) return;
 
+    // Drift swap scenarios: skip Jupiter quote, show confirmation directly
+    if (isDriftSwapScenario(scenario.type)) {
+      if (!connected || !publicKey) {
+        setSwapState((prev) => ({
+          ...prev,
+          state: 'error',
+          error: 'Connect your wallet to execute on-chain scenarios',
+        }));
+        return;
+      }
+      setSwapState({
+        state: 'confirming',
+        quote: null,
+        result: null,
+        error: null,
+        isOnChain: true,
+      });
+      return;
+    }
+
     if (!isSwapConfigured()) {
       setSwapState((prev) => ({
         ...prev,
@@ -103,18 +123,6 @@ export function useSwapScenario() {
         state: 'error',
         error: 'Connect your wallet to execute on-chain scenarios',
       }));
-      return;
-    }
-
-    // Drift swap scenarios: skip Jupiter quote, show confirmation directly
-    if (isDriftSwapScenario(scenario.type)) {
-      setSwapState({
-        state: 'confirming',
-        quote: null,
-        result: null,
-        error: null,
-        isOnChain: true,
-      });
       return;
     }
 
@@ -173,26 +181,14 @@ export function useSwapScenario() {
       }
     }
 
-    // On-chain flow
-    if (!isSwapConfigured()) {
-      Alert.alert(
-        'Swap Not Available',
-        'The swap service isn\'t configured in this build. Set EXPO_PUBLIC_API_URL in EAS environment variables and rebuild.'
-      );
-      return false;
-    }
-
-    if (!connected || !publicKey) {
-      Alert.alert(
-        'Wallet Required',
-        'Connect your Solana wallet to execute this action on-chain.',
-        [{ text: 'OK' }]
-      );
-      return false;
-    }
-
     // ── Drift swap scenarios (drift_yield, goal_upgrade) ────
+    // Check before Jupiter-specific guards since Drift uses its own API
     if (isDriftSwapScenario(scenario.type)) {
+      if (!connected || !publicKey) {
+        Alert.alert('Wallet Required', 'Connect your Solana wallet to execute this swap.');
+        return false;
+      }
+
       const upgrade = (scenario as any)._goalUpgrade;
       if (!upgrade && scenario.type === 'goal_upgrade') {
         Alert.alert('Error', 'Missing goal upgrade metadata');
@@ -281,6 +277,16 @@ export function useSwapScenario() {
     }
 
     // ── Jupiter swap scenarios ───────────────────────────────
+    if (!isSwapConfigured()) {
+      Alert.alert('Swap Not Available', 'Set EXPO_PUBLIC_API_URL in EAS environment variables and rebuild.');
+      return false;
+    }
+
+    if (!connected || !publicKey) {
+      Alert.alert('Wallet Required', 'Connect your Solana wallet to execute this action on-chain.');
+      return false;
+    }
+
     const swapParams = scenarioToSwapParams(scenario, publicKey.toBase58());
 
     if (!swapParams || swapParams.amount <= 0) {
