@@ -1422,56 +1422,75 @@ function generateDriftYieldScenario(
   monthlyNeeds: number,
   goals: Goal[]
 ): WhatIfScenario | null {
-  // Calculate total USDC sitting in Drift from trade allocations
-  const totalLeftInDrift = driftTrades.reduce(
-    (sum, t) => sum + (t.allocation?.leftInDrift || 0), 0
-  );
-
-  // Also check for Drift-protocol assets that might be logged directly
+  // Find Drift-protocol assets logged in the app (the source of truth for balances).
+  // Don't also sum leftInDrift from trades — that's the same money double-counted.
   const driftAssets = assets.filter(a =>
     (a.type === 'crypto' || a.type === 'defi') &&
-    ((a.metadata as any)?.protocol?.toLowerCase() === 'drift') &&
-    ((a.metadata as any)?.apy || 0) < 5 // Not already in a yield position
+    ((a.metadata as any)?.protocol?.toLowerCase() === 'drift')
   );
-  const driftAssetValue = driftAssets.reduce((sum, a) => sum + a.value, 0);
 
-  const totalDriftUSDC = totalLeftInDrift + driftAssetValue;
-  if (totalDriftUSDC < 200) return null;
+  if (driftAssets.length === 0) {
+    // Fallback: if no Drift assets logged, use trade allocation totals
+    const totalLeftInDrift = driftTrades.reduce(
+      (sum, t) => sum + (t.allocation?.leftInDrift || 0), 0
+    );
+    if (totalLeftInDrift < 200) return null;
+    // Treat as a single virtual asset with 0% APY
+    driftAssets.push({
+      id: '_drift_virtual',
+      type: 'crypto',
+      name: 'Drift USDC',
+      value: totalLeftInDrift,
+      annualIncome: 0,
+      metadata: { type: 'crypto', symbol: 'USDC', protocol: 'Drift', apy: 0 } as any,
+    } as any);
+  }
+
+  const totalDriftValue = driftAssets.reduce((sum, a) => sum + a.value, 0);
+  if (totalDriftValue < 200) return null;
+
+  // Calculate current weighted APY across Drift assets
+  const currentAnnualIncome = driftAssets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
+  const currentAPY = totalDriftValue > 0 ? (currentAnnualIncome / totalDriftValue) * 100 : 0;
 
   // Drift supports multi-collateral (SOL, dSOL, etc. all count as margin),
   // so swapping USDC → yield tokens doesn't reduce trading ability.
-  // The full balance can be deployed.
-  const deployableUSDC = totalDriftUSDC;
+  const deployableUSDC = totalDriftValue;
 
   // ── Find active goals that match yield options ──
   const activeGoals = goals.filter(g => !g.completedAt && g.strategy === 'accumulate');
   const goalSymbols = new Set(activeGoals.map(g => (g.symbol || '').toUpperCase()));
 
   // ── Rank yield options: goal-aligned first, then by APY ──
+  // Only show options that beat current APY
   const ranked = [...DRIFT_YIELD_OPTIONS]
+    .filter(opt => opt.apy > currentAPY)
     .map(opt => ({
       ...opt,
       matchesGoal: goalSymbols.has(opt.symbol.toUpperCase()),
       matchingGoal: activeGoals.find(g => (g.symbol || '').toUpperCase() === opt.symbol.toUpperCase()),
     }))
     .sort((a, b) => {
-      // Goal-aligned options first
       if (a.matchesGoal && !b.matchesGoal) return -1;
       if (!a.matchesGoal && b.matchesGoal) return 1;
-      // Then by APY
       return b.apy - a.apy;
     });
+
+  if (ranked.length === 0) return null; // Already at best yield
 
   const topPick = ranked[0];
   const alternatives = ranked.slice(1, 3);
 
-  // Calculate impact using top pick's APY
+  // Calculate income DELTA (new yield minus current yield)
   const newAnnualIncome = deployableUSDC * (topPick.apy / 100);
-  const monthlyIncomeDelta = newAnnualIncome / 12;
+  const annualIncomeDelta = newAnnualIncome - currentAnnualIncome;
+  const monthlyIncomeDelta = annualIncomeDelta / 12;
+
+  if (monthlyIncomeDelta < 1) return null; // Not worth suggesting
+
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
 
-  // Build goal-aware title and description
   const goalNote = topPick.matchingGoal
     ? ` (aligns with your "${topPick.matchingGoal.name}" goal)`
     : '';
@@ -1481,11 +1500,16 @@ function generateDriftYieldScenario(
     return `${a.symbol} (${a.apy}% APY${goalTag}) — ${a.description}`;
   });
 
+  const driftNames = driftAssets
+    .filter(a => a.id !== '_drift_virtual')
+    .map(a => `${(a.metadata as any)?.symbol || a.name} ($${Math.round(a.value).toLocaleString()})`)
+    .join(', ');
+
   return {
     id: 'drift_yield',
     type: 'drift_yield',
-    title: `Swap $${Math.round(deployableUSDC).toLocaleString()} Drift USDC → ${topPick.symbol} at ${topPick.apy}%`,
-    description: `${topPick.description}${goalNote} — still usable as Drift collateral`,
+    title: `Increase Drift yield: ${currentAPY.toFixed(1)}% → ${topPick.apy}% via ${topPick.symbol}`,
+    description: `Swap $${Math.round(deployableUSDC).toLocaleString()} ${driftNames || 'Drift USDC'} → ${topPick.symbol}${goalNote} — still usable as collateral`,
     emoji: '⚡',
     difficulty: 'easy',
     timeframe: 'This week',
@@ -1499,12 +1523,12 @@ function generateDriftYieldScenario(
       monthlyIncomeBefore: currentMonthlyIncome,
       monthlyIncomeAfter: newMonthlyIncome,
       monthlyIncomeDelta: monthlyIncomeDelta,
-      annualIncomeDelta: newAnnualIncome,
+      annualIncomeDelta: annualIncomeDelta,
       investmentRequired: 0,
       roi: topPick.apy,
     },
 
-    reasoning: `You have $${Math.round(totalDriftUSDC).toLocaleString()} USDC sitting idle in Drift earning nothing. Drift supports multi-collateral, so swapping to ${topPick.symbol} at ${topPick.apy}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo) keeps your full trading power intact.${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
+    reasoning: `You have $${Math.round(totalDriftValue).toLocaleString()} in Drift currently earning ${currentAPY.toFixed(2)}% APY. Swapping to ${topPick.symbol} at ${topPick.apy}% increases yield by ${(topPick.apy - currentAPY).toFixed(2)}% (+$${monthlyIncomeDelta.toFixed(0)}/mo). Drift multi-collateral means your trading power stays the same.${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
 
     risks: [
       'Smart contract risk on yield protocol',
