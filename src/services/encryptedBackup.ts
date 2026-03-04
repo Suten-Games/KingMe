@@ -1,7 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
+// src/services/encryptedBackup.ts
+// Cloud backup via authenticated backup API.
+// All API calls require a valid wallet signature.
 
-const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  encryptProfileWithWallet,
+  decryptProfileWithWallet,
+  getAuthParams,
+} from './walletStorage';
+
+import { getApiBase } from './apiBase';
+
+const BACKUP_API = `${getApiBase()}/api/backup`;
 
 export async function saveBackup(
   profileData: any,
@@ -9,27 +19,25 @@ export async function saveBackup(
   walletAddress: string
 ): Promise<string> {
   try {
-    console.log('📦 Encrypting profile with wallet...');
-
-    // Pass walletAddress to encryption
     const encrypted = await encryptProfileWithWallet(profileData, signMessage, walletAddress);
 
-    console.log('☁️ Uploading to cloud...');
+    // Sign a fresh auth challenge for the upload request
+    const authParams = await getAuthParams(signMessage, walletAddress);
 
-    const response = await fetch(`${BACKUP_API}?wallet=${walletAddress}`, {
+    const response = await fetch(`${BACKUP_API}?${authParams}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: encrypted })
+      body: JSON.stringify({ data: encrypted }),
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Upload failed: ${err.error || response.status}`);
     }
 
     const backupId = `cloud_${Date.now()}`;
     await AsyncStorage.setItem(`backup_latest_${walletAddress}`, backupId);
 
-    console.log('✅ Backup saved to cloud');
     return backupId;
   } catch (error) {
     console.error('Backup failed:', error);
@@ -42,12 +50,14 @@ export async function loadBackup(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>
 ): Promise<any> {
   try {
-    console.log('☁️ Loading backup from cloud...');
+    // Sign a fresh auth challenge for the download request
+    const authParams = await getAuthParams(signMessage, walletAddress);
 
-    const response = await fetch(`${BACKUP_API}?wallet=${walletAddress}`);
+    const response = await fetch(`${BACKUP_API}?${authParams}`);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch backup: ${response.status}`);
+      const err = await response.json().catch(() => ({}));
+      throw new Error(`Failed to fetch backup: ${err.error || response.status}`);
     }
 
     const { data: encrypted } = await response.json();
@@ -56,17 +66,12 @@ export async function loadBackup(
       throw new Error('No backup found for this wallet');
     }
 
-    // Strip quotes if present
     const cleanEncrypted = typeof encrypted === 'string'
       ? encrypted.replace(/^"|"$/g, '')
       : encrypted;
 
-    console.log('🔓 Decrypting profile with wallet...');
-
-    // Pass walletAddress to decryption
     const profileData = await decryptProfileWithWallet(cleanEncrypted, signMessage, walletAddress);
 
-    console.log('✅ Backup loaded from cloud');
     return profileData;
   } catch (error) {
     console.error('Load backup failed:', error);

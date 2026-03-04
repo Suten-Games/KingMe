@@ -85,6 +85,7 @@ export default function BankAccountDetailScreen() {
   const debts = useStore(s => s.debts);
   const addDebt = useStore(s => s.addDebt);
   const updateBankAccount = useStore(s => s.updateBankAccount);
+  const clearBankTransactions = useStore(s => s.clearBankTransactions);
 
   const account = bankAccounts.find(a => a.id === id);
   const accountTransactions = useMemo(
@@ -359,11 +360,16 @@ export default function BankAccountDetailScreen() {
         const descNorm = normalize(t.description);
 
         // Name match (debt name or payee)
+        const descStripped = descNorm.replace(/\s/g, '');
+        const debtNameStripped = debtNameNorm.replace(/\s/g, '');
+        const debtPayeeStripped = debtPayeeNorm.replace(/\s/g, '');
         const directNameMatch =
           descNorm.includes(debtNameNorm) ||
           debtNameNorm.includes(descNorm.substring(0, 15)) ||
+          descStripped.includes(debtNameStripped) ||
           (debtPayeeNorm && descNorm.includes(debtPayeeNorm)) ||
-          (debtPayeeNorm && debtPayeeNorm.includes(descNorm.substring(0, 15)));
+          (debtPayeeNorm && debtPayeeNorm.includes(descNorm.substring(0, 15))) ||
+          (debtPayeeStripped && descStripped.includes(debtPayeeStripped));
 
         const tokenMatch =
           hasTokenOverlap(t.description, debt.name) ||
@@ -376,6 +382,9 @@ export default function BankAccountDetailScreen() {
         if ((directNameMatch || tokenMatch) && (amountClose || amountExact)) return true;
         if (amountExact && tokenMatch) return true;
         if (directNameMatch && t.amount === debtAmount) return true;
+
+        // Strong name match alone — credit card payments vary in amount (min pay vs payoff)
+        if (directNameMatch) return true;
 
         // Debt-specific: exact amount + same bank account + categorized as debt payment
         // (handles "Truck Loan" debt vs "Bridgecrest" transaction)
@@ -715,6 +724,24 @@ export default function BankAccountDetailScreen() {
           <TouchableOpacity style={s.importBtn} onPress={() => setShowImportModal(true)}>
             <Text style={s.importBtnText}>📄 Import CSV</Text>
           </TouchableOpacity>
+          {accountTransactions.length > 0 && (
+            <TouchableOpacity
+              style={[s.importBtn, { borderColor: '#ef444440', backgroundColor: '#ef444410' }]}
+              onPress={() => {
+                const msg = `Remove all ${accountTransactions.length} transactions from this account? This cannot be undone.`;
+                if (Platform.OS === 'web') {
+                  if (window.confirm(msg)) clearBankTransactions(id!);
+                } else {
+                  Alert.alert('Clear All Transactions', msg, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Clear All', style: 'destructive', onPress: () => clearBankTransactions(id!) },
+                  ]);
+                }
+              }}
+            >
+              <Text style={[s.importBtnText, { color: '#ef4444' }]}>🗑 Clear All</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ════════════════════════════════════════════════════════════

@@ -183,6 +183,7 @@ export default function AssetsScreen() {
   const addAsset = useStore((state) => state.addAsset);
   const removeAsset = useStore((state) => state.removeAsset);
   const updateAsset = useStore((state) => state.updateAsset);
+  const addBankAccount = useStore((state) => state.addBankAccount);
   const updateBankAccount = useStore((state) => state.updateBankAccount);
   const addThesis = useStore((state) => state.addThesis);
   const investmentTheses = useStore((state) => state.investmentTheses);
@@ -460,6 +461,7 @@ export default function AssetsScreen() {
         visible={showAddModal}
         onClose={handleCloseAddModal}
         onAddAsset={handleAddAsset}
+        onAddBankAccount={addBankAccount}
         onUpdateAsset={handleUpdateAsset}
         editingAsset={editingAsset}
       />

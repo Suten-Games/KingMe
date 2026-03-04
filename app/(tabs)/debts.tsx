@@ -232,12 +232,17 @@ export default function DebtsScreen() {
 
       const found = thisMonthTxns.filter(t => {
         const descNorm = normalize(t.description);
+        const descStripped = descNorm.replace(/\s/g, '');
+        const debtNameStripped = debtNameNorm.replace(/\s/g, '');
+        const debtPayeeStripped = debtPayeeNorm.replace(/\s/g, '');
 
         const nameMatch =
           descNorm.includes(debtNameNorm) ||
           debtNameNorm.includes(descNorm.substring(0, 15)) ||
+          descStripped.includes(debtNameStripped) ||
           (debtPayeeNorm && descNorm.includes(debtPayeeNorm)) ||
           (debtPayeeNorm && debtPayeeNorm.includes(descNorm.substring(0, 15))) ||
+          (debtPayeeStripped && descStripped.includes(debtPayeeStripped)) ||
           hasTokenOverlap(t.description, debt.name) ||
           hasTokenOverlap(t.description, (debt as any).payee || '');
 
@@ -246,6 +251,10 @@ export default function DebtsScreen() {
 
         // Standard: name/payee + amount
         if (nameMatch && (amountClose || amountExact)) return true;
+
+        // Strong name match alone — credit card payments vary in amount
+        if (nameMatch) return true;
+
         // Exact amount + debt payment category + same account
         if (amountExact && t.category === 'financial_debt_payment' && debt.bankAccountId === t.bankAccountId) return true;
 

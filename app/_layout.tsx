@@ -15,6 +15,7 @@ import {
 import { PrivyWrapper } from '@/providers/PrivyWrapper';
 import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
 import BadgeToast from '../src/components/BadgeToast';
+import WalletHeaderButton from '../src/components/WalletHeaderButton';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -55,6 +56,7 @@ export default function RootLayout() {
             },
             headerShadowVisible: false,
             headerBackTitleVisible: false,
+            headerRight: () => <WalletHeaderButton />,
             contentStyle: { backgroundColor: '#0a0e1a' },
             animation: 'slide_from_right',
           }}

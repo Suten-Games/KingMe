@@ -271,8 +271,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!activeAdapter) throw new Error('No active wallet adapter');
 
     try {
-      const encodedMessage = new TextEncoder().encode(message.toString());
-      const result = await activeAdapter.signMessage(encodedMessage, 'utf8');
+      const result = await activeAdapter.signMessage(message, 'utf8');
       return result.signature || result;
     } catch (error: any) {
       console.error('[Wallet] Signing failed:', error);

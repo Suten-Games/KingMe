@@ -69,7 +69,7 @@ const AUTO_CATEGORY_RULES: Array<{
     { keywords: ['atm', 'withdrawal', 'cash back'], category: 'other' },
     { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley'], category: 'financial_investment' },
     { keywords: ['savings transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
-    { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment', 'capital one mobile pmt', 'american express', 'amex', 'discover payment', 'chase payment', 'bridgecrest', 'foris dax'], category: 'financial_debt_payment' },
+    { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment', 'capital one mobile pmt', 'american express', 'amex', 'discover payment', 'chase payment', 'bridgecrest', 'foris dax', 'applecard gsbank', 'apple card'], category: 'financial_debt_payment' },
     { keywords: ['overdraft', 'nsf', 'fee', 'service charge', 'monthly fee', 'maintenance fee'], category: 'financial_fees' },
     { keywords: ['irs', 'tax', 'state tax', 'property tax'], category: 'financial_taxes' },
 
@@ -111,8 +111,9 @@ function determineType(amount: number, description: string): 'income' | 'expense
 function parseDate(dateStr: string): string {
   const cleaned = dateStr.trim().replace(/"/g, '');
 
-  // Try YYYY-MM-DD first
-  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+  // Try YYYY-MM-DD (with optional time/timezone suffix like "2026-03-02 16:03:13 MST")
+  const isoMatch = cleaned.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) return isoMatch[1];
 
   // MM/DD/YYYY or M/D/YYYY or MM-DD-YYYY
   const match = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
@@ -167,6 +168,7 @@ interface ColumnMap {
   creditCol?: number;
   typeCol?: number;    // SoFi has a "Type" column (P2P, DEBIT_CARD, DEPOSIT)
   statusCol?: number;  // SoFi has "Status" (Posted, Pending)
+  senderCol?: number;  // Cash App has "Name of sender/receiver"
 }
 
 function detectColumns(headers: string[]): ColumnMap {
@@ -181,7 +183,12 @@ function detectColumns(headers: string[]): ColumnMap {
   const descCol = lower.findIndex(h =>
     h === 'description' || h === 'memo' || h === 'payee' || h === 'name' ||
     h === 'transaction' || h === 'details' || h === 'narrative' ||
-    h === 'merchant' || h === 'original description'
+    h === 'merchant' || h === 'original description' || h === 'notes'
+  );
+
+  // Cash App: "Name of sender/receiver" column for combining with Notes
+  const senderCol = lower.findIndex(h =>
+    h === 'name of sender/receiver' || h === 'sender/receiver' || h === 'sender'
   );
 
   const amountCol = lower.findIndex(h =>
@@ -213,6 +220,7 @@ function detectColumns(headers: string[]): ColumnMap {
     creditCol: creditCol >= 0 ? creditCol : undefined,
     typeCol: typeCol >= 0 ? typeCol : undefined,
     statusCol: statusCol >= 0 ? statusCol : undefined,
+    senderCol: senderCol >= 0 ? senderCol : undefined,
   };
 }
 
@@ -440,7 +448,17 @@ export function parseCSVTransactions(
 
     try {
       const dateStr = row[columns.dateCol] || '';
-      const description = (row[columns.descCol] || '').replace(/"/g, '').trim();
+      let description = (row[columns.descCol] || '').replace(/"/g, '').trim();
+
+      // Cash App: combine Notes with sender/receiver name for a better description
+      if (columns.senderCol !== undefined) {
+        const sender = (row[columns.senderCol] || '').replace(/"/g, '').trim();
+        if (sender && description) {
+          description = `${description} — ${sender}`;
+        } else if (sender && !description) {
+          description = sender;
+        }
+      }
 
       if (!dateStr || !description) {
         errors.push(`Row ${i + 1}: Missing date or description`);

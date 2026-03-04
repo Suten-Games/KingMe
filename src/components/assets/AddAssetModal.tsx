@@ -16,10 +16,17 @@ const ASSET_TYPES: { key: AssetType; label: string }[] = [
   { key: 'crypto', label: '₿ Crypto' },
   { key: 'defi', label: '🔗 DeFi' },
   { key: 'stocks', label: '📈 Stocks' },
+  { key: 'bank_account', label: '🏧 Bank Account' },
   { key: 'real_estate', label: '🏠 Real Estate' },
   { key: 'retirement', label: '🏦 Retirement' },
   { key: 'business', label: '💼 Business' },
   { key: 'other', label: '💰 Other' },
+];
+
+const BANK_ACCOUNT_TYPES = [
+  { key: 'checking' as const, label: 'Checking' },
+  { key: 'savings' as const, label: 'Savings' },
+  { key: 'investment' as const, label: 'Investment' },
 ];
 
 const RETIREMENT_TYPES = [
@@ -51,6 +58,7 @@ interface AddAssetModalProps {
   visible: boolean;
   onClose: () => void;
   onAddAsset: (asset: Asset) => void;
+  onAddBankAccount?: (account: import('../../types').BankAccount) => void;
   onUpdateAsset?: (assetId: string, updates: Partial<Asset>) => void;
   editingAsset?: Asset | null;
 }
@@ -59,6 +67,7 @@ export default function AddAssetModal({
   visible,
   onClose,
   onAddAsset,
+  onAddBankAccount,
   onUpdateAsset,
   editingAsset,
 }: AddAssetModalProps) {
@@ -106,6 +115,12 @@ export default function AddAssetModal({
   const [retFrequency, setRetFrequency] = useState<'weekly' | 'biweekly' | 'twice_monthly' | 'monthly'>('biweekly');
   const [retMatchPercent, setRetMatchPercent] = useState('');
   const [retGrowthRate, setRetGrowthRate] = useState(''); // Historical APY e.g. 20%
+
+  // ── Bank account fields ─────────────────────────────────
+  const [bankAccountType, setBankAccountType] = useState<'checking' | 'savings' | 'investment'>('checking');
+  const [bankInstitution, setBankInstitution] = useState('');
+  const [bankBalance, setBankBalance] = useState('');
+  const [bankIsPrimary, setBankIsPrimary] = useState(false);
 
   // ── Computed ─────────────────────────────────────────────
   const retMonthlyContribution = (parseFloat(retContribution) || 0) * getFrequencyMultiplier(retFrequency);
@@ -319,6 +334,22 @@ export default function AddAssetModal({
 
   // ── Submit: Add ──────────────────────────────────────────
   const handleAdd = () => {
+    if (type === 'bank_account') {
+      if (!name || !bankBalance || !bankInstitution) return;
+      if (onAddBankAccount) {
+        onAddBankAccount({
+          id: 'bank_' + Date.now().toString(),
+          name,
+          type: bankAccountType,
+          currentBalance: parseFloat(bankBalance) || 0,
+          institution: bankInstitution,
+          isPrimaryIncome: bankIsPrimary,
+        });
+      }
+      resetAndClose();
+      return;
+    }
+
     if (type === 'retirement') {
       if (!retInstitution || !retBalance) return;
       const retLabel = retAccountType === '401k' ? '401(k)'
@@ -401,6 +432,7 @@ export default function AddAssetModal({
     setIsPrimaryResidence(false);
     setRetAccountType('401k'); setRetInstitution(''); setRetBalance('');
     setRetContribution(''); setRetFrequency('biweekly'); setRetMatchPercent(''); setRetGrowthRate('');
+    setBankAccountType('checking'); setBankInstitution(''); setBankBalance(''); setBankIsPrimary(false);
     onClose();
   };
 
@@ -410,8 +442,11 @@ export default function AddAssetModal({
   const showProtocolField = isCryptoLike(type);
   const showVestingFields = isStockLike(type);
   const isRetirement = type === 'retirement';
+  const isBankAccount = type === 'bank_account';
   const isRealEstate = type === 'real_estate';
-  const canSubmit = isRetirement ? !!(retInstitution && retBalance) : !!(name && value);
+  const canSubmit = isBankAccount
+    ? !!(name && bankInstitution && bankBalance)
+    : isRetirement ? !!(retInstitution && retBalance) : !!(name && value);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={resetAndClose}>
@@ -420,8 +455,8 @@ export default function AddAssetModal({
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>
               {isEditing
-                ? (isRetirement ? 'Edit Retirement Account' : 'Edit Asset')
-                : (isRetirement ? 'Add Retirement Account' : 'Add Asset')
+                ? (isRetirement ? 'Edit Retirement Account' : isBankAccount ? 'Edit Bank Account' : 'Edit Asset')
+                : (isRetirement ? 'Add Retirement Account' : isBankAccount ? 'Add Bank Account' : 'Add Asset')
               }
             </Text>
 
@@ -442,9 +477,69 @@ export default function AddAssetModal({
             </View>
 
             {/* ═══════════════════════════════════════════ */}
-            {/* RETIREMENT PATH                             */}
+            {/* BANK ACCOUNT PATH                           */}
             {/* ═══════════════════════════════════════════ */}
-            {isRetirement ? (
+            {isBankAccount ? (
+              <>
+                <Text style={styles.label}>Account Type</Text>
+                <View style={styles.typeContainer}>
+                  {BANK_ACCOUNT_TYPES.map((t) => (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[styles.typeBtn, bankAccountType === t.key && styles.typeBtnActive]}
+                      onPress={() => setBankAccountType(t.key)}
+                    >
+                      <Text style={[styles.typeBtnText, bankAccountType === t.key && styles.typeBtnTextActive]}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Account Name</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g., Chase Checking, Ally Savings"
+                  placeholderTextColor="#666"
+                  value={name}
+                  onChangeText={setName}
+                />
+
+                <Text style={styles.label}>Institution</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="e.g., Chase, Ally, Fidelity"
+                  placeholderTextColor="#666"
+                  value={bankInstitution}
+                  onChangeText={setBankInstitution}
+                />
+
+                <Text style={styles.label}>Current Balance</Text>
+                <View style={styles.inputRow}>
+                  <Text style={styles.dollar}>$</Text>
+                  <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
+                    keyboardType="numeric" value={bankBalance} onChangeText={setBankBalance} />
+                </View>
+
+                <Text style={styles.label}>Primary Income Account?</Text>
+                <Text style={styles.helper}>Is this where your paycheck gets deposited?</Text>
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity style={[styles.toggleBtn, !bankIsPrimary && styles.toggleBtnActive]}
+                    onPress={() => setBankIsPrimary(false)}>
+                    <Text style={[styles.toggleBtnText, !bankIsPrimary && styles.toggleBtnTextActive]}>No</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.toggleBtn, bankIsPrimary && styles.toggleBtnActive]}
+                    onPress={() => setBankIsPrimary(true)}>
+                    <Text style={[styles.toggleBtnText, bankIsPrimary && styles.toggleBtnTextActive]}>Yes</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) :
+
+            /* ═══════════════════════════════════════════ */
+            /* RETIREMENT PATH                             */
+            /* ═══════════════════════════════════════════ */
+            isRetirement ? (
               <>
                 <Text style={styles.label}>Account Type</Text>
                 <View style={styles.typeContainer}>

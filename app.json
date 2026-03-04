@@ -28,6 +28,9 @@
         "backgroundColor": "#0F172A"
       }
     },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
     "ios": {
       "bundleIdentifier": "com.saxthefiver.kingme",
       "infoPlist": {
