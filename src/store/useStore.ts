@@ -99,6 +99,7 @@ interface AppState extends UserProfile {
 
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
+  syncDriftAssets: (walletAddress: string) => Promise<void>;
 
   // Market price refresh (stocks via Yahoo, exchange crypto via CoinGecko)
   lastPriceRefresh?: string;
@@ -1649,10 +1650,193 @@ export const useStore = create<AppState>((set, get) => ({
       // Chain: refresh stock/exchange crypto prices after wallet sync
       get().refreshMarketPrices().catch(console.error);
 
+      // Chain: sync Drift balances after wallet sync
+      get().syncDriftAssets(walletAddress).catch(err =>
+        console.warn('[DRIFT-SYNC] Drift sync failed (non-blocking):', err.message)
+      );
+
     } catch (error: any) {
       console.error('[SYNC] Error:', error);
       set({ isLoadingAssets: false });
       throw error;
+    }
+  },
+
+  // ─── Drift Balance Sync ──────────────────────────────────────────────────
+  syncDriftAssets: async (walletAddress: string) => {
+    const DRIFT_API = 'https://kingme-api.vercel.app/api/drift/balances';
+    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
+    if (!rpcUrl) {
+      console.warn('[DRIFT-SYNC] No RPC URL configured, skipping');
+      return;
+    }
+
+    // Mint addresses for Drift spot tokens (for Jupiter price lookup)
+    const DRIFT_MINTS: Record<string, string> = {
+      USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      SOL: 'So11111111111111111111111111111111111111112',
+      dSOL: 'Dso1bDeDjCQxTrWHqUUi63oBvV7Mdm6WaobLbQ7gnPQ',
+      syrupUSDC: 'AvZZF1YaZDziPY2RCK4oJrRVrbN3mTD9NL24hPeaZeUj',
+      DRIFT: 'DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7',
+      mSOL: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
+      wBTC: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh',
+      wETH: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
+      USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+      jitoSOL: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
+      JLP: '27G8MtK7VtTcCLVkG89EjDBCz48UTsRRwA3yMZhJNrE6',
+      JUP: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+      INF: '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm',
+      HNT: 'hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux',
+      bSOL: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
+    };
+
+    console.log('[DRIFT-SYNC] Starting Drift balance sync...');
+
+    try {
+      // 1. Fetch Drift balances from KingMe API
+      const response = await fetch(
+        `${DRIFT_API}?wallet=${walletAddress}&subAccount=1`,
+        { headers: { 'X-RPC-URL': rpcUrl } }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('[DRIFT-SYNC] No Drift account found, skipping');
+          return;
+        }
+        throw new Error(`Drift API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const { spotBalances } = data;
+
+      if (!spotBalances || spotBalances.length === 0) {
+        console.log('[DRIFT-SYNC] No spot balances, skipping');
+        return;
+      }
+
+      console.log(`[DRIFT-SYNC] Got ${spotBalances.length} spot positions`);
+
+      // 2. Fetch USD prices from Jupiter for all Drift tokens
+      const mintsToPrice = spotBalances
+        .map((b: any) => DRIFT_MINTS[b.symbol])
+        .filter(Boolean);
+
+      let prices: Record<string, number> = {};
+      if (mintsToPrice.length > 0) {
+        try {
+          const jupRes = await fetch(
+            `https://api.jup.ag/price/v2?ids=${mintsToPrice.join(',')}`
+          );
+          const jupData = await jupRes.json();
+          // Build mint → price map
+          for (const [mint, info] of Object.entries(jupData.data || {})) {
+            const p = (info as any)?.price;
+            if (p) prices[mint] = parseFloat(p);
+          }
+        } catch (e) {
+          console.warn('[DRIFT-SYNC] Jupiter price fetch failed, using fallback prices');
+          // Stablecoin fallbacks
+          prices[DRIFT_MINTS.USDC] = 1;
+          prices[DRIFT_MINTS.USDT] = 1;
+          prices[DRIFT_MINTS.syrupUSDC] = 1;
+        }
+      }
+
+      // 3. Build/merge assets
+      const currentAssets = get().assets;
+
+      // Index existing Drift assets by symbol for merging
+      const existingDriftMap = new Map<string, typeof currentAssets[0]>();
+      for (const a of currentAssets) {
+        const meta = a.metadata as any;
+        if (meta?.protocol?.toLowerCase() === 'drift' && meta.symbol) {
+          existingDriftMap.set(meta.symbol.toUpperCase(), a);
+        }
+        // Also match by our stable drift ID
+        if (a.id.startsWith('drift_')) {
+          const sym = a.id.replace('drift_', '').toUpperCase();
+          if (!existingDriftMap.has(sym)) existingDriftMap.set(sym, a);
+        }
+      }
+
+      const driftAssetIds = new Set<string>();
+      const newDriftAssets = spotBalances
+        .filter((b: any) => b.balanceType === 'deposit' && b.scaledBalance > 0.001)
+        .map((b: any) => {
+          const sym = b.symbol;
+          const mint = DRIFT_MINTS[sym];
+          const price = mint ? (prices[mint] || 0) : (sym === 'USDC' ? 1 : 0);
+          const balance = b.scaledBalance;
+          const value = balance * price;
+          const assetId = `drift_${sym}`;
+          driftAssetIds.add(assetId);
+
+          // Find existing asset to preserve user-set fields
+          const existing = existingDriftMap.get(sym.toUpperCase());
+          const existingMeta = (existing?.metadata || {}) as any;
+
+          // Preserve user-set fields
+          const preservedApy = existingMeta.apy || 0;
+          const preservedName = existing?.name || `${sym} (Drift)`;
+          const preservedAnnualIncome = preservedApy > 0
+            ? (value * preservedApy) / 100
+            : (existing?.annualIncome || 0);
+
+          console.log(`[DRIFT-SYNC] ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} ${existing ? '(UPDATE)' : '(NEW)'}`);
+
+          return {
+            id: existing?.id || assetId,
+            type: existing?.type || 'defi' as const,
+            name: preservedName,
+            value,
+            annualIncome: preservedAnnualIncome,
+            isLiquid: true,
+            isAutoSynced: true,
+            lastSynced: new Date().toISOString(),
+            metadata: {
+              // Preserve all user-set fields from existing
+              ...(existing ? existingMeta : {}),
+              type: existingMeta.type || ('crypto' as const),
+              symbol: sym,
+              mint: mint || existingMeta.mint,
+              balance,
+              quantity: balance,
+              priceUSD: price,
+              protocol: 'Drift',
+              apy: preservedApy,
+              isStaked: preservedApy > 0,
+              description: existingMeta.description || `${sym} on Drift`,
+            },
+          };
+        });
+
+      // 4. Merge: replace matching Drift assets, keep everything else
+      const nonDriftAssets = currentAssets.filter(a => {
+        // Remove old manual Drift assets that are now auto-synced
+        const meta = a.metadata as any;
+        const sym = (meta?.symbol || '').toUpperCase();
+        if (meta?.protocol?.toLowerCase() === 'drift' && driftAssetIds.has(`drift_${sym}`)) {
+          console.log(`[DRIFT-SYNC] Replacing manual "${a.name}" with auto-synced`);
+          return false;
+        }
+        // Remove old auto-synced drift assets (will be replaced)
+        if (a.id.startsWith('drift_') && driftAssetIds.has(a.id)) {
+          return false;
+        }
+        return true;
+      });
+
+      const mergedAssets = [...nonDriftAssets, ...newDriftAssets];
+      set({ assets: mergedAssets });
+
+      console.log(`[DRIFT-SYNC] Complete: ${newDriftAssets.length} Drift positions synced`);
+
+      // Save
+      await get().saveProfile();
+
+    } catch (error: any) {
+      console.error('[DRIFT-SYNC] Error:', error.message);
     }
   },
 
