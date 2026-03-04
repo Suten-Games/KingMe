@@ -4,10 +4,28 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Platform, ActivityIndicator } from 'react-native';
+import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import { useRouter } from 'expo-router';
 import WalletPickerModal from './WalletPickerModal';
+
+function SolanaLogo({ size = 14 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 128 128">
+      <Defs>
+        <SvgGradient id="sol" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#9945FF" />
+          <Stop offset="1" stopColor="#14F195" />
+        </SvgGradient>
+      </Defs>
+      <Path
+        d="M25.5 100.5a4.3 4.3 0 0 1 3-1.3h91.2c1.9 0 2.9 2.3 1.5 3.7l-18 18a4.3 4.3 0 0 1-3 1.3H9.1c-1.9 0-2.9-2.3-1.5-3.7l17.9-18Zm0-72.7a4.3 4.3 0 0 1 3-1.3h91.2c1.9 0 2.9 2.3 1.5 3.7l-18 18a4.3 4.3 0 0 1-3 1.3H9.1c-1.9 0-2.9-2.3-1.5-3.7l17.9-18Zm95.7 35.1a4.3 4.3 0 0 0-3-1.3H27c-1.9 0-2.9 2.3-1.5 3.7l18 18a4.3 4.3 0 0 0 3 1.3h91.2c1.9 0 2.9-2.3 1.5-3.7l-18-18Z"
+        fill="url(#sol)"
+      />
+    </Svg>
+  );
+}
 
 export default function WalletHeaderButton() {
   const wallets = useStore(s => s.wallets);
@@ -82,7 +100,7 @@ export default function WalletHeaderButton() {
             <ActivityIndicator size="small" color="#f4c430" />
           ) : (
             <>
-              <Text style={s.walletIcon}>👛</Text>
+              <SolanaLogo size={14} />
               <Text style={s.connectText}>Connect</Text>
             </>
           )}
@@ -157,7 +175,6 @@ const s = StyleSheet.create({
     backgroundColor: '#f4c43020', paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: 20, borderWidth: 1, borderColor: '#f4c43060', gap: 5, marginRight: 8,
   },
-  walletIcon: { fontSize: 14 },
   connectText: { fontSize: 13, fontWeight: '700', color: '#f4c430' },
   btnConnected: {
     flexDirection: 'row', alignItems: 'center',
