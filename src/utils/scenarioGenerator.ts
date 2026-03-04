@@ -1438,17 +1438,10 @@ function generateDriftYieldScenario(
   const totalDriftUSDC = totalLeftInDrift + driftAssetValue;
   if (totalDriftUSDC < 200) return null;
 
-  // Estimate how much needs to stay as collateral for open positions
-  const recentTrades = driftTrades
-    .filter(t => t.date >= new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10))
-    .sort((a, b) => b.size - a.size);
-
-  const largestPosition = recentTrades.length > 0 ? recentTrades[0].size : 0;
-  const marginBuffer = largestPosition * 0.5;
-  const keepForTrading = Math.max(200, marginBuffer);
-
-  const excessUSDC = Math.max(0, totalDriftUSDC - keepForTrading);
-  if (excessUSDC < 100) return null;
+  // Drift supports multi-collateral (SOL, dSOL, etc. all count as margin),
+  // so swapping USDC → yield tokens doesn't reduce trading ability.
+  // The full balance can be deployed.
+  const deployableUSDC = totalDriftUSDC;
 
   // ── Find active goals that match yield options ──
   const activeGoals = goals.filter(g => !g.completedAt && g.strategy === 'accumulate');
@@ -1473,7 +1466,7 @@ function generateDriftYieldScenario(
   const alternatives = ranked.slice(1, 3);
 
   // Calculate impact using top pick's APY
-  const newAnnualIncome = excessUSDC * (topPick.apy / 100);
+  const newAnnualIncome = deployableUSDC * (topPick.apy / 100);
   const monthlyIncomeDelta = newAnnualIncome / 12;
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
@@ -1491,8 +1484,8 @@ function generateDriftYieldScenario(
   return {
     id: 'drift_yield',
     type: 'drift_yield',
-    title: `Swap $${Math.round(excessUSDC).toLocaleString()} Drift USDC → ${topPick.symbol} at ${topPick.apy}%`,
-    description: `${topPick.description}${goalNote}`,
+    title: `Swap $${Math.round(deployableUSDC).toLocaleString()} Drift USDC → ${topPick.symbol} at ${topPick.apy}%`,
+    description: `${topPick.description}${goalNote} — still usable as Drift collateral`,
     emoji: '⚡',
     difficulty: 'easy',
     timeframe: 'This week',
@@ -1511,20 +1504,18 @@ function generateDriftYieldScenario(
       roi: topPick.apy,
     },
 
-    reasoning: `You have $${Math.round(totalDriftUSDC).toLocaleString()} USDC in Drift${largestPosition > 0 ? `, but your largest recent trade was $${largestPosition.toLocaleString()}` : ''}. Keeping $${Math.round(keepForTrading).toLocaleString()} as trading collateral, swap $${Math.round(excessUSDC).toLocaleString()} into ${topPick.symbol} at ${topPick.apy}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo).${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
+    reasoning: `You have $${Math.round(totalDriftUSDC).toLocaleString()} USDC sitting idle in Drift earning nothing. Drift supports multi-collateral, so swapping to ${topPick.symbol} at ${topPick.apy}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo) keeps your full trading power intact.${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
 
     risks: [
       'Smart contract risk on yield protocol',
-      'May need to unwind position quickly if a trade opportunity arises',
       'APY fluctuates with market conditions',
       ...(topPick.type === 'staking' ? ['SOL price exposure if swapping from USDC'] : []),
     ],
 
     steps: [
       topPick.action,
-      `Keep $${Math.round(keepForTrading).toLocaleString()} USDC as trading collateral in Drift`,
+      'Your new position still counts as Drift collateral — no impact on trading',
       ...altLines.map(l => `Alternative: ${l}`),
-      'Monitor and unwind before opening large positions',
     ],
   };
 }
