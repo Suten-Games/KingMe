@@ -40,6 +40,7 @@ export default function WhatIfModal({
 
   // Button label based on state
   const getButtonLabel = (): string => {
+    if (scenario.type === 'drift_yield') return 'Go to Drift Trading →';
     if (!onChain) return 'Apply This Scenario';
     if (!swapState) return '⚡ Execute On-Chain';
 

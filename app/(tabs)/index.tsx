@@ -153,6 +153,15 @@ export default function HomeScreen() {
   //   catch { Alert.alert('Error', 'Failed to apply scenario'); }
   // };
   const handleApplyScenario = async (s: WhatIfScenario) => {
+    // Drift scenarios: navigate to trading page to adjust balances manually
+    if (s.type === 'drift_yield') {
+      setShowModal(false);
+      setSelectedScenario(null);
+      reset();
+      router.push('/trading');
+      return;
+    }
+
     const success = await applyWithSwap(s);
     if (success) {
       const onChain = isOnChainScenario(s.type);
