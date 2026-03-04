@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AVATAR_PREVIEWS } from '../../src/utils/constants';
+import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useWallet } from '../../src/providers/wallet-provider';
 import { loadBackup } from '../../src/services/encryptedBackup';
 import { restoreAsyncData } from '../../src/services/fullBackup';
@@ -163,7 +164,21 @@ export default function OnboardingIntro() {
                     disabled={restoring}
                   >
                     {restoring ? <ActivityIndicator size="small" color={T.blue} /> :
-                      <Text style={st.restoreBtnText}>👛 Connect Wallet</Text>}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Svg width={16} height={16} viewBox="0 0 128 128">
+                          <Defs>
+                            <SvgGradient id="sol" x1="0" y1="0" x2="1" y2="1">
+                              <Stop offset="0" stopColor="#9945FF" />
+                              <Stop offset="1" stopColor="#14F195" />
+                            </SvgGradient>
+                          </Defs>
+                          <Path
+                            d="M25.5 100.5a4.3 4.3 0 0 1 3-1.3h91.2c1.9 0 2.9 2.3 1.5 3.7l-18 18a4.3 4.3 0 0 1-3 1.3H9.1c-1.9 0-2.9-2.3-1.5-3.7l17.9-18Zm0-72.7a4.3 4.3 0 0 1 3-1.3h91.2c1.9 0 2.9 2.3 1.5 3.7l-18 18a4.3 4.3 0 0 1-3 1.3H9.1c-1.9 0-2.9-2.3-1.5-3.7l17.9-18Zm95.7 35.1a4.3 4.3 0 0 0-3-1.3H27c-1.9 0-2.9 2.3-1.5 3.7l18 18a4.3 4.3 0 0 0 3 1.3h91.2c1.9 0 2.9-2.3 1.5-3.7l-18-18Z"
+                            fill="url(#sol)"
+                          />
+                        </Svg>
+                        <Text style={st.restoreBtnText}>Connect Wallet</Text>
+                      </View>}
                   </TouchableOpacity>
                   <Text style={st.restoreHint}>
                     {Platform.OS === 'web'
