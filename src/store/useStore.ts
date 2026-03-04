@@ -1722,24 +1722,27 @@ export const useStore = create<AppState>((set, get) => ({
         .map((b: any) => DRIFT_MINTS[b.symbol])
         .filter(Boolean);
 
-      let prices: Record<string, number> = {};
+      // Stablecoin fallback prices (always set, Jupiter will override)
+      let prices: Record<string, number> = {
+        [DRIFT_MINTS.USDC]: 1,
+        [DRIFT_MINTS.USDT]: 1,
+        [DRIFT_MINTS.syrupUSDC]: 1,
+      };
       if (mintsToPrice.length > 0) {
         try {
-          const jupRes = await fetch(
-            `https://api.jup.ag/price/v2?ids=${mintsToPrice.join(',')}`
-          );
+          const jupUrl = `https://api.jup.ag/price/v2?ids=${mintsToPrice.join(',')}`;
+          console.log(`[DRIFT-SYNC] Jupiter price fetch for ${mintsToPrice.length} mints`);
+          const jupRes = await fetch(jupUrl);
           const jupData = await jupRes.json();
-          // Build mint → price map
           for (const [mint, info] of Object.entries(jupData.data || {})) {
             const p = (info as any)?.price;
-            if (p) prices[mint] = parseFloat(p);
+            if (p) {
+              prices[mint] = parseFloat(p);
+              console.log(`[DRIFT-SYNC] Price: ${mint.slice(0, 8)}... = $${parseFloat(p).toFixed(4)}`);
+            }
           }
         } catch (e) {
           console.warn('[DRIFT-SYNC] Jupiter price fetch failed, using fallback prices');
-          // Stablecoin fallbacks
-          prices[DRIFT_MINTS.USDC] = 1;
-          prices[DRIFT_MINTS.USDT] = 1;
-          prices[DRIFT_MINTS.syrupUSDC] = 1;
         }
       }
 
@@ -1766,11 +1769,14 @@ export const useStore = create<AppState>((set, get) => ({
         .map((b: any) => {
           const sym = b.symbol;
           const mint = DRIFT_MINTS[sym];
-          const price = mint ? (prices[mint] || 0) : (sym === 'USDC' ? 1 : 0);
+          const price = mint ? (prices[mint] || 0) : 0;
           const balance = b.scaledBalance;
           const value = balance * price;
           const assetId = `drift_${sym}`;
           driftAssetIds.add(assetId);
+
+          // Look up token info for logo
+          const tokenInfo = lookupToken(sym);
 
           // Find existing asset to preserve user-set fields
           const existing = existingDriftMap.get(sym.toUpperCase());
@@ -1806,6 +1812,7 @@ export const useStore = create<AppState>((set, get) => ({
               protocol: 'Drift',
               apy: preservedApy,
               isStaked: preservedApy > 0,
+              logoURI: existingMeta.logoURI || tokenInfo?.logoURI || '',
               description: existingMeta.description || `${sym} on Drift`,
             },
           };

@@ -137,6 +137,12 @@ export const TOKEN_REGISTRY: Record<string, TokenInfo> = {
     mint: 'DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7',
     coingeckoId: 'drift-protocol',
   },
+  SYRUPUSDC: {
+    symbol: 'syrupUSDC',
+    name: 'Syrup USDC (Maple)',
+    logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+    mint: 'AvZZF1YaZDziPY2RCK4oJrRVrbN3mTD9NL24hPeaZeUj',
+  },
   MNDE: {
     symbol: 'MNDE',
     name: 'Marinade',
