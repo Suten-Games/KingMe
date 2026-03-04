@@ -1733,37 +1733,22 @@ export const useStore = create<AppState>((set, get) => ({
 
       console.log(`[DRIFT-SYNC] Got ${spotBalances.length} spot positions`);
 
-      // 2. Fetch USD prices from Jupiter for all Drift tokens
-      const mintsToPrice = spotBalances
-        .map((b: any) => DRIFT_MINTS[b.symbol])
-        .filter(Boolean);
-
-      // Stablecoin fallback prices (always set, Jupiter will override)
+      // 2. Build price map from existing assets (wallet sync already fetched prices)
+      const currentAssets = get().assets;
       let prices: Record<string, number> = {
-        [DRIFT_MINTS.USDC]: 1,
-        [DRIFT_MINTS.USDT]: 1,
-        [DRIFT_MINTS.syrupUSDC]: 1,
+        USDC: 1,
+        USDT: 1,
+        syrupUSDC: 1,
       };
-      if (mintsToPrice.length > 0) {
-        try {
-          const jupUrl = `https://api.jup.ag/price/v2?ids=${mintsToPrice.join(',')}`;
-          console.log(`[DRIFT-SYNC] Jupiter price fetch for ${mintsToPrice.length} mints`);
-          const jupRes = await fetch(jupUrl);
-          const jupData = await jupRes.json();
-          for (const [mint, info] of Object.entries(jupData.data || {})) {
-            const p = (info as any)?.price;
-            if (p) {
-              prices[mint] = parseFloat(p);
-              console.log(`[DRIFT-SYNC] Price: ${mint.slice(0, 8)}... = $${parseFloat(p).toFixed(4)}`);
-            }
-          }
-        } catch (e) {
-          console.warn('[DRIFT-SYNC] Jupiter price fetch failed, using fallback prices');
+      for (const a of currentAssets) {
+        const meta = a.metadata as any;
+        if (meta?.symbol && meta?.priceUSD > 0) {
+          prices[meta.symbol.toUpperCase()] = meta.priceUSD;
         }
       }
+      console.log(`[DRIFT-SYNC] Prices from store: ${Object.entries(prices).map(([s,p]) => `${s}=$${(p as number).toFixed(2)}`).join(', ')}`);
 
-      // 3. Build/merge assets
-      const currentAssets = get().assets;
+      // 3. Build/merge assets — currentAssets already fetched above for prices
 
       // Index existing Drift assets by symbol for merging
       const existingDriftMap = new Map<string, typeof currentAssets[0]>();
@@ -1785,7 +1770,7 @@ export const useStore = create<AppState>((set, get) => ({
         .map((b: any) => {
           const sym = b.symbol;
           const mint = DRIFT_MINTS[sym];
-          const price = mint ? (prices[mint] || 0) : 0;
+          const price = prices[sym.toUpperCase()] || prices[sym] || 0;
           const balance = b.scaledBalance;
           const value = balance * price;
           const assetId = `drift_${sym}`;
