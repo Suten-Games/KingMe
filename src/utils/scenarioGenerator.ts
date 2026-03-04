@@ -168,11 +168,13 @@ function generateInvestCashScenario(
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncome;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
 
+  const accountNames = cashAssets.map(a => `${a.name} ($${Math.round(a.value).toLocaleString()})`).join(', ');
+
   return {
     id: 'invest_cash',
     type: 'invest_cash',
-    title: `Invest $${investAmount.toLocaleString()} in dividend stocks`,
-    description: `Move idle cash into S&P 500 dividend ETF (VOO, VYM, or SCHD)`,
+    title: `Invest $${investAmount.toLocaleString()} from bank into dividend stocks`,
+    description: `Transfer from ${accountNames} into S&P 500 dividend ETF (SCHD or VYM)`,
     emoji: '📈',
     difficulty: 'easy',
     timeframe: 'This week',
@@ -214,7 +216,7 @@ function generateInvestCashScenario(
       roi: 3.5,
     },
 
-    reasoning: `You have $${totalCash.toLocaleString()} in cash. After keeping $${emergencyFund.toLocaleString()} as a 3-month expense buffer, investing $${investAmount.toLocaleString()} in dividend stocks earns $${monthlyIncome.toFixed(0)}/month in passive income.`,
+    reasoning: `You have $${totalCash.toLocaleString()} across ${cashAssets.length} bank account${cashAssets.length > 1 ? 's' : ''} (${accountNames}). After keeping $${emergencyFund.toLocaleString()} as a 3-month expense buffer, investing $${investAmount.toLocaleString()} in dividend stocks earns $${monthlyIncome.toFixed(0)}/month in passive income.`,
 
     risks: [
       'Stock prices fluctuate - value may go down',
@@ -224,7 +226,7 @@ function generateInvestCashScenario(
 
     steps: [
       'Open brokerage account (Fidelity, Schwab, or Vanguard)',
-      'Transfer cash from savings',
+      `Transfer $${investAmount.toLocaleString()} from ${cashAssets[0]?.name || 'bank'}`,
       'Buy SCHD or VYM (dividend-focused ETFs)',
       'Set dividends to auto-reinvest',
     ],
@@ -314,7 +316,7 @@ function generateStakeCryptoScenario(
       roi: targetAPY,
     },
 
-    reasoning: `You have ${cryptoAssets.length} idle token${cryptoAssets.length > 1 ? 's' : ''} worth $${totalIdleCrypto.toLocaleString()} earning little to no yield (${cryptoAssets.map(a => `${(a.metadata as any)?.symbol || a.name}: ${formatCurrencyShort(a.value)}`).join(', ')}). None of these have an investment thesis set, so staking at ${targetAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income.`,
+    reasoning: `You have ${cryptoAssets.map(a => `$${Math.round(a.value).toLocaleString()} in ${(a.metadata as any)?.symbol || a.name}`).join(', ')} sitting in your wallet earning no yield. Staking these at ${targetAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income.`,
 
     risks: [
       'Smart contract risk (protocol hacks)',
@@ -1208,18 +1210,24 @@ function generatePerenaYieldScenario(
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
 
   const parts: string[] = [];
-  if (totalStablecoins > 0) parts.push(`$${totalStablecoins.toLocaleString()} in idle stablecoins`);
-  if (cashToConvert > 0) parts.push(`$${cashToConvert.toLocaleString()} excess cash → USDC`);
-  const description = `Deposit ${parts.join(' + ')} into Perena`;
+  if (totalStablecoins > 0) {
+    const stableNames = stablecoinAssets.map(a => `${(a.metadata as any)?.symbol || 'USDC'} ($${Math.round(a.value).toLocaleString()})`).join(', ');
+    parts.push(`${stableNames} from wallet`);
+  }
+  if (cashToConvert > 0) {
+    const bankNames = cashAccounts.map(a => a.name).join(', ');
+    parts.push(`$${cashToConvert.toLocaleString()} from ${bankNames} → buy USDC`);
+  }
+  const description = `Deposit ${parts.join(' + ')} into Perena yield vault`;
 
   const bufferNote = cashToConvert > 0
-    ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${monthlyBurn.toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash.`
+    ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${Math.round(monthlyBurn).toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash in ${cashAccounts.map(a => a.name).join(', ')}.`
     : '';
 
   return {
     id: 'perena_yield',
     type: 'perena_yield',
-    title: `Earn ${perenaAPY}% on $${totalToDeposit.toLocaleString()} via Perena`,
+    title: `Earn ${perenaAPY}% on $${Math.round(totalToDeposit).toLocaleString()} via Perena`,
     description,
     emoji: '🌊',
     difficulty: cashToConvert > 0 ? 'medium' : 'easy',
@@ -1269,7 +1277,7 @@ function generatePerenaYieldScenario(
       roi: perenaAPY,
     },
 
-    reasoning: `${totalStablecoins > 0 ? `You have $${totalStablecoins.toLocaleString()} in stablecoins earning below-market yield.` : ''}${bufferNote} Deploying $${totalToDeposit.toLocaleString()} into Perena at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
+    reasoning: `${totalStablecoins > 0 ? `You have ${stablecoinAssets.map(a => `$${Math.round(a.value).toLocaleString()} ${(a.metadata as any)?.symbol || 'USDC'}`).join(' + ')} in your wallet earning below-market yield.` : ''}${bufferNote} Deploying $${Math.round(totalToDeposit).toLocaleString()} into Perena at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
 
     risks: [
       'Smart contract risk (Perena protocol)',
