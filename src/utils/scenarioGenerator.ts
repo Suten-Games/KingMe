@@ -154,8 +154,8 @@ function generateInvestCashScenario(
   // Need at least $5K to invest
   if (totalCash < 5000) return null;
 
-  // Keep $2K emergency, invest 70% of rest
-  const emergencyFund = 2000;
+  // Keep 3 months of expenses as buffer (or $2K, whichever is higher)
+  const emergencyFund = Math.max(2000, monthlyNeeds * 3);
   const investable = Math.max(0, totalCash - emergencyFund);
   const investAmount = Math.floor(investable * 0.7);
 
@@ -214,7 +214,7 @@ function generateInvestCashScenario(
       roi: 3.5,
     },
 
-    reasoning: `You have $${totalCash.toLocaleString()} in cash earning minimal interest. By investing $${investAmount.toLocaleString()} in dividend stocks, you can earn $${monthlyIncome.toFixed(0)}/month in passive income while keeping $${(totalCash - investAmount).toLocaleString()} liquid for emergencies.`,
+    reasoning: `You have $${totalCash.toLocaleString()} in cash. After keeping $${emergencyFund.toLocaleString()} as a 3-month expense buffer, investing $${investAmount.toLocaleString()} in dividend stocks earns $${monthlyIncome.toFixed(0)}/month in passive income.`,
 
     risks: [
       'Stock prices fluctuate - value may go down',
@@ -282,8 +282,8 @@ function generateStakeCryptoScenario(
   return {
     id: 'stake_crypto',
     type: 'stake_crypto',
-    title: `Stake $${stakeAmount.toLocaleString()} in ${cryptoAssets.map(a => (a.metadata as any)?.symbol || a.name).join(', ')} for 8% APY`,
-    description: `Move idle tokens to yield-generating protocols (Drift, Kamino, Marginfi)`,
+    title: `Stake $${Math.round(stakeAmount).toLocaleString()} in ${cryptoAssets.map(a => (a.metadata as any)?.symbol || a.name).join(', ')} for ${targetAPY}% APY`,
+    description: `Move idle ${cryptoAssets.map(a => `${(a.metadata as any)?.symbol || a.name} ($${Math.round(a.value).toLocaleString()})`).join(', ')} to yield protocols`,
     emoji: '⛓️',
     difficulty: 'medium',
     timeframe: 'This week',
