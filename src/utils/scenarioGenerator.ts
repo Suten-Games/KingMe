@@ -252,9 +252,11 @@ function generateStakeCryptoScenario(
   const assetsWithThesis = new Set(investmentTheses.map(t => t.assetId));
 
   // Only suggest staking for tokens that actually have known yield options
+  // Exclude Drift collateral — handled by the Drift yield scenario
   const cryptoAssets = assets.filter(a => {
     if (a.type !== 'crypto') return false;
     if ((a.metadata as any)?.apy >= 3) return false; // Already earning yield
+    if ((a.metadata as any)?.protocol?.toLowerCase() === 'drift') return false;
     if (a.value < 500) return false;
     if (assetsWithThesis.has(a.id)) return false; // Has thesis
     const symbol = ((a.metadata as any)?.symbol || '').toUpperCase();
@@ -1160,7 +1162,7 @@ function generatePerenaYieldScenario(
   obligations: Obligation[],
   debts: Debt[]
 ): WhatIfScenario | null {
-  // 1. Idle stablecoins already in wallet
+  // 1. Idle stablecoins already in wallet (exclude Drift collateral — handled separately)
   const stablecoinAssets = assets.filter(a =>
     a.type === 'crypto' && (
       (a.metadata as any)?.symbol?.toUpperCase() === 'USDC' ||
@@ -1169,6 +1171,7 @@ function generatePerenaYieldScenario(
       (a.metadata as any)?.symbol?.toUpperCase() === 'PYUSD'
     ) &&
     ((a.metadata as any)?.apy || 0) < 8 &&
+    ((a.metadata as any)?.protocol?.toLowerCase() !== 'drift') &&
     a.value > 100
   );
   const totalStablecoins = stablecoinAssets.reduce((sum, a) => sum + a.value, 0);
