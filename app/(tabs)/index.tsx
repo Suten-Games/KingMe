@@ -158,7 +158,7 @@ export default function HomeScreen() {
       setShowModal(false);
       setSelectedScenario(null);
       reset();
-      router.push('/trading');
+      router.push('/protocol/Drift');
       return;
     }
 
