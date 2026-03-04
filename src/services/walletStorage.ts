@@ -78,29 +78,41 @@ async function fetchWalletSalt(
   return salt;
 }
 
+/** Derive a 32-byte key from a hex SHA256 hash string. */
+function keyFromHash(hash: string): Uint8Array {
+  const keyArray = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    keyArray[i] = parseInt(hash.substr(i * 2, 2), 16);
+  }
+  return keyArray;
+}
+
+/**
+ * Derive the salted encryption key (current scheme).
+ * key = SHA256(publicKey + ':' + serverSalt)
+ */
 export async function getEncryptionKeyFromWallet(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   publicKey: string
 ): Promise<Uint8Array> {
-  try {
-    // Fetch per-wallet server-side salt (requires valid signature)
-    const salt = await fetchWalletSalt(signMessage, publicKey);
+  const salt = await fetchWalletSalt(signMessage, publicKey);
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    publicKey + ':' + salt
+  );
+  return keyFromHash(hash);
+}
 
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      publicKey + ':' + salt
-    );
-
-    const keyArray = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      keyArray[i] = parseInt(hash.substr(i * 2, 2), 16);
-    }
-
-    return keyArray;
-  } catch (error) {
-    console.error('Failed to get encryption key:', error);
-    throw error;
-  }
+/**
+ * Derive the legacy encryption key (pre-salt scheme).
+ * key = SHA256(publicKey)
+ */
+async function getLegacyEncryptionKey(publicKey: string): Promise<Uint8Array> {
+  const hash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    publicKey
+  );
+  return keyFromHash(hash);
 }
 
 export async function encryptProfileWithWallet(
@@ -131,14 +143,19 @@ export async function encryptProfileWithWallet(
   }
 }
 
+/** Try to decrypt raw bytes with a given key. Returns null on failure. */
+function tryDecrypt(combined: Uint8Array, key: Uint8Array): Uint8Array | null {
+  const nonce = combined.slice(0, 24);
+  const encrypted = combined.slice(24);
+  return nacl.secretbox.open(encrypted, nonce, key);
+}
+
 export async function decryptProfileWithWallet(
   encryptedData: string,
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   publicKey: string
 ): Promise<any> {
   try {
-    const key = await getEncryptionKeyFromWallet(signMessage, publicKey);
-
     let combined: Uint8Array;
     if (encryptedData.startsWith('b64:')) {
       combined = new Uint8Array(Buffer.from(encryptedData.slice(4), 'base64'));
@@ -147,10 +164,16 @@ export async function decryptProfileWithWallet(
       combined = new Uint8Array(bs58.decode(encryptedData));
     }
 
-    const nonce = combined.slice(0, 24);
-    const encrypted = combined.slice(24);
+    // Try current salted key first
+    const saltedKey = await getEncryptionKeyFromWallet(signMessage, publicKey);
+    let decrypted = tryDecrypt(combined, saltedKey);
 
-    const decrypted = nacl.secretbox.open(encrypted, nonce, key);
+    // Fall back to legacy key (pre-salt: SHA256(publicKey) only)
+    if (!decrypted) {
+      console.log('[DECRYPT] Salted key failed, trying legacy key...');
+      const legacyKey = await getLegacyEncryptionKey(publicKey);
+      decrypted = tryDecrypt(combined, legacyKey);
+    }
 
     if (!decrypted) {
       throw new Error('Decryption failed - wrong wallet or corrupted data');
