@@ -1414,6 +1414,9 @@ const DRIFT_YIELD_OPTIONS: DriftYieldOption[] = [
   { symbol: 'USDC', name: 'Drift USDC Lending', apy: 1.52, type: 'lending', description: 'Lend USDC on Drift', action: 'Drift → Earn → Lend USDC' },
 ];
 
+// Tokens staked for governance/fee reduction — not tradeable collateral
+const DRIFT_NON_COLLATERAL_SYMBOLS = new Set(['DRIFT']);
+
 function generateDriftYieldScenario(
   driftTrades: DriftTrade[],
   assets: Asset[],
@@ -1422,21 +1425,19 @@ function generateDriftYieldScenario(
   monthlyNeeds: number,
   goals: Goal[]
 ): WhatIfScenario | null {
-  // Find Drift-protocol assets logged in the app (the source of truth for balances).
-  // Don't also sum leftInDrift from trades — that's the same money double-counted.
-  const driftAssets = assets.filter(a =>
+  // Find all Drift-protocol assets
+  const allDriftAssets = assets.filter(a =>
     (a.type === 'crypto' || a.type === 'defi') &&
     ((a.metadata as any)?.protocol?.toLowerCase() === 'drift')
   );
 
-  if (driftAssets.length === 0) {
+  if (allDriftAssets.length === 0) {
     // Fallback: if no Drift assets logged, use trade allocation totals
     const totalLeftInDrift = driftTrades.reduce(
       (sum, t) => sum + (t.allocation?.leftInDrift || 0), 0
     );
     if (totalLeftInDrift < 200) return null;
-    // Treat as a single virtual asset with 0% APY
-    driftAssets.push({
+    allDriftAssets.push({
       id: '_drift_virtual',
       type: 'crypto',
       name: 'Drift USDC',
@@ -1446,25 +1447,12 @@ function generateDriftYieldScenario(
     } as any);
   }
 
-  const totalDriftValue = driftAssets.reduce((sum, a) => sum + a.value, 0);
-  if (totalDriftValue < 200) return null;
-
-  // Calculate current weighted APY across Drift assets
-  const currentAnnualIncome = driftAssets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
-  const currentAPY = totalDriftValue > 0 ? (currentAnnualIncome / totalDriftValue) * 100 : 0;
-
-  // Drift supports multi-collateral (SOL, dSOL, etc. all count as margin),
-  // so swapping USDC → yield tokens doesn't reduce trading ability.
-  const deployableUSDC = totalDriftValue;
-
   // ── Find active goals that match yield options ──
   const activeGoals = goals.filter(g => !g.completedAt && g.strategy === 'accumulate');
   const goalSymbols = new Set(activeGoals.map(g => (g.symbol || '').toUpperCase()));
 
   // ── Rank yield options: goal-aligned first, then by APY ──
-  // Only show options that beat current APY
   const ranked = [...DRIFT_YIELD_OPTIONS]
-    .filter(opt => opt.apy > currentAPY)
     .map(opt => ({
       ...opt,
       matchesGoal: goalSymbols.has(opt.symbol.toUpperCase()),
@@ -1476,17 +1464,35 @@ function generateDriftYieldScenario(
       return b.apy - a.apy;
     });
 
-  if (ranked.length === 0) return null; // Already at best yield
-
+  if (ranked.length === 0) return null;
   const topPick = ranked[0];
   const alternatives = ranked.slice(1, 3);
 
-  // Calculate income DELTA (new yield minus current yield)
-  const newAnnualIncome = deployableUSDC * (topPick.apy / 100);
+  // ── Separate swappable collateral from non-collateral (staked DRIFT, etc.) ──
+  // Also exclude assets already in the target token (don't suggest dSOL → dSOL)
+  const topSymbol = topPick.symbol.toUpperCase();
+  const swappableAssets = allDriftAssets.filter(a => {
+    const sym = ((a.metadata as any)?.symbol || '').toUpperCase();
+    if (DRIFT_NON_COLLATERAL_SYMBOLS.has(sym)) return false; // Staked for fees, not moveable
+    if (sym === topSymbol || sym === 'D' + topSymbol) return false; // Already the target
+    return true;
+  });
+
+  const swappableValue = swappableAssets.reduce((sum, a) => sum + a.value, 0);
+  if (swappableValue < 200) return null;
+
+  // Calculate current weighted APY across swappable assets only
+  const currentAnnualIncome = swappableAssets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
+  const currentAPY = swappableValue > 0 ? (currentAnnualIncome / swappableValue) * 100 : 0;
+
+  if (topPick.apy <= currentAPY) return null; // Already at best yield
+
+  // Calculate income DELTA
+  const newAnnualIncome = swappableValue * (topPick.apy / 100);
   const annualIncomeDelta = newAnnualIncome - currentAnnualIncome;
   const monthlyIncomeDelta = annualIncomeDelta / 12;
 
-  if (monthlyIncomeDelta < 1) return null; // Not worth suggesting
+  if (monthlyIncomeDelta < 1) return null;
 
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
@@ -1500,7 +1506,7 @@ function generateDriftYieldScenario(
     return `${a.symbol} (${a.apy}% APY${goalTag}) — ${a.description}`;
   });
 
-  const driftNames = driftAssets
+  const swappableNames = swappableAssets
     .filter(a => a.id !== '_drift_virtual')
     .map(a => `${(a.metadata as any)?.symbol || a.name} ($${Math.round(a.value).toLocaleString()})`)
     .join(', ');
@@ -1509,7 +1515,7 @@ function generateDriftYieldScenario(
     id: 'drift_yield',
     type: 'drift_yield',
     title: `Increase Drift yield: ${currentAPY.toFixed(1)}% → ${topPick.apy}% via ${topPick.symbol}`,
-    description: `Swap $${Math.round(deployableUSDC).toLocaleString()} ${driftNames || 'Drift USDC'} → ${topPick.symbol}${goalNote} — still usable as collateral`,
+    description: `Swap ${swappableNames || 'Drift assets'} → ${topPick.symbol}${goalNote} — still usable as collateral`,
     emoji: '⚡',
     difficulty: 'easy',
     timeframe: 'This week',
@@ -1528,7 +1534,7 @@ function generateDriftYieldScenario(
       roi: topPick.apy,
     },
 
-    reasoning: `You have $${Math.round(totalDriftValue).toLocaleString()} in Drift currently earning ${currentAPY.toFixed(2)}% APY. Swapping to ${topPick.symbol} at ${topPick.apy}% increases yield by ${(topPick.apy - currentAPY).toFixed(2)}% (+$${monthlyIncomeDelta.toFixed(0)}/mo). Drift multi-collateral means your trading power stays the same.${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
+    reasoning: `You have $${Math.round(swappableValue).toLocaleString()} in swappable Drift collateral (${swappableNames}) currently earning ${currentAPY.toFixed(2)}% APY. Swapping to ${topPick.symbol} at ${topPick.apy}% increases yield by ${(topPick.apy - currentAPY).toFixed(2)}% (+$${monthlyIncomeDelta.toFixed(0)}/mo). Drift multi-collateral means your trading power stays the same.${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
 
     risks: [
       'Smart contract risk on yield protocol',
