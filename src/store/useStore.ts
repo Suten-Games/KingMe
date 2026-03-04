@@ -100,6 +100,7 @@ interface AppState extends UserProfile {
   // Wallet sync actions
   syncWalletAssets: (walletAddress: string) => Promise<void>;
   syncDriftAssets: (walletAddress: string) => Promise<void>;
+  driftRates: Record<string, { depositApy: number; borrowApy: number }>;
 
   // Market price refresh (stocks via Yahoo, exchange crypto via CoinGecko)
   lastPriceRefresh?: string;
@@ -281,6 +282,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // What-If Scenarios
   whatIfScenarios: [],
+  driftRates: {},
 
   // ──────────────────────────────────────────────────────────────
   // INVESTMENT THESIS ACTIONS
@@ -1301,6 +1303,7 @@ export const useStore = create<AppState>((set, get) => ({
       investmentTheses: state.investmentTheses || [],
       driftTrades: state.driftTrades || [],
       goals,
+      driftRates: state.driftRates || {},
     };
 
     const scenarios = generateSmartScenarios(profile);
@@ -1706,10 +1709,11 @@ export const useStore = create<AppState>((set, get) => ({
       ]);
 
       // Parse rates (non-blocking — use empty object if failed)
-      let driftRates: Record<string, { depositApy: number }> = {};
+      let driftRates: Record<string, { depositApy: number; borrowApy: number }> = {};
       if (ratesRes?.ok) {
         const ratesData = await ratesRes.json();
         driftRates = ratesData.rates || {};
+        set({ driftRates });
         console.log(`[DRIFT-SYNC] Got rates for ${Object.keys(driftRates).length} markets`);
       } else {
         console.warn('[DRIFT-SYNC] Rates fetch failed, APY will use existing values');

@@ -14,6 +14,7 @@ interface UserProfile {
   investmentTheses?: InvestmentThesis[];
   driftTrades?: DriftTrade[];
   goals?: Goal[];
+  driftRates?: Record<string, { depositApy: number; borrowApy: number }>;
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -124,7 +125,8 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     currentMonthlyIncome,
     currentFreedom,
     currentMonthlyNeeds,
-    profile.goals || []
+    profile.goals || [],
+    profile.driftRates || {}
   );
   if (driftYieldScenario) scenarios.push(driftYieldScenario);
 
@@ -1407,12 +1409,56 @@ interface DriftYieldOption {
   action: string; // What to do with USDC to get this
 }
 
-const DRIFT_YIELD_OPTIONS: DriftYieldOption[] = [
-  { symbol: 'dSOL', name: 'Drift Staked SOL', apy: 6.40, type: 'staking', description: 'Liquid staking via Drift', action: 'Swap USDC → SOL → dSOL on Drift' },
-  { symbol: 'SOL', name: 'Staked SOL', apy: 5.67, type: 'staking', description: 'Native SOL staking (Marinade, Jito)', action: 'Swap USDC → SOL, stake via Marinade or Jito' },
-  { symbol: 'syrupUSDC', name: 'Syrup USDC', apy: 4.59, type: 'lending', description: 'Maple Finance institutional lending', action: 'Deposit USDC into Maple syrupUSDC vault' },
-  { symbol: 'USDC', name: 'Drift USDC Lending', apy: 1.52, type: 'lending', description: 'Lend USDC on Drift', action: 'Drift → Earn → Lend USDC' },
-];
+// Token descriptions for scenario display
+const DRIFT_TOKEN_INFO: Record<string, { name: string; type: 'staking' | 'lending'; description: string; action: string }> = {
+  USDC: { name: 'Drift USDC Lending', type: 'lending', description: 'Lend USDC on Drift', action: 'Drift → Earn → Lend USDC' },
+  SOL: { name: 'SOL on Drift', type: 'staking', description: 'SOL deposit on Drift', action: 'Hold SOL on Drift (earns deposit rate)' },
+  dSOL: { name: 'Drift Staked SOL', type: 'staking', description: 'Liquid staking via Drift', action: 'Swap → dSOL on Drift' },
+  syrupUSDC: { name: 'Syrup USDC', type: 'lending', description: 'Maple Finance institutional lending', action: 'Deposit USDC into Maple syrupUSDC vault on Drift' },
+  jitoSOL: { name: 'Jito Staked SOL', type: 'staking', description: 'Jito MEV-boosted staking', action: 'Swap → jitoSOL on Drift' },
+  mSOL: { name: 'Marinade SOL', type: 'staking', description: 'Marinade liquid staking', action: 'Swap → mSOL on Drift' },
+  bSOL: { name: 'BlazeStake SOL', type: 'staking', description: 'BlazeStake liquid staking', action: 'Swap → bSOL on Drift' },
+  INF: { name: 'Infinity (Sanctum)', type: 'staking', description: 'Sanctum unified LST', action: 'Swap → INF on Drift' },
+  JLP: { name: 'Jupiter LP', type: 'lending', description: 'Jupiter perpetuals liquidity', action: 'Swap → JLP on Drift' },
+  USDT: { name: 'USDT Lending', type: 'lending', description: 'Lend USDT on Drift', action: 'Drift → Earn → Lend USDT' },
+};
+
+/**
+ * Build yield options dynamically from live Drift rates.
+ * Falls back to hardcoded values if no rates available.
+ */
+function buildDriftYieldOptions(
+  driftRates: Record<string, { depositApy: number; borrowApy: number }>
+): DriftYieldOption[] {
+  if (Object.keys(driftRates).length === 0) {
+    // Fallback: hardcoded defaults
+    return [
+      { symbol: 'jitoSOL', name: 'Jito Staked SOL', apy: 7.5, type: 'staking', description: 'Jito MEV-boosted staking', action: 'Swap → jitoSOL on Drift' },
+      { symbol: 'USDC', name: 'Drift USDC Lending', apy: 1.5, type: 'lending', description: 'Lend USDC on Drift', action: 'Drift → Earn → Lend USDC' },
+    ];
+  }
+
+  // Build options from live rates — only include tokens with > 0.1% APY
+  return Object.entries(driftRates)
+    .filter(([_, rate]) => rate.depositApy > 0.1)
+    .map(([symbol, rate]) => {
+      const info = DRIFT_TOKEN_INFO[symbol] || {
+        name: `${symbol} on Drift`,
+        type: 'lending' as const,
+        description: `${symbol} deposit on Drift`,
+        action: `Deposit ${symbol} on Drift`,
+      };
+      return {
+        symbol,
+        name: info.name,
+        apy: rate.depositApy,
+        type: info.type,
+        description: `${info.description} (${rate.depositApy}% APY live)`,
+        action: info.action,
+      };
+    })
+    .sort((a, b) => b.apy - a.apy);
+}
 
 // Tokens staked for governance/fee reduction — not tradeable collateral
 const DRIFT_NON_COLLATERAL_SYMBOLS = new Set(['DRIFT']);
@@ -1423,7 +1469,8 @@ function generateDriftYieldScenario(
   currentMonthlyIncome: number,
   currentFreedom: number,
   monthlyNeeds: number,
-  goals: Goal[]
+  goals: Goal[],
+  driftRates: Record<string, { depositApy: number; borrowApy: number }>
 ): WhatIfScenario | null {
   // Find all Drift-protocol assets
   const allDriftAssets = assets.filter(a =>
@@ -1451,8 +1498,9 @@ function generateDriftYieldScenario(
   const activeGoals = goals.filter(g => !g.completedAt && g.strategy === 'accumulate');
   const goalSymbols = new Set(activeGoals.map(g => (g.symbol || '').toUpperCase()));
 
-  // ── Rank yield options: goal-aligned first, then by APY ──
-  const ranked = [...DRIFT_YIELD_OPTIONS]
+  // ── Build yield options from live rates, rank by goal-alignment then APY ──
+  const yieldOptions = buildDriftYieldOptions(driftRates);
+  const ranked = [...yieldOptions]
     .map(opt => ({
       ...opt,
       matchesGoal: goalSymbols.has(opt.symbol.toUpperCase()),
