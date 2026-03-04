@@ -14,8 +14,15 @@ import {
 } from '@expo-google-fonts/inter';
 import { PrivyWrapper } from '@/providers/PrivyWrapper';
 import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
+import { useAutoBackup } from '../src/hooks/useAutoBackup';
 import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+
+/** Runs hooks that depend on WalletProvider context. */
+function WalletHooks() {
+  useAutoBackup();
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -45,6 +52,7 @@ export default function RootLayout() {
     <PrivyWrapper>
       <BadgeToast />
       <WalletProvider>
+        <WalletHooks />
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: '#0a0e1a' },

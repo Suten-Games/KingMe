@@ -14,6 +14,7 @@ import { generatePositionAlerts, getAlertColor, PositionAlert, AccPlanContext } 
 import { loadAllPlans, computePlanStats } from '@/services/accumulationPlan';
 import { useSwapToast } from './SwapToast';
 import { postSwapUpdate } from '@/utils/postSwapUpdate';
+import { playAlertSound } from '@/services/alertSound';
 
 // Platform-safe confirm — Alert.alert is silent on web
 function xConfirm(title: string, message: string, onConfirm: () => void) {
@@ -181,6 +182,17 @@ export default function PositionAlertCards() {
       // ── END TEST ──
 
       console.log(`🔔 Generated ${newAlerts.length} position alerts`);
+
+      // Play alert sound for new urgent/high alerts that aren't dismissed
+      const undismissedHigh = newAlerts.filter(a => {
+        const baseId = a.id.replace(/-\d+$/, '');
+        return (a.priority === 'urgent' || a.priority === 'high') && !dismissed.has(baseId);
+      });
+      if (undismissedHigh.length > 0) {
+        const hasUrgent = undismissedHigh.some(a => a.priority === 'urgent');
+        playAlertSound(hasUrgent ? 'urgent' : 'high');
+      }
+
       setAlerts(newAlerts);
       setLastRefresh(Date.now());
     } catch (error) {
