@@ -13,6 +13,7 @@ import {
   executeSwap,
   scenarioToSwapParams,
   isOnChainScenario,
+  isDriftSwapScenario,
   formatSwapAmount,
   isSwapConfigured,
   MINTS,
@@ -20,6 +21,8 @@ import {
   type SwapResult,
   type SwapParams,
 } from '../services/jupiterSwap';
+import { executeDriftSwap, isDriftSwapConfigured, type DriftSwapResult } from '../services/driftSwap';
+import { updateGoal } from '../services/goals';
 import type { WhatIfScenario } from '../types';
 import { useWallet } from '@/providers/wallet-provider';
 
@@ -103,6 +106,18 @@ export function useSwapScenario() {
       return;
     }
 
+    // Drift swap scenarios: skip Jupiter quote, show confirmation directly
+    if (isDriftSwapScenario(scenario.type)) {
+      setSwapState({
+        state: 'confirming',
+        quote: null,
+        result: null,
+        error: null,
+        isOnChain: true,
+      });
+      return;
+    }
+
     const swapParams = scenarioToSwapParams(scenario, publicKey.toBase58());
 
     if (!swapParams || swapParams.amount <= 0) {
@@ -176,6 +191,96 @@ export function useSwapScenario() {
       return false;
     }
 
+    // ── Drift swap scenarios (drift_yield, goal_upgrade) ────
+    if (isDriftSwapScenario(scenario.type)) {
+      const upgrade = (scenario as any)._goalUpgrade;
+      if (!upgrade && scenario.type === 'goal_upgrade') {
+        Alert.alert('Error', 'Missing goal upgrade metadata');
+        return false;
+      }
+
+      // Extract swap details from scenario
+      const fromSymbol = upgrade?.fromSymbol || '';
+      const toSymbol = upgrade?.toSymbol || '';
+      // For drift_yield scenarios without _goalUpgrade, navigate to Drift page
+      if (!fromSymbol || !toSymbol) {
+        try {
+          await applyScenario(scenario);
+          return true;
+        } catch (error: any) {
+          Alert.alert('Error', error.message || 'Failed to apply scenario');
+          return false;
+        }
+      }
+
+      setSwapState((prev) => ({ ...prev, state: 'signing' }));
+
+      const driftResult = await executeDriftSwap(
+        {
+          wallet: publicKey.toBase58(),
+          fromSymbol,
+          toSymbol,
+          amount: upgrade?.amount || 0,
+        },
+        signTransaction
+      );
+
+      if (!driftResult.success) {
+        setSwapState((prev) => ({
+          ...prev,
+          state: 'error',
+          error: driftResult.error || 'Drift swap failed',
+        }));
+        if (driftResult.error !== 'Transaction cancelled by user') {
+          Alert.alert('Swap Failed', driftResult.error || 'Something went wrong');
+        }
+        return false;
+      }
+
+      setSwapState((prev) => ({ ...prev, state: 'submitting' }));
+      console.log(`[SWAP_HOOK] Drift swap confirmed: ${driftResult.signature}`);
+
+      // Update goal if this is a goal_upgrade scenario
+      if (upgrade?.goalId) {
+        try {
+          await updateGoal(upgrade.goalId, {
+            symbol: upgrade.toSymbol,
+            name: `${upgrade.toSymbol} Accumulation`,
+            targetUnit: upgrade.toSymbol,
+          });
+          console.log(`[SWAP_HOOK] Updated goal ${upgrade.goalId} to ${upgrade.toSymbol}`);
+        } catch (err) {
+          console.warn('[SWAP_HOOK] Goal update failed (non-critical):', err);
+        }
+      }
+
+      // Re-sync Drift balances
+      try {
+        if (wallets.length > 0) {
+          await syncWalletAssets(wallets[0]);
+        }
+      } catch (err) {
+        console.warn('[SWAP_HOOK] Post-swap sync failed (non-critical):', err);
+      }
+
+      try {
+        await applyScenario(scenario);
+      } catch (err) {
+        console.warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
+      }
+
+      setSwapState({
+        state: 'success',
+        quote: null,
+        result: { success: true, signature: driftResult.signature },
+        error: null,
+        isOnChain: true,
+      });
+
+      return true;
+    }
+
+    // ── Jupiter swap scenarios ───────────────────────────────
     const swapParams = scenarioToSwapParams(scenario, publicKey.toBase58());
 
     if (!swapParams || swapParams.amount <= 0) {
@@ -211,7 +316,7 @@ export function useSwapScenario() {
     // ── Swap succeeded ──────────────────────────────────────
     setSwapState((prev) => ({ ...prev, state: 'submitting', result }));
 
-    console.log(`[SWAP_HOOK] ✅ Swap confirmed: ${result.signature}`);
+    console.log(`[SWAP_HOOK] Swap confirmed: ${result.signature}`);
 
     // Sync wallet to pick up new balances
     try {

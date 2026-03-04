@@ -153,12 +153,13 @@ export default function HomeScreen() {
   //   catch { Alert.alert('Error', 'Failed to apply scenario'); }
   // };
   const handleApplyScenario = async (s: WhatIfScenario) => {
-    // Drift scenarios: navigate to trading page to adjust balances manually
-    if (s.type === 'drift_yield') {
-      setShowModal(false);
-      setSelectedScenario(null);
-      reset();
-      router.push('/protocol/Drift');
+    // Drift swap scenarios (drift_yield, goal_upgrade): execute via Drift native swap
+    if (s.type === 'drift_yield' || s.type === 'goal_upgrade') {
+      const success = await applyWithSwap(s);
+      if (success) {
+        // On-chain: modal stays open showing success + tx signature
+        // User taps "Done — Close" to dismiss
+      }
       return;
     }
 

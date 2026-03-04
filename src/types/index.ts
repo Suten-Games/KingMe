@@ -198,6 +198,7 @@ export type ScenarioType =
   | 'perena_yield'
   | 'hysa_transfer'
   | 'drift_yield'
+  | 'goal_upgrade'
   | 'custom';
 
 export interface WhatIfScenario {
