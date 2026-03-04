@@ -98,6 +98,7 @@ export default function HomeScreen() {
   const [infoModal, setInfoModal] = useState<'freedom' | 'runway' | null>(null);
   const [infoDetails, setInfoDetails] = useState(false);
   const [includeHouse, setIncludeHouse] = useState(false);
+  const [showCashFlow, setShowCashFlow] = useState(false);
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -279,9 +280,6 @@ export default function HomeScreen() {
   const dashboardBody = (
     <View style={styles.content}>
       <SetupChecklist />
-      <CashFlowSummary cashFlow={cashFlow}>
-        <SpendingGapAlert cashFlow={cashFlow} />
-      </CashFlowSummary>
 
 
 
@@ -302,7 +300,7 @@ export default function HomeScreen() {
       <ThesisAlerts alerts={thesisAlerts} onDismiss={dismissThesisAlert} onReview={(id) => router.push(`/asset/${id}`)} />
 
       {/* ── Health Badge ──────────────────────────────────────────── */}
-      <TouchableOpacity onPress={() => router.push('/(tabs)/assets')}>
+      <TouchableOpacity onPress={() => setShowCashFlow(!showCashFlow)}>
         <LinearGradient colors={healthColor.bg as [string, string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[styles.healthBadge, { borderColor: healthColor.border }]}>
           <Text style={styles.healthEmoji}>{HEALTH_EMOJI[cashFlow.healthStatus]}</Text>
@@ -312,8 +310,15 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.healthMessage}>{cashFlow.healthMessage}</Text>
           </View>
+          <Text style={{ color: '#888', fontSize: 12 }}>{showCashFlow ? '▲' : '▼'}</Text>
         </LinearGradient>
       </TouchableOpacity>
+
+      {showCashFlow && (
+        <CashFlowSummary cashFlow={cashFlow}>
+          <SpendingGapAlert cashFlow={cashFlow} />
+        </CashFlowSummary>
+      )}
 
       {/* ── Metrics Grid ──────────────────────────────────────────── */}
       <View style={styles.metricsGrid}>
