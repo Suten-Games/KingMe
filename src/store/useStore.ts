@@ -1664,7 +1664,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // ─── Drift Balance Sync ──────────────────────────────────────────────────
   syncDriftAssets: async (walletAddress: string) => {
-    const DRIFT_API = 'https://kingme-api.vercel.app/api/drift/balances';
+    const DRIFT_API_BASE = 'https://kingme-api.vercel.app/api/drift';
     // RPC URL: try client env vars, but API has its own fallback via HELIUS_RPC_URL
     const heliusKey = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
     const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC
@@ -1692,12 +1692,28 @@ export const useStore = create<AppState>((set, get) => ({
     console.log(`[DRIFT-SYNC] Starting Drift balance sync for ${walletAddress.slice(0, 8)}... rpcUrl=${rpcUrl ? 'SET' : 'MISSING'}`);
 
     try {
-      // 1. Fetch Drift balances from KingMe API
-      const url = `${DRIFT_API}?wallet=${walletAddress}&subAccount=1`;
-      console.log(`[DRIFT-SYNC] Fetching: ${url}`);
-      const headers: Record<string, string> = {};
-      if (rpcUrl) headers['X-RPC-URL'] = rpcUrl;
-      const response = await fetch(url, { headers });
+      // 1. Fetch Drift balances and rates in parallel
+      const fetchHeaders: Record<string, string> = {};
+      if (rpcUrl) fetchHeaders['X-RPC-URL'] = rpcUrl;
+
+      const balancesUrl = `${DRIFT_API_BASE}/balances?wallet=${walletAddress}&subAccount=1`;
+      const ratesUrl = `${DRIFT_API_BASE}/rates`;
+      console.log(`[DRIFT-SYNC] Fetching balances + rates...`);
+
+      const [response, ratesRes] = await Promise.all([
+        fetch(balancesUrl, { headers: fetchHeaders }),
+        fetch(ratesUrl, { headers: fetchHeaders }).catch(() => null),
+      ]);
+
+      // Parse rates (non-blocking — use empty object if failed)
+      let driftRates: Record<string, { depositApy: number }> = {};
+      if (ratesRes?.ok) {
+        const ratesData = await ratesRes.json();
+        driftRates = ratesData.rates || {};
+        console.log(`[DRIFT-SYNC] Got rates for ${Object.keys(driftRates).length} markets`);
+      } else {
+        console.warn('[DRIFT-SYNC] Rates fetch failed, APY will use existing values');
+      }
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -1782,8 +1798,9 @@ export const useStore = create<AppState>((set, get) => ({
           const existing = existingDriftMap.get(sym.toUpperCase());
           const existingMeta = (existing?.metadata || {}) as any;
 
-          // Preserve user-set fields
-          const preservedApy = existingMeta.apy || 0;
+          // APY: prefer live Drift rate, fall back to user-set value
+          const liveApy = driftRates[sym]?.depositApy || 0;
+          const preservedApy = liveApy > 0 ? liveApy : (existingMeta.apy || 0);
           const preservedName = existing?.name || `${sym} (Drift)`;
           const preservedAnnualIncome = preservedApy > 0
             ? (value * preservedApy) / 100
