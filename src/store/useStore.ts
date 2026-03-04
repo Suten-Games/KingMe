@@ -1665,13 +1665,10 @@ export const useStore = create<AppState>((set, get) => ({
   // ─── Drift Balance Sync ──────────────────────────────────────────────────
   syncDriftAssets: async (walletAddress: string) => {
     const DRIFT_API = 'https://kingme-api.vercel.app/api/drift/balances';
+    // RPC URL: try client env vars, but API has its own fallback via HELIUS_RPC_URL
     const heliusKey = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
     const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC
       || (heliusKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusKey}` : '');
-    if (!rpcUrl) {
-      console.warn('[DRIFT-SYNC] No RPC URL configured, skipping');
-      return;
-    }
 
     // Mint addresses for Drift spot tokens (for Jupiter price lookup)
     const DRIFT_MINTS: Record<string, string> = {
@@ -1698,7 +1695,9 @@ export const useStore = create<AppState>((set, get) => ({
       // 1. Fetch Drift balances from KingMe API
       const url = `${DRIFT_API}?wallet=${walletAddress}&subAccount=1`;
       console.log(`[DRIFT-SYNC] Fetching: ${url}`);
-      const response = await fetch(url, { headers: { 'X-RPC-URL': rpcUrl } });
+      const headers: Record<string, string> = {};
+      if (rpcUrl) headers['X-RPC-URL'] = rpcUrl;
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         if (response.status === 404) {
