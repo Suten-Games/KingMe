@@ -1297,6 +1297,7 @@ export const useStore = create<AppState>((set, get) => ({
       debts: state.debts,
       bankTransactions: state.bankTransactions || [],
       investmentTheses: state.investmentTheses || [],
+      driftTrades: state.driftTrades || [],
     };
 
     const scenarios = generateSmartScenarios(profile);

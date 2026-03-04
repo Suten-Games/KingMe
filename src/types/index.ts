@@ -192,6 +192,12 @@ export type ScenarioType =
   | 'stake_crypto'
   | 'reduce_expenses'
   | 'side_hustle'
+  | 'debt_payoff'
+  | 'debt_refinance'
+  | 'tax_optimization'
+  | 'perena_yield'
+  | 'hysa_transfer'
+  | 'drift_yield'
   | 'custom';
 
 export interface WhatIfScenario {

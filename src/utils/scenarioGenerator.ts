@@ -1,5 +1,5 @@
 // src/utils/scenarioGenerator.ts
-import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario, InvestmentThesis } from '../types';
+import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario, InvestmentThesis, DriftTrade } from '../types';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 import { detectRecurring } from './csvBankImport';
@@ -11,6 +11,7 @@ interface UserProfile {
   debts: Debt[];
   bankTransactions?: BankTransaction[];
   investmentTheses?: InvestmentThesis[];
+  driftTrades?: DriftTrade[];
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -99,7 +100,9 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     assets,
     currentMonthlyIncome,
     currentFreedom,
-    currentMonthlyNeeds
+    currentMonthlyNeeds,
+    obligations,
+    debts
   );
   if (perenaScenario) scenarios.push(perenaScenario);
 
@@ -111,6 +114,16 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     currentMonthlyNeeds
   );
   if (hysaScenario) scenarios.push(hysaScenario);
+
+  // 11. DRIFT IDLE USDC → Yield
+  const driftYieldScenario = generateDriftYieldScenario(
+    profile.driftTrades || [],
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (driftYieldScenario) scenarios.push(driftYieldScenario);
 
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
@@ -218,6 +231,14 @@ function generateInvestCashScenario(
   };
 }
 
+// Tokens with known staking/yield options on Solana
+const STAKEABLE_SYMBOLS = new Set([
+  'SOL', 'MSOL', 'JITOSOL', 'BSOL', 'JSOL',  // SOL liquid staking
+  'USDC', 'USDT', 'DAI', 'PYUSD',              // Stablecoin lending
+  'JUP', 'RAY', 'ORCA', 'MNDE', 'HNT',         // Protocol staking
+  'ETH', 'WETH', 'STETH',                        // ETH staking
+]);
+
 function generateStakeCryptoScenario(
   assets: Asset[],
   currentMonthlyIncome: number,
@@ -228,13 +249,15 @@ function generateStakeCryptoScenario(
   // Build set of asset IDs that have an investment thesis
   const assetsWithThesis = new Set(investmentTheses.map(t => t.assetId));
 
-  // Find crypto with low APY AND no investment thesis
-  const cryptoAssets = assets.filter(a =>
-    a.type === 'crypto' &&
-    (a.metadata as any)?.apy < 3 &&
-    a.value > 500 &&
-    !assetsWithThesis.has(a.id)  // ← Skip if thesis exists
-  );
+  // Only suggest staking for tokens that actually have known yield options
+  const cryptoAssets = assets.filter(a => {
+    if (a.type !== 'crypto') return false;
+    if ((a.metadata as any)?.apy >= 3) return false; // Already earning yield
+    if (a.value < 500) return false;
+    if (assetsWithThesis.has(a.id)) return false; // Has thesis
+    const symbol = ((a.metadata as any)?.symbol || '').toUpperCase();
+    return STAKEABLE_SYMBOLS.has(symbol);
+  });
 
   if (cryptoAssets.length === 0) return null;
 
@@ -259,7 +282,7 @@ function generateStakeCryptoScenario(
   return {
     id: 'stake_crypto',
     type: 'stake_crypto',
-    title: `Stake $${stakeAmount.toLocaleString()} crypto for 8% APY`,
+    title: `Stake $${stakeAmount.toLocaleString()} in ${cryptoAssets.map(a => (a.metadata as any)?.symbol || a.name).join(', ')} for 8% APY`,
     description: `Move idle tokens to yield-generating protocols (Drift, Kamino, Marginfi)`,
     emoji: '⛓️',
     difficulty: 'medium',
@@ -1131,9 +1154,11 @@ function generatePerenaYieldScenario(
   assets: Asset[],
   currentMonthlyIncome: number,
   currentFreedom: number,
-  monthlyNeeds: number
+  monthlyNeeds: number,
+  obligations: Obligation[],
+  debts: Debt[]
 ): WhatIfScenario | null {
-  // Find idle stablecoins or cash that could go into Perena
+  // 1. Idle stablecoins already in wallet
   const stablecoinAssets = assets.filter(a =>
     a.type === 'crypto' && (
       (a.metadata as any)?.symbol?.toUpperCase() === 'USDC' ||
@@ -1141,24 +1166,33 @@ function generatePerenaYieldScenario(
       (a.metadata as any)?.symbol?.toUpperCase() === 'DAI' ||
       (a.metadata as any)?.symbol?.toUpperCase() === 'PYUSD'
     ) &&
-    ((a.metadata as any)?.apy || 0) < 8 && // Not already earning competitive yield
+    ((a.metadata as any)?.apy || 0) < 8 &&
     a.value > 100
   );
+  const totalStablecoins = stablecoinAssets.reduce((sum, a) => sum + a.value, 0);
 
-  // Also consider idle cash for conversion to stablecoins → Perena
-  const cashAssets = assets.filter(a =>
+  // 2. Calculate monthly burn from obligations + debt payments
+  const monthlyObligations = obligations.reduce((sum, o) => {
+    if (o.frequency === 'monthly') return sum + o.amount;
+    if (o.frequency === 'annual') return sum + o.amount / 12;
+    if (o.frequency === 'weekly') return sum + o.amount * 4.33;
+    return sum + o.amount;
+  }, 0);
+  const monthlyDebtPayments = debts.reduce((sum, d) => sum + (d.minimumPayment || 0), 0);
+  const monthlyBurn = monthlyObligations + monthlyDebtPayments;
+
+  // 3. Calculate safe excess cash (keep 3 months of burn as buffer)
+  const cashAccounts = assets.filter(a =>
     a.type === 'bank_account' &&
     ((a.metadata as any)?.accountType === 'savings' ||
       (a.metadata as any)?.accountType === 'checking')
   );
-  const totalCash = cashAssets.reduce((sum, a) => sum + a.value, 0);
+  const totalCash = cashAccounts.reduce((sum, a) => sum + a.value, 0);
+  const safetyBuffer = Math.max(2000, monthlyBurn * 3); // 3 months of bills or $2k, whichever is higher
+  const excessCash = Math.max(0, totalCash - safetyBuffer);
 
-  const totalStablecoins = stablecoinAssets.reduce((sum, a) => sum + a.value, 0);
-
-  // Consider moving up to 30% of excess cash into Perena as well
-  const emergencyFund = 2000;
-  const excessCash = Math.max(0, totalCash - emergencyFund);
-  const cashToConvert = Math.floor(excessCash * 0.3);
+  // Only suggest converting cash if there's meaningful excess after bills are covered
+  const cashToConvert = excessCash >= 500 ? Math.floor(excessCash * 0.5) : 0;
 
   const totalToDeposit = totalStablecoins + cashToConvert;
   if (totalToDeposit < 100) return null;
@@ -1173,9 +1207,14 @@ function generatePerenaYieldScenario(
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
 
-  const description = cashToConvert > 0
-    ? `Deposit $${totalStablecoins.toLocaleString()} stablecoins + convert $${cashToConvert.toLocaleString()} cash into Perena`
-    : `Deposit $${totalToDeposit.toLocaleString()} stablecoins into Perena`;
+  const parts: string[] = [];
+  if (totalStablecoins > 0) parts.push(`$${totalStablecoins.toLocaleString()} in idle stablecoins`);
+  if (cashToConvert > 0) parts.push(`$${cashToConvert.toLocaleString()} excess cash → USDC`);
+  const description = `Deposit ${parts.join(' + ')} into Perena`;
+
+  const bufferNote = cashToConvert > 0
+    ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${monthlyBurn.toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash.`
+    : '';
 
   return {
     id: 'perena_yield',
@@ -1183,7 +1222,7 @@ function generatePerenaYieldScenario(
     title: `Earn ${perenaAPY}% on $${totalToDeposit.toLocaleString()} via Perena`,
     description,
     emoji: '🌊',
-    difficulty: stablecoinAssets.length > 0 ? 'easy' : 'medium',
+    difficulty: cashToConvert > 0 ? 'medium' : 'easy',
     timeframe: 'This week',
 
     changes: {
@@ -1226,23 +1265,24 @@ function generatePerenaYieldScenario(
       monthlyIncomeDelta: monthlyIncomeDelta,
       annualIncomeDelta: annualIncomeDelta,
       investmentRequired: cashToConvert,
-      totalDeposit: totalToDeposit,  // ← add this line
+      totalDeposit: totalToDeposit,
       roi: perenaAPY,
     },
 
-    reasoning: `You have $${totalToDeposit.toLocaleString()} in stablecoins${cashToConvert > 0 ? ' and convertible cash' : ''} that could earn ${perenaAPY}% APY through Perena's stablecoin infrastructure. That's $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk — no price exposure to volatile crypto.`,
+    reasoning: `${totalStablecoins > 0 ? `You have $${totalStablecoins.toLocaleString()} in stablecoins earning below-market yield.` : ''}${bufferNote} Deploying $${totalToDeposit.toLocaleString()} into Perena at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
 
     risks: [
       'Smart contract risk (Perena protocol)',
       'Stablecoin depeg risk (unlikely for USDC but non-zero)',
       'APY may fluctuate based on protocol utilization',
       'DeFi protocols are not FDIC insured',
+      ...(cashToConvert > 0 ? ['Requires off-ramping cash to USDC (Coinbase, on-ramp)'] : []),
     ],
 
     steps: [
       ...(cashToConvert > 0 ? [
-        'Buy USDC on Coinbase or through on-ramp',
-        'Transfer USDC to Solana wallet',
+        `Buy $${cashToConvert.toLocaleString()} USDC on Coinbase or through an on-ramp`,
+        'Transfer USDC to your Solana wallet',
       ] : []),
       'Go to Perena (perena.org)',
       'Connect your wallet',
@@ -1339,6 +1379,93 @@ function generateHYSAScenario(
       'Link your checking account',
       `Transfer $${moveToHYSA.toLocaleString()} to HYSA`,
       'Set up automatic monthly sweep from checking',
+    ],
+  };
+}
+
+function generateDriftYieldScenario(
+  driftTrades: DriftTrade[],
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Calculate total USDC sitting in Drift from trade allocations
+  const totalLeftInDrift = driftTrades.reduce(
+    (sum, t) => sum + (t.allocation?.leftInDrift || 0), 0
+  );
+
+  // Also check for Drift-protocol assets that might be logged directly
+  const driftAssets = assets.filter(a =>
+    (a.type === 'crypto' || a.type === 'defi') &&
+    ((a.metadata as any)?.protocol?.toLowerCase() === 'drift') &&
+    ((a.metadata as any)?.apy || 0) < 5 // Not already in a yield position
+  );
+  const driftAssetValue = driftAssets.reduce((sum, a) => sum + a.value, 0);
+
+  const totalDriftUSDC = totalLeftInDrift + driftAssetValue;
+  if (totalDriftUSDC < 200) return null;
+
+  // Estimate how much needs to stay as collateral for open positions
+  // Look at recent trades to gauge typical position size
+  const recentTrades = driftTrades
+    .filter(t => t.date >= new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10))
+    .sort((a, b) => b.size - a.size);
+
+  // Keep enough for the largest recent position + 50% buffer as margin
+  const largestPosition = recentTrades.length > 0 ? recentTrades[0].size : 0;
+  const marginBuffer = largestPosition * 0.5; // 50% of largest trade as safety margin
+  const keepForTrading = Math.max(200, marginBuffer); // At least $200 for small trades
+
+  const excessUSDC = Math.max(0, totalDriftUSDC - keepForTrading);
+  if (excessUSDC < 100) return null;
+
+  // Suggest deploying to Drift lending or moving to Perena/Kamino
+  const yieldAPY = 8; // Drift lending / Kamino / Perena rates
+  const newAnnualIncome = excessUSDC * (yieldAPY / 100);
+  const monthlyIncomeDelta = newAnnualIncome / 12;
+
+  const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
+  const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
+
+  return {
+    id: 'drift_yield',
+    type: 'drift_yield',
+    title: `Put $${excessUSDC.toLocaleString()} idle Drift USDC to work at ${yieldAPY}%`,
+    description: `Deploy excess collateral to Drift lending or Perena while keeping $${keepForTrading.toLocaleString()} for trading`,
+    emoji: '⚡',
+    difficulty: 'easy',
+    timeframe: 'This week',
+
+    changes: {},
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: monthlyIncomeDelta,
+      annualIncomeDelta: newAnnualIncome,
+      investmentRequired: 0,
+      roi: yieldAPY,
+    },
+
+    reasoning: `You have $${totalDriftUSDC.toLocaleString()} USDC in Drift${largestPosition > 0 ? `, but your largest recent trade was $${largestPosition.toLocaleString()}` : ''}. Keeping $${keepForTrading.toLocaleString()} as trading collateral, $${excessUSDC.toLocaleString()} can earn ${yieldAPY}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo) without affecting your ability to trade.`,
+
+    risks: [
+      'Lending USDC on Drift has smart contract risk',
+      'May need to withdraw quickly if a trade opportunity arises',
+      'APY fluctuates with borrowing demand',
+      'Moving to another protocol means USDC isn\'t instantly available for Drift trades',
+    ],
+
+    steps: [
+      'Open Drift (drift.trade) → Earn tab',
+      `Deposit $${excessUSDC.toLocaleString()} USDC into lending`,
+      `Keep $${keepForTrading.toLocaleString()} USDC as trading collateral`,
+      'Or move excess to Perena/Kamino for potentially higher yield',
+      'Monitor and withdraw before opening large positions',
     ],
   };
 }
