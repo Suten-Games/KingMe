@@ -3,7 +3,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
-import { useFonts, PlayfairDisplay_700Bold, PlayfairDisplay_400Regular } from '@expo-google-fonts/playfair-display';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WalletHeaderButton from '../../src/components/WalletHeaderButton';
 import {
@@ -15,8 +15,7 @@ import {
 
 function TabBarHeader() {
   const [fontsLoaded] = useFonts({
-    PlayfairDisplay_700Bold,
-    PlayfairDisplay_400Regular,
+    Cinzel_700Bold,
   });
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -43,15 +42,12 @@ function TabBarHeader() {
 
           <MaskedView
             maskElement={
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.headerMark}>♚</Text>
-                <Text style={[
-                  styles.headerTitle,
-                  fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' }
-                ]}>
-                  KingMe
-                </Text>
-              </View>
+              <Text style={[
+                styles.headerTitle,
+                fontsLoaded && { fontFamily: 'Cinzel_700Bold' }
+              ]}>
+                KingMe
+              </Text>
             }
           >
             <LinearGradient
@@ -59,15 +55,13 @@ function TabBarHeader() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, opacity: 0 }}>
-                <Text style={styles.headerMark}>♚</Text>
-                <Text style={[
-                  styles.headerTitle,
-                  fontsLoaded && { fontFamily: 'PlayfairDisplay_700Bold' }
-                ]}>
-                  KingMe
-                </Text>
-              </View>
+              <Text style={[
+                styles.headerTitle,
+                fontsLoaded && { fontFamily: 'Cinzel_700Bold' },
+                { opacity: 0 }
+              ]}>
+                KingMe
+              </Text>
             </LinearGradient>
           </MaskedView>
         </TouchableOpacity>
@@ -164,11 +158,6 @@ const styles = StyleSheet.create({
     color: '#f4c430',                 // fallback color (masked out when font loads)
     letterSpacing: 1.5,
     lineHeight: 34,
-  },
-  headerMark: {
-    fontSize: 32,
-    color: '#f4c430',
-    lineHeight: 38,
   },
   headerAccent: {
     height: 1.5,
