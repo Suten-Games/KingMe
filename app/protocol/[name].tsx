@@ -10,8 +10,8 @@ import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import type { Asset } from '../../src/types';
 
 // ── Protocol info map ────────────────────────────────────────
-const PROTOCOL_INFO: Record<string, { emoji: string; description: string; url: string }> = {
-  'Drift':     { emoji: '🟡', description: 'Decentralized perpetual futures and spot exchange on Solana. Supports leveraged trading, lending, and borrowing.', url: 'https://drift.trade' },
+const PROTOCOL_INFO: Record<string, { emoji: string; logoURI?: string; description: string; url: string }> = {
+  'Drift':     { emoji: '🟡', logoURI: 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png', description: 'Decentralized perpetual futures and spot exchange on Solana. Supports leveraged trading, lending, and borrowing.', url: 'https://drift.trade' },
   'Kamino':    { emoji: '🔵', description: 'Automated liquidity and lending protocol on Solana. Offers leveraged yield strategies and concentrated liquidity vaults.', url: 'https://kamino.finance' },
   'MarginFi':  { emoji: '🟣', description: 'Decentralized lending and borrowing protocol on Solana with risk-adjusted interest rates.', url: 'https://marginfi.com' },
   'Marinade':  { emoji: '🔴', description: 'Liquid staking protocol for SOL. Stake SOL and receive mSOL to use across DeFi while earning staking rewards.', url: 'https://marinade.finance' },
@@ -152,13 +152,24 @@ export default function ProtocolDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{info.emoji} {protocolName}</Text>
+          <View style={styles.headerTitleRow}>
+            {info.logoURI ? (
+              <Image source={{ uri: info.logoURI }} style={styles.headerLogo} />
+            ) : (
+              <Text style={styles.headerEmoji}>{info.emoji}</Text>
+            )}
+            <Text style={styles.headerTitle}>{protocolName}</Text>
+          </View>
           <View style={{ width: 60 }} />
         </View>
 
         {/* ── Protocol info card ─────────────────────────────── */}
         <View style={styles.infoCard}>
-          <Text style={styles.infoEmoji}>{info.emoji}</Text>
+          {info.logoURI ? (
+            <Image source={{ uri: info.logoURI }} style={styles.infoLogo} />
+          ) : (
+            <Text style={styles.infoEmoji}>{info.emoji}</Text>
+          )}
           <Text style={styles.infoName}>{protocolName}</Text>
           <Text style={styles.infoDesc}>{info.description}</Text>
           {info.url ? (
@@ -331,6 +342,9 @@ const styles = StyleSheet.create({
   },
   backBtn: { paddingVertical: 6, paddingRight: 12 },
   backText: { color: '#4ade80', fontSize: 15, fontWeight: '600' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerLogo: { width: 28, height: 28, borderRadius: 14 },
+  headerEmoji: { fontSize: 22 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff' },
 
   // Info card
@@ -338,6 +352,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1f2e', borderRadius: 16, padding: 20, marginBottom: 16,
     alignItems: 'center', borderWidth: 1, borderColor: '#2a3050',
   },
+  infoLogo: { width: 56, height: 56, borderRadius: 28, marginBottom: 8 },
   infoEmoji: { fontSize: 40, marginBottom: 8 },
   infoName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8 },
   infoDesc: { fontSize: 14, color: '#999', textAlign: 'center', lineHeight: 20, marginBottom: 12 },
