@@ -3,6 +3,7 @@ import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScen
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 import { detectRecurring } from './csvBankImport';
+import type { Goal } from '../services/goals';
 
 interface UserProfile {
   assets: Asset[];
@@ -12,6 +13,7 @@ interface UserProfile {
   bankTransactions?: BankTransaction[];
   investmentTheses?: InvestmentThesis[];
   driftTrades?: DriftTrade[];
+  goals?: Goal[];
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -121,7 +123,8 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     assets,
     currentMonthlyIncome,
     currentFreedom,
-    currentMonthlyNeeds
+    currentMonthlyNeeds,
+    profile.goals || []
   );
   if (driftYieldScenario) scenarios.push(driftYieldScenario);
 
@@ -1394,12 +1397,30 @@ function generateHYSAScenario(
   };
 }
 
+// ── Drift yield options with current APYs ──
+interface DriftYieldOption {
+  symbol: string;
+  name: string;
+  apy: number;
+  type: 'staking' | 'lending';
+  description: string;
+  action: string; // What to do with USDC to get this
+}
+
+const DRIFT_YIELD_OPTIONS: DriftYieldOption[] = [
+  { symbol: 'dSOL', name: 'Drift Staked SOL', apy: 6.40, type: 'staking', description: 'Liquid staking via Drift', action: 'Swap USDC → SOL → dSOL on Drift' },
+  { symbol: 'SOL', name: 'Staked SOL', apy: 5.67, type: 'staking', description: 'Native SOL staking (Marinade, Jito)', action: 'Swap USDC → SOL, stake via Marinade or Jito' },
+  { symbol: 'syrupUSDC', name: 'Syrup USDC', apy: 4.59, type: 'lending', description: 'Maple Finance institutional lending', action: 'Deposit USDC into Maple syrupUSDC vault' },
+  { symbol: 'USDC', name: 'Drift USDC Lending', apy: 1.52, type: 'lending', description: 'Lend USDC on Drift', action: 'Drift → Earn → Lend USDC' },
+];
+
 function generateDriftYieldScenario(
   driftTrades: DriftTrade[],
   assets: Asset[],
   currentMonthlyIncome: number,
   currentFreedom: number,
-  monthlyNeeds: number
+  monthlyNeeds: number,
+  goals: Goal[]
 ): WhatIfScenario | null {
   // Calculate total USDC sitting in Drift from trade allocations
   const totalLeftInDrift = driftTrades.reduce(
@@ -1418,32 +1439,60 @@ function generateDriftYieldScenario(
   if (totalDriftUSDC < 200) return null;
 
   // Estimate how much needs to stay as collateral for open positions
-  // Look at recent trades to gauge typical position size
   const recentTrades = driftTrades
     .filter(t => t.date >= new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10))
     .sort((a, b) => b.size - a.size);
 
-  // Keep enough for the largest recent position + 50% buffer as margin
   const largestPosition = recentTrades.length > 0 ? recentTrades[0].size : 0;
-  const marginBuffer = largestPosition * 0.5; // 50% of largest trade as safety margin
-  const keepForTrading = Math.max(200, marginBuffer); // At least $200 for small trades
+  const marginBuffer = largestPosition * 0.5;
+  const keepForTrading = Math.max(200, marginBuffer);
 
   const excessUSDC = Math.max(0, totalDriftUSDC - keepForTrading);
   if (excessUSDC < 100) return null;
 
-  // Suggest deploying to Drift lending or moving to Perena/Kamino
-  const yieldAPY = 8; // Drift lending / Kamino / Perena rates
-  const newAnnualIncome = excessUSDC * (yieldAPY / 100);
-  const monthlyIncomeDelta = newAnnualIncome / 12;
+  // ── Find active goals that match yield options ──
+  const activeGoals = goals.filter(g => !g.completedAt && g.strategy === 'accumulate');
+  const goalSymbols = new Set(activeGoals.map(g => (g.symbol || '').toUpperCase()));
 
+  // ── Rank yield options: goal-aligned first, then by APY ──
+  const ranked = [...DRIFT_YIELD_OPTIONS]
+    .map(opt => ({
+      ...opt,
+      matchesGoal: goalSymbols.has(opt.symbol.toUpperCase()),
+      matchingGoal: activeGoals.find(g => (g.symbol || '').toUpperCase() === opt.symbol.toUpperCase()),
+    }))
+    .sort((a, b) => {
+      // Goal-aligned options first
+      if (a.matchesGoal && !b.matchesGoal) return -1;
+      if (!a.matchesGoal && b.matchesGoal) return 1;
+      // Then by APY
+      return b.apy - a.apy;
+    });
+
+  const topPick = ranked[0];
+  const alternatives = ranked.slice(1, 3);
+
+  // Calculate impact using top pick's APY
+  const newAnnualIncome = excessUSDC * (topPick.apy / 100);
+  const monthlyIncomeDelta = newAnnualIncome / 12;
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
+
+  // Build goal-aware title and description
+  const goalNote = topPick.matchingGoal
+    ? ` (aligns with your "${topPick.matchingGoal.name}" goal)`
+    : '';
+
+  const altLines = alternatives.map(a => {
+    const goalTag = a.matchesGoal ? ' ⭐ goal' : '';
+    return `${a.symbol} (${a.apy}% APY${goalTag}) — ${a.description}`;
+  });
 
   return {
     id: 'drift_yield',
     type: 'drift_yield',
-    title: `Put $${excessUSDC.toLocaleString()} idle Drift USDC to work at ${yieldAPY}%`,
-    description: `Deploy excess collateral to Drift lending or Perena while keeping $${keepForTrading.toLocaleString()} for trading`,
+    title: `Swap $${Math.round(excessUSDC).toLocaleString()} Drift USDC → ${topPick.symbol} at ${topPick.apy}%`,
+    description: `${topPick.description}${goalNote}`,
     emoji: '⚡',
     difficulty: 'easy',
     timeframe: 'This week',
@@ -1459,24 +1508,23 @@ function generateDriftYieldScenario(
       monthlyIncomeDelta: monthlyIncomeDelta,
       annualIncomeDelta: newAnnualIncome,
       investmentRequired: 0,
-      roi: yieldAPY,
+      roi: topPick.apy,
     },
 
-    reasoning: `You have $${totalDriftUSDC.toLocaleString()} USDC in Drift${largestPosition > 0 ? `, but your largest recent trade was $${largestPosition.toLocaleString()}` : ''}. Keeping $${keepForTrading.toLocaleString()} as trading collateral, $${excessUSDC.toLocaleString()} can earn ${yieldAPY}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo) without affecting your ability to trade.`,
+    reasoning: `You have $${Math.round(totalDriftUSDC).toLocaleString()} USDC in Drift${largestPosition > 0 ? `, but your largest recent trade was $${largestPosition.toLocaleString()}` : ''}. Keeping $${Math.round(keepForTrading).toLocaleString()} as trading collateral, swap $${Math.round(excessUSDC).toLocaleString()} into ${topPick.symbol} at ${topPick.apy}% APY (+$${monthlyIncomeDelta.toFixed(0)}/mo).${topPick.matchingGoal ? ` This also builds toward your "${topPick.matchingGoal.name}" goal.` : ''}`,
 
     risks: [
-      'Lending USDC on Drift has smart contract risk',
-      'May need to withdraw quickly if a trade opportunity arises',
-      'APY fluctuates with borrowing demand',
-      'Moving to another protocol means USDC isn\'t instantly available for Drift trades',
+      'Smart contract risk on yield protocol',
+      'May need to unwind position quickly if a trade opportunity arises',
+      'APY fluctuates with market conditions',
+      ...(topPick.type === 'staking' ? ['SOL price exposure if swapping from USDC'] : []),
     ],
 
     steps: [
-      'Open Drift (drift.trade) → Earn tab',
-      `Deposit $${excessUSDC.toLocaleString()} USDC into lending`,
-      `Keep $${keepForTrading.toLocaleString()} USDC as trading collateral`,
-      'Or move excess to Perena/Kamino for potentially higher yield',
-      'Monitor and withdraw before opening large positions',
+      topPick.action,
+      `Keep $${Math.round(keepForTrading).toLocaleString()} USDC as trading collateral in Drift`,
+      ...altLines.map(l => `Alternative: ${l}`),
+      'Monitor and unwind before opening large positions',
     ],
   };
 }

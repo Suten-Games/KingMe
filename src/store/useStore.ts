@@ -1288,8 +1288,9 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  generateScenarios: () => {
+  generateScenarios: async () => {
     const state = get();
+    const goals = await loadGoals();
     const profile = {
       assets: state.assets,
       incomeSources: state.income.sources || [],
@@ -1298,6 +1299,7 @@ export const useStore = create<AppState>((set, get) => ({
       bankTransactions: state.bankTransactions || [],
       investmentTheses: state.investmentTheses || [],
       driftTrades: state.driftTrades || [],
+      goals,
     };
 
     const scenarios = generateSmartScenarios(profile);
