@@ -1746,6 +1746,11 @@ export const useStore = create<AppState>((set, get) => ({
           prices[meta.symbol.toUpperCase()] = meta.priceUSD;
         }
       }
+      // dSOL tracks ~1.19x SOL price (staking premium); derive if missing
+      if (!prices['DSOL'] && prices['SOL']) {
+        prices['DSOL'] = prices['SOL'] * 1.19;
+        console.log(`[DRIFT-SYNC] dSOL price derived from SOL: $${prices['DSOL'].toFixed(2)}`);
+      }
       console.log(`[DRIFT-SYNC] Prices from store: ${Object.entries(prices).map(([s,p]) => `${s}=$${(p as number).toFixed(2)}`).join(', ')}`);
 
       // 3. Build/merge assets — currentAssets already fetched above for prices
