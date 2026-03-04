@@ -1665,7 +1665,9 @@ export const useStore = create<AppState>((set, get) => ({
   // ─── Drift Balance Sync ──────────────────────────────────────────────────
   syncDriftAssets: async (walletAddress: string) => {
     const DRIFT_API = 'https://kingme-api.vercel.app/api/drift/balances';
-    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
+    const heliusKey = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
+    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC
+      || (heliusKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusKey}` : '');
     if (!rpcUrl) {
       console.warn('[DRIFT-SYNC] No RPC URL configured, skipping');
       return;
@@ -1690,14 +1692,13 @@ export const useStore = create<AppState>((set, get) => ({
       bSOL: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
     };
 
-    console.log('[DRIFT-SYNC] Starting Drift balance sync...');
+    console.log(`[DRIFT-SYNC] Starting Drift balance sync for ${walletAddress.slice(0, 8)}... rpcUrl=${rpcUrl ? 'SET' : 'MISSING'}`);
 
     try {
       // 1. Fetch Drift balances from KingMe API
-      const response = await fetch(
-        `${DRIFT_API}?wallet=${walletAddress}&subAccount=1`,
-        { headers: { 'X-RPC-URL': rpcUrl } }
-      );
+      const url = `${DRIFT_API}?wallet=${walletAddress}&subAccount=1`;
+      console.log(`[DRIFT-SYNC] Fetching: ${url}`);
+      const response = await fetch(url, { headers: { 'X-RPC-URL': rpcUrl } });
 
       if (!response.ok) {
         if (response.status === 404) {
