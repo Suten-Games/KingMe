@@ -14,11 +14,12 @@ const ASYNC_KEY = 'lastAutoBackup';
 
 export function useAutoBackup() {
   const isLoaded = useStore(s => s._isLoaded);
+  const onboardingComplete = useStore(s => s.onboardingComplete);
   const { connected, publicKey, signMessage } = useWallet();
   const runningRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !connected || !publicKey) return;
+    if (!isLoaded || !onboardingComplete || !connected || !publicKey) return;
 
     const walletAddress = publicKey.toBase58();
 
@@ -62,5 +63,5 @@ export function useAutoBackup() {
     check();
     const interval = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isLoaded, connected, publicKey, signMessage]);
+  }, [isLoaded, onboardingComplete, connected, publicKey, signMessage]);
 }
