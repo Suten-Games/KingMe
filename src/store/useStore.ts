@@ -69,6 +69,7 @@ interface AppState extends UserProfile {
   addDriftTrade: (trade: DriftTrade) => void;
   removeDriftTrade: (tradeId: string) => void;
   updateDriftTrade: (tradeId: string, trade: Partial<DriftTrade>) => void;
+  syncDriftTradeHistory: () => Promise<{ imported: number; error?: string }>;
   addDailyExpense: (expense: DailyExpense) => void;
   removeDailyExpense: (expenseId: string) => void;
   updateDailyExpense: (expenseId: string, expense: Partial<DailyExpense>) => void;
@@ -836,6 +837,61 @@ export const useStore = create<AppState>((set, get) => ({
         income: { ...state.income, sources: updatedIncomeSources },
       };
     }),
+
+  syncDriftTradeHistory: async () => {
+    const state = get();
+    const wallet = state.wallets?.[0];
+    if (!wallet) return { imported: 0, error: 'No wallet connected' };
+
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
+    const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
+
+    try {
+      const headers: Record<string, string> = {};
+      if (RPC_URL) headers['X-RPC-URL'] = RPC_URL;
+
+      const resp = await fetch(`${API_BASE}/api/drift/history?wallet=${wallet}&limit=200`, { headers });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({ error: resp.statusText }));
+        return { imported: 0, error: body.error || `HTTP ${resp.status}` };
+      }
+
+      const data = await resp.json();
+      const remoteTrades: DriftTrade[] = (data.trades || []).map((t: any) => {
+        const assetMap: Record<string, DriftTrade['asset']> = { SOL: 'SOL', BTC: 'BTC', ETH: 'ETH' };
+        return {
+          id: t.id,
+          date: t.date,
+          asset: assetMap[t.asset] || 'other',
+          direction: t.direction as DriftTrade['direction'],
+          size: t.size,
+          entryPrice: t.entryPrice,
+          exitPrice: t.exitPrice,
+          pnlUsdc: t.pnlUsdc,
+          fees: t.fees,
+        } satisfies DriftTrade;
+      });
+
+      const existingIds = new Set((state.driftTrades || []).map((t) => t.id));
+      const newTrades = remoteTrades.filter((t) => !existingIds.has(t.id));
+
+      if (newTrades.length === 0) return { imported: 0 };
+
+      // Merge: keep existing trades (preserving notes/allocation), append new ones
+      const merged = [...(state.driftTrades || []), ...newTrades];
+      const defaultAccount = getDefaultDriftIncomeAccount(state.bankAccounts);
+      const updatedIncomeSources = syncDriftIncomeSource(merged, state.income.sources || [], defaultAccount);
+
+      set({
+        driftTrades: merged,
+        income: { ...state.income, sources: updatedIncomeSources },
+      });
+
+      return { imported: newTrades.length };
+    } catch (err: any) {
+      return { imported: 0, error: err.message || 'Network error' };
+    }
+  },
 
   // Daily Expense actions
   addDailyExpense: (expense) =>

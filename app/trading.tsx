@@ -1,5 +1,5 @@
 // app/(tabs)/trading.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useStore } from '../src/store/useStore';
@@ -25,6 +25,9 @@ export default function TradingScreen() {
   const addDriftTrade = useStore((s) => s.addDriftTrade);
   const updateDriftTrade = useStore((s) => s.updateDriftTrade);
   const removeDriftTrade = useStore((s) => s.removeDriftTrade);
+  const syncDriftTradeHistory = useStore((s) => s.syncDriftTradeHistory);
+
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // ── trade form state ───────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
@@ -120,6 +123,25 @@ export default function TradingScreen() {
       thisMonthTotalFees: totalFees,
     };
   }, [driftTrades]);
+
+  // ── sync handler ──────────────────────────────────────────────────────────
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncDriftTradeHistory();
+      if (result.error) {
+        Alert.alert('Sync Error', result.error);
+      } else if (result.imported === 0) {
+        Alert.alert('Up to Date', 'No new trades found on-chain.');
+      } else {
+        Alert.alert('Synced', `Imported ${result.imported} trade${result.imported === 1 ? '' : 's'} from Drift.`);
+      }
+    } catch (err: any) {
+      Alert.alert('Sync Error', err.message || 'Something went wrong');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // ── handlers ───────────────────────────────────────────────────────────────
   const resetForm = () => {
@@ -337,15 +359,28 @@ export default function TradingScreen() {
         {/* Trade List Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Trade Journal</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              resetForm();
-              setShowModal(true);
-            }}
-          >
-            <Text style={styles.addButtonText}>+ Log Trade</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={styles.syncButton}
+              onPress={handleSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#60a5fa" />
+              ) : (
+                <Text style={styles.syncButtonText}>Sync Drift</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Log Trade</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {sortedTrades.length === 0 ? (
@@ -817,6 +852,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#fff' },
   addButton: { backgroundColor: '#4ade80', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   addButtonText: { color: '#0a0e1a', fontWeight: 'bold', fontSize: 14 },
+  syncButton: { backgroundColor: '#60a5fa20', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#60a5fa40', minWidth: 80, alignItems: 'center', justifyContent: 'center' },
+  syncButtonText: { color: '#60a5fa', fontWeight: 'bold', fontSize: 14 },
   emptyCard: { padding: 30, alignItems: 'center' },
   emptyText: { fontSize: 16, color: '#666', marginBottom: 6 },
   emptySubtext: { fontSize: 13, color: '#444', textAlign: 'center' },
