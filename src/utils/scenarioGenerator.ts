@@ -1533,6 +1533,7 @@ function generateGoalUpgradeScenarios(
         fromSymbol: goal.symbol || '',
         toSymbol: bestSymbol,
         toApy: bestApy,
+        toAssetId: `drift_${bestSymbol}`,
       },
     } as WhatIfScenario & { _goalUpgrade: any });
   }
@@ -1731,11 +1732,11 @@ function generateDriftYieldScenario(
     _driftSwap: {
       fromSymbol: primarySymbol,
       toSymbol: topPick.symbol,
-      amount: primaryAsset?.value || swappableValue,
+      amount: (primaryAsset?.metadata as any)?.balance || (primaryAsset?.metadata as any)?.quantity || 0,
       totalValue: swappableValue,
       swaps: sortedByValue.map(a => ({
         fromSymbol: (a.metadata as any)?.symbol || 'USDC',
-        amount: a.value,
+        amount: (a.metadata as any)?.balance || (a.metadata as any)?.quantity || 0,
       })),
     },
 

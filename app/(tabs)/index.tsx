@@ -159,13 +159,21 @@ export default function HomeScreen() {
       if (upgrade?.goalId) {
         try {
           const { updateGoal } = await import('../../src/services/goals');
+          // Find the target asset to get its mint and current balance
+          const targetAsset = useStore.getState().assets.find(a => a.id === upgrade.toAssetId);
+          const targetMint = (targetAsset?.metadata as any)?.mint || '';
+          const currentBalance = (targetAsset?.metadata as any)?.balance || (targetAsset?.metadata as any)?.quantity || 0;
           await updateGoal(upgrade.goalId, {
             symbol: upgrade.toSymbol,
             name: `${upgrade.toSymbol} Accumulation`,
             targetUnit: upgrade.toSymbol,
+            currentAmount: currentBalance,
+            ...(targetMint ? { mint: targetMint } : {}),
+            ...(upgrade.toAssetId ? { autoSource: { type: 'asset_tokens' as const, sourceId: upgrade.toAssetId } } : {}),
           });
           setShowModal(false);
           reset();
+          generateScenarios(); // Refresh so the card disappears
           Alert.alert('Goal Updated! 🎉', `Your goal now targets ${upgrade.toSymbol}.`, [{ text: 'OK' }]);
         } catch (err: any) {
           Alert.alert('Error', err.message || 'Failed to update goal');
