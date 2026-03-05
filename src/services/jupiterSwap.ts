@@ -422,14 +422,14 @@ export function scenarioToSwapParams(
  * Check if a scenario has an executable on-chain action.
  */
 export function isOnChainScenario(scenarioType: string): boolean {
-  return ['invest_cash', 'perena_yield', 'stake_crypto', 'drift_yield', 'goal_upgrade'].includes(scenarioType);
+  return ['invest_cash', 'perena_yield', 'stake_crypto', 'drift_yield'].includes(scenarioType);
 }
 
 /**
  * Check if a scenario should use Drift's native swap instead of Jupiter.
  */
 export function isDriftSwapScenario(scenarioType: string): boolean {
-  return ['drift_yield', 'goal_upgrade'].includes(scenarioType);
+  return ['drift_yield'].includes(scenarioType);
 }
 
 /**

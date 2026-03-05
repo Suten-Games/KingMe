@@ -153,8 +153,29 @@ export default function HomeScreen() {
   //   catch { Alert.alert('Error', 'Failed to apply scenario'); }
   // };
   const handleApplyScenario = async (s: WhatIfScenario) => {
-    // Drift swap scenarios (drift_yield, goal_upgrade): execute via Drift native swap
-    if (s.type === 'drift_yield' || s.type === 'goal_upgrade') {
+    // Goal upgrade: just update the goal in-app (no on-chain action)
+    if (s.type === 'goal_upgrade') {
+      const upgrade = (s as any)._goalUpgrade;
+      if (upgrade?.goalId) {
+        try {
+          const { updateGoal } = await import('../../src/services/goals');
+          await updateGoal(upgrade.goalId, {
+            symbol: upgrade.toSymbol,
+            name: `${upgrade.toSymbol} Accumulation`,
+            targetUnit: upgrade.toSymbol,
+          });
+          setShowModal(false);
+          reset();
+          Alert.alert('Goal Updated! 🎉', `Your goal now targets ${upgrade.toSymbol}.`, [{ text: 'OK' }]);
+        } catch (err: any) {
+          Alert.alert('Error', err.message || 'Failed to update goal');
+        }
+      }
+      return;
+    }
+
+    // Drift swap scenarios: execute via Drift native swap
+    if (s.type === 'drift_yield') {
       const success = await applyWithSwap(s);
       if (success) {
         // On-chain: modal stays open showing success + tx signature

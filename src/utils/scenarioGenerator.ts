@@ -1448,22 +1448,21 @@ function generateGoalUpgradeScenarios(
 
     const goalRate = driftRates[goal.symbol || '']?.depositApy || 0;
 
-    // Find best alternative in the same category
-    const candidates = category === 'staking' ? STAKING_TOKENS : STABLECOIN_TOKENS;
-    let bestSymbol = '';
-    let bestApy = 0;
-    for (const candidate of candidates) {
-      // Find the actual symbol casing from driftRates keys
-      const rateKey = Object.keys(driftRates).find(k => k.toUpperCase() === candidate);
-      if (!rateKey) continue;
-      const apy = driftRates[rateKey].depositApy;
-      if (apy > bestApy) {
-        bestApy = apy;
-        bestSymbol = rateKey;
-      }
-    }
+    // Find best alternative using the same yield options as drift_yield
+    // This ensures both scenarios recommend the same token (e.g., jitoSOL)
+    const yieldOptions = buildDriftYieldOptions(driftRates);
+    const categoryOptions = yieldOptions.filter(opt => {
+      const optCategory = getTokenCategory(opt.symbol.toUpperCase());
+      return optCategory === category;
+    });
 
-    if (!bestSymbol || bestSymbol.toUpperCase() === sym) continue;
+    const best = categoryOptions
+      .filter(opt => opt.symbol.toUpperCase() !== sym)
+      .sort((a, b) => b.apy - a.apy)[0];
+
+    if (!best) continue;
+    const bestSymbol = best.symbol;
+    const bestApy = best.apy;
 
     // Only trigger if best alternative is >2x the goal's APY (or goal is 0% and best > 1%)
     const significantlyBetter = goalRate > 0
@@ -1580,9 +1579,17 @@ function buildDriftYieldOptions(
     ];
   }
 
-  // Build options from live rates — only include tokens with > 0.1% APY
+  // LST base staking yields (not captured in Drift deposit rates)
+  const LST_STAKING_APY: Record<string, number> = {
+    jitoSOL: 7.5,
+    mSOL: 6.8,
+    bSOL: 6.5,
+    dSOL: 6.0,
+    INF: 7.0,
+  };
+
+  // Build options from live rates — blend staking yield + Drift deposit rate
   return Object.entries(driftRates)
-    .filter(([_, rate]) => rate.depositApy > 0.1)
     .map(([symbol, rate]) => {
       const info = DRIFT_TOKEN_INFO[symbol] || {
         name: `${symbol} on Drift`,
@@ -1590,15 +1597,21 @@ function buildDriftYieldOptions(
         description: `${symbol} deposit on Drift`,
         action: `Deposit ${symbol} on Drift`,
       };
+      const stakingApy = LST_STAKING_APY[symbol] || 0;
+      const totalApy = Math.round((stakingApy + rate.depositApy) * 100) / 100;
+      if (totalApy <= 0.1) return null;
       return {
         symbol,
         name: info.name,
-        apy: rate.depositApy,
+        apy: totalApy,
         type: info.type,
-        description: `${info.description} (${rate.depositApy}% APY live)`,
+        description: stakingApy > 0
+          ? `${info.description} (${stakingApy}% staking + ${rate.depositApy}% Drift)`
+          : `${info.description} (${rate.depositApy}% APY live)`,
         action: info.action,
       };
     })
+    .filter((opt): opt is DriftYieldOption => opt !== null)
     .sort((a, b) => b.apy - a.apy);
 }
 
