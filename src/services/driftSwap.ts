@@ -2,8 +2,8 @@
 // ==============================================================
 // Client-side Drift spot swap service.
 // Calls the Vercel API to build an unsigned placeAndTakeSpotOrder
-// transaction, then signs via MWA and submits to Solana RPC.
-// Same pattern as jupiterSwap.ts.
+// transaction, then signs via wallet and submits to Solana RPC.
+// Uses signAndSendTransaction on web (Phantom requires it).
 // ==============================================================
 
 import {
@@ -11,6 +11,7 @@ import {
   VersionedTransaction,
   TransactionConfirmationStrategy,
 } from '@solana/web3.js';
+import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export interface DriftSwapParams {
   subAccount?: number;
   fromSymbol: string;
   toSymbol: string;
-  /** Amount in token units (e.g., 1.5 SOL) */
+  /** Amount in token units (e.g., 100 syrupUSDC) */
   amount: number;
 }
 
@@ -52,11 +53,17 @@ function base64ToUint8Array(base64: string): Uint8Array {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Execute a Drift spot swap: build tx via API → sign via MWA → submit to RPC.
+ * Execute a Drift collateral swap.
+ *
+ * On web: uses signAndSendTransaction (Phantom blocks signTransaction on
+ * untrusted domains — signAndSendTransaction shows tx details and is allowed).
+ *
+ * On mobile: uses signTransaction + manual RPC submit (MWA pattern).
  */
 export async function executeDriftSwap(
   params: DriftSwapParams,
   signTransaction: (transaction: any) => Promise<any>,
+  signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
 ): Promise<DriftSwapResult> {
   const { wallet, subAccount, fromSymbol, toSymbol, amount } = params;
 
@@ -65,8 +72,9 @@ export async function executeDriftSwap(
   }
 
   const url = `${API_BASE}/api/drift/swap`;
+  const isWeb = Platform.OS === 'web';
 
-  console.log(`[DRIFT-SWAP] Executing: ${amount} ${fromSymbol} → ${toSymbol}`);
+  console.log(`[DRIFT-SWAP] Executing: ${amount} ${fromSymbol} → ${toSymbol} (${isWeb ? 'web' : 'mobile'})`);
 
   try {
     // ── 1. Get unsigned transaction from API ─────────────────
@@ -104,41 +112,37 @@ export async function executeDriftSwap(
     const transactionBuffer = base64ToUint8Array(txBase64);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...', {
-      version: transaction.version,
-      signaturesCount: transaction.signatures?.length,
-      messageAccountKeys: transaction.message?.staticAccountKeys?.length,
-    });
+    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...');
 
-    // ── 3. Sign with wallet (Phantom on web, MWA on mobile) ──
-    let signedTransaction;
-    try {
-      signedTransaction = await signTransaction(transaction);
-    } catch (signError: any) {
-      console.error('[DRIFT-SWAP] Sign error:', signError);
-      throw new Error(signError.message?.includes('authorized')
-        ? 'Phantom needs transaction signing permission. Disconnect and reconnect your wallet, then approve when prompted.'
-        : signError.message || 'Failed to sign transaction');
+    // ── 3. Sign + submit ─────────────────────────────────────
+    let signature: string;
+
+    if (isWeb && signAndSendTransaction) {
+      // Web: Phantom requires signAndSendTransaction (it handles RPC submission)
+      console.log('[DRIFT-SWAP] Using signAndSendTransaction (web/Phantom)...');
+      const result = await signAndSendTransaction(transaction);
+      signature = result.signature;
+      console.log(`[DRIFT-SWAP] Phantom submitted: ${signature}`);
+    } else {
+      // Mobile (MWA): sign locally, then submit to RPC ourselves
+      console.log('[DRIFT-SWAP] Using signTransaction + manual submit (mobile)...');
+      const signedTransaction = await signTransaction(transaction);
+
+      const connection = new Connection(RPC_URL, 'confirmed');
+      const rawTransaction = signedTransaction.serialize
+        ? signedTransaction.serialize()
+        : signedTransaction;
+
+      signature = await connection.sendRawTransaction(rawTransaction, {
+        skipPreflight: false,
+        maxRetries: 3,
+        preflightCommitment: 'confirmed',
+      });
+      console.log(`[DRIFT-SWAP] Submitted: ${signature}`);
     }
 
-    console.log('[DRIFT-SWAP] Transaction signed, submitting...');
-
-    // ── 4. Submit to Solana RPC ──────────────────────────────
+    // ── 4. Confirm transaction ───────────────────────────────
     const connection = new Connection(RPC_URL, 'confirmed');
-
-    const rawTransaction = signedTransaction.serialize
-      ? signedTransaction.serialize()
-      : signedTransaction;
-
-    const signature = await connection.sendRawTransaction(rawTransaction, {
-      skipPreflight: false,
-      maxRetries: 3,
-      preflightCommitment: 'confirmed',
-    });
-
-    console.log(`[DRIFT-SWAP] Submitted: ${signature}`);
-
-    // ── 5. Confirm transaction ───────────────────────────────
     const latestBlockhash = await connection.getLatestBlockhash('confirmed');
 
     const confirmStrategy: TransactionConfirmationStrategy = {
@@ -168,10 +172,12 @@ export async function executeDriftSwap(
     console.error('[DRIFT-SWAP] Error:', error);
 
     let message = error.message || 'Drift swap failed';
-    if (message.includes('User rejected')) {
+    if (message.includes('User rejected') || message.includes('user rejected')) {
       message = 'Transaction cancelled by user';
     } else if (message.includes('insufficient')) {
       message = 'Insufficient balance for this swap';
+    } else if (message.includes('Blocked')) {
+      message = 'Phantom blocked the request. Try clicking "Proceed anyway" in the Phantom popup.';
     }
 
     return {

@@ -31,6 +31,7 @@ interface WalletContextType {
   disconnect: () => void;
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   signTransaction: (transaction: any) => Promise<any>;
+  signAndSendTransaction: (transaction: any) => Promise<{ signature: string }>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -293,6 +294,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [connected, publicKey, activeAdapter]);
 
+  // ── Sign AND Send Transaction (Phantom-preferred on web) ──────────────────
+  // Phantom blocks signTransaction on untrusted domains but allows
+  // signAndSendTransaction because it shows tx details and controls submission.
+
+  const signAndSendTransaction = useCallback(async (transaction: any): Promise<{ signature: string }> => {
+    if (!connected || !publicKey) throw new Error('Wallet not connected');
+    if (!activeAdapter) throw new Error('No active wallet adapter');
+
+    try {
+      // Phantom and most wallets support signAndSendTransaction
+      if (activeAdapter.signAndSendTransaction) {
+        const result = await activeAdapter.signAndSendTransaction(transaction);
+        const sig = result?.signature || result?.publicKey || result;
+        return { signature: typeof sig === 'string' ? sig : sig?.toString?.() || '' };
+      }
+      // Fallback: sign then send manually
+      const signed = await activeAdapter.signTransaction(transaction);
+      throw new Error('signAndSendTransaction not supported — use signTransaction fallback');
+    } catch (error: any) {
+      console.error('[Wallet] signAndSendTransaction failed:', error);
+      throw error;
+    }
+  }, [connected, publicKey, activeAdapter]);
+
   return (
     <WalletContext.Provider
       value={{
@@ -307,6 +332,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         disconnect,
         signMessage,
         signTransaction,
+        signAndSendTransaction,
       }}
     >
       {children}

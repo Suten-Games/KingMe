@@ -45,7 +45,7 @@ export interface SwapScenarioState {
 }
 
 export function useSwapScenario() {
-  const { publicKey, signTransaction, connected } = useWallet();
+  const { publicKey, signTransaction, signAndSendTransaction, connected } = useWallet();
   const applyScenario = useStore((s) => s.applyScenario);
   const syncWalletAssets = useStore((s) => s.syncWalletAssets);
   const wallets = useStore((s) => s.wallets);
@@ -218,7 +218,8 @@ export function useSwapScenario() {
           toSymbol,
           amount: upgrade?.amount || 0,
         },
-        signTransaction
+        signTransaction,
+        signAndSendTransaction,
       );
 
       if (!driftResult.success) {
@@ -350,7 +351,7 @@ export function useSwapScenario() {
     });
 
     return true;
-  }, [connected, publicKey, signTransaction, applyScenario, syncWalletAssets, wallets, swapState.quote]);
+  }, [connected, publicKey, signTransaction, signAndSendTransaction, applyScenario, syncWalletAssets, wallets, swapState.quote]);
 
   /**
    * Get a human-readable status message for the current swap state.
