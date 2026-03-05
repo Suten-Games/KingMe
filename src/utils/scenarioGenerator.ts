@@ -141,52 +141,10 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (driftYieldScenario) scenarios.push(driftYieldScenario);
 
-  // ── TEST: Drift swap syrupUSDC → jitoSOL ($100) ──────────
-  // TODO: Remove after verifying Drift swap flow works
-  scenarios.unshift({
-    id: 'test_drift_swap',
-    type: 'goal_upgrade',
-    title: 'TEST: Swap ~$100 syrupUSDC → jitoSOL on Drift',
-    description: 'Test swap: sell 100 syrupUSDC (~$100) for jitoSOL via Drift collateral swap (Jupiter routing). Remove this scenario after testing.',
-    emoji: '🧪',
-    difficulty: 'easy',
-    timeframe: 'Now',
-    changes: {},
-    impact: {
-      freedomBefore: currentFreedom,
-      freedomAfter: currentFreedom,
-      freedomDelta: 0,
-      monthlyIncomeBefore: currentMonthlyIncome,
-      monthlyIncomeAfter: currentMonthlyIncome,
-      monthlyIncomeDelta: 0,
-      annualIncomeDelta: 0,
-      investmentRequired: 0,
-      roi: 0,
-    },
-    reasoning: 'Test transaction to verify Drift on-chain swap flow works end-to-end. Swapping ~$100 of syrupUSDC for jitoSOL. If something goes wrong, max $100 at risk.',
-    risks: ['This is a test — $100 max exposure', 'Transaction may fail if Drift liquidity is thin'],
-    steps: [
-      'Tap Apply to start the Drift swap',
-      'MWA will prompt you to sign',
-      'Watch for on-chain confirmation',
-      'Check Drift balances after',
-    ],
-    _goalUpgrade: {
-      goalId: null,  // No goal update — just test the swap
-      fromSymbol: 'syrupUSDC',
-      toSymbol: 'jitoSOL',
-      amount: 100,   // 100 syrupUSDC (~$100) — ExactIn swap mode
-    },
-  } as any);
-
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
 
-  // Return top 5 + always include the test scenario
-  const testScenario = scenarios.find(s => s.id === 'test_drift_swap');
-  const others = scenarios.filter(s => s.id !== 'test_drift_swap').slice(0, 5);
-  if (testScenario) others.unshift(testScenario);
-  return others;
+  return scenarios.slice(0, 5);
 }
 
 // ═══════════════════════════════════════════════════════════════
