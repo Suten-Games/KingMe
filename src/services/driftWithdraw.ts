@@ -16,7 +16,7 @@ import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 // ── Types ────────────────────────────────────────────────────

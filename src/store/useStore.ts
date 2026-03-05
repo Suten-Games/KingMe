@@ -843,7 +843,7 @@ export const useStore = create<AppState>((set, get) => ({
     const wallet = state.wallets?.[0];
     if (!wallet) return { imported: 0, error: 'No wallet connected' };
 
-    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
     const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
 
     try {
@@ -1494,7 +1494,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // Call your Vercel API
-      const response = await fetch('https://kingme.money/api/wallet/sync', {
+      const response = await fetch('https://kingme-api.vercel.app/api/wallet/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress, manualMints }),
@@ -1727,7 +1727,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // ─── Drift Balance Sync ──────────────────────────────────────────────────
   syncDriftAssets: async (walletAddress: string) => {
-    const DRIFT_API_BASE = 'https://kingme.money/api/drift';
+    const DRIFT_API_BASE = 'https://kingme-api.vercel.app/api/drift';
     // RPC URL: try client env vars, but API has its own fallback via HELIUS_RPC_URL
     const heliusKey = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
     const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC

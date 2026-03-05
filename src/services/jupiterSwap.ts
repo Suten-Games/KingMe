@@ -15,7 +15,7 @@ import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
 // Point to your Vercel deployment. In dev, this might be localhost.
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
 
 // Helius or other Solana RPC (you already have HELIUS_API_KEY server-side;
 // for client-side RPC you can use the public endpoint or a dedicated one)
@@ -27,7 +27,7 @@ function getApiBase(): string {
     console.error(
       '[JUPITER] ❌ EXPO_PUBLIC_API_URL is not set or is still the placeholder!\n' +
       '  Current value: "' + API_BASE + '"\n' +
-      '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://kingme.money`\n' +
+      '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://kingme-api.vercel.app`\n' +
       '  Then rebuild with `eas build`'
     );
     throw new Error(
