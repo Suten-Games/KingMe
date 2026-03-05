@@ -104,10 +104,22 @@ export async function executeDriftSwap(
     const transactionBuffer = base64ToUint8Array(txBase64);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...');
+    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...', {
+      version: transaction.version,
+      signaturesCount: transaction.signatures?.length,
+      messageAccountKeys: transaction.message?.staticAccountKeys?.length,
+    });
 
-    // ── 3. Sign with wallet (MWA) ────────────────────────────
-    const signedTransaction = await signTransaction(transaction);
+    // ── 3. Sign with wallet (Phantom on web, MWA on mobile) ──
+    let signedTransaction;
+    try {
+      signedTransaction = await signTransaction(transaction);
+    } catch (signError: any) {
+      console.error('[DRIFT-SWAP] Sign error:', signError);
+      throw new Error(signError.message?.includes('authorized')
+        ? 'Phantom needs transaction signing permission. Disconnect and reconnect your wallet, then approve when prompted.'
+        : signError.message || 'Failed to sign transaction');
+    }
 
     console.log('[DRIFT-SWAP] Transaction signed, submitting...');
 
