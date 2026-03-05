@@ -136,11 +136,11 @@ export default function HomeScreen() {
     if (isStale) refreshMarketPrices().catch(console.error);
   }, []);
 
+  useEffect(() => { generateScenarios(); }, []);
+
   if (!onboardingComplete) {
     return (<View style={styles.loadingContainer}><Text style={styles.loadingText}>Loading...</Text></View>);
   }
-
-  useEffect(() => { generateScenarios(); }, []);
 
   //const handleViewScenario = (s: WhatIfScenario) => { setSelectedScenario(s); setShowModal(true); };
   const handleViewScenario = (s: WhatIfScenario) => {
