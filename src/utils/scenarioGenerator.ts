@@ -1701,6 +1701,11 @@ function generateDriftYieldScenario(
     .map(a => `${(a.metadata as any)?.symbol || a.name} ($${Math.round(a.value).toLocaleString()})`)
     .join(', ');
 
+  // Attach swap metadata — use the largest swappable asset as the primary swap
+  const sortedByValue = [...swappableAssets].sort((a, b) => b.value - a.value);
+  const primaryAsset = sortedByValue[0];
+  const primarySymbol = (primaryAsset?.metadata as any)?.symbol || 'USDC';
+
   return {
     id: 'drift_yield',
     type: 'drift_yield',
@@ -1709,6 +1714,17 @@ function generateDriftYieldScenario(
     emoji: '⚡',
     difficulty: 'easy',
     timeframe: 'This week',
+
+    _driftSwap: {
+      fromSymbol: primarySymbol,
+      toSymbol: topPick.symbol,
+      amount: primaryAsset?.value || swappableValue,
+      totalValue: swappableValue,
+      swaps: sortedByValue.map(a => ({
+        fromSymbol: (a.metadata as any)?.symbol || 'USDC',
+        amount: a.value,
+      })),
+    },
 
     changes: {},
 

@@ -196,9 +196,10 @@ export function useSwapScenario() {
       }
 
       // Extract swap details from scenario
-      const fromSymbol = upgrade?.fromSymbol || '';
-      const toSymbol = upgrade?.toSymbol || '';
-      // For drift_yield scenarios without _goalUpgrade, navigate to Drift page
+      const driftSwap = (scenario as any)._driftSwap;
+      const fromSymbol = upgrade?.fromSymbol || driftSwap?.fromSymbol || '';
+      const toSymbol = upgrade?.toSymbol || driftSwap?.toSymbol || '';
+      const swapAmount = upgrade?.amount || driftSwap?.amount || 0;
       if (!fromSymbol || !toSymbol) {
         try {
           await applyScenario(scenario);
@@ -216,7 +217,7 @@ export function useSwapScenario() {
           wallet: publicKey.toBase58(),
           fromSymbol,
           toSymbol,
-          amount: upgrade?.amount || 0,
+          amount: swapAmount,
         },
         signTransaction,
         signAndSendTransaction,

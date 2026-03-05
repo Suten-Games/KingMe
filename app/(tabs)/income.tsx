@@ -38,6 +38,7 @@ export default function IncomeScreen() {
   const preTaxDeductions = useStore((s) => s.preTaxDeductions || []);
 
   const [selectedPaycheck, setSelectedPaycheck] = useState<IncomeSource | null>(null);
+  const driftTrades = useStore((s) => s.driftTrades || []);
   const wallets = useStore((s) => s.wallets);
   const [skrIncome, setSKRIncome] = useState<SKRIncomeSnapshot | null>(null);
 
@@ -87,6 +88,15 @@ export default function IncomeScreen() {
   const assetTotal = (skrIncome?.monthlyYieldUsd || 0) + assets.reduce((sum, a) => sum + (a.annualIncome / 12), 0);
   const tradingTotal = otherSources.reduce((sum, src) => sum + toMonthly(src.amount, src.frequency), 0);
   const getAccountName = (id: string) => bankAccounts.find((a) => a.id === id)?.name || 'Unknown';
+
+  const driftMonthPnl = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    return driftTrades
+      .filter((t) => { const d = new Date(t.date); return d.getFullYear() === y && d.getMonth() === m; })
+      .reduce((sum, t) => sum + t.pnlUsdc, 0);
+  }, [driftTrades]);
 
   return (
     <View style={s.container}>
@@ -168,6 +178,34 @@ export default function IncomeScreen() {
         </View>
 
         <CollapsibleSection title="Trading & Other" total={`$${tradingTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo`} totalColor={T.blue}>
+          {/* Drift Trading CTA */}
+          {driftTrades.length > 0 ? (
+            <TouchableOpacity onPress={() => router.push('/trading')} activeOpacity={0.7}>
+              <LinearGradient colors={['#0c1a2e', '#0a1220', '#080c18']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={s.driftCtaCard}>
+                <View style={s.driftCtaHeader}>
+                  <Text style={s.driftCtaTitle}>📊 Drift Trading Journal</Text>
+                  <View style={s.driftCtaBadge}><Text style={s.driftCtaBadgeText}>{driftTrades.length} trades</Text></View>
+                </View>
+                <Text style={s.driftCtaSub}>
+                  This month: <Text style={{ color: driftMonthPnl >= 0 ? T.green : T.redBright, fontFamily: T.fontExtraBold }}>
+                    {driftMonthPnl >= 0 ? '+' : '-'}${Math.abs(driftMonthPnl).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </Text>
+                </Text>
+                <View style={s.driftCtaBtn}><Text style={s.driftCtaBtnText}>View Trading Journal →</Text></View>
+              </LinearGradient>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => router.push('/trading')} activeOpacity={0.7}>
+              <LinearGradient colors={['#0c1a2e', '#0a1220', '#080c18']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={s.driftCtaCard}>
+                <Text style={s.driftCtaTitle}>📈 Trade Perpetuals on Drift</Text>
+                <Text style={s.driftCtaDesc}>Track your Drift perps P&L automatically with our Solana integration. Log wins, losses, and see how trading fits into your income.</Text>
+                <View style={s.driftCtaBtn}><Text style={s.driftCtaBtnText}>Start Trading Tracker →</Text></View>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+
           {otherSources.length === 0 ? (
             <View style={s.emptyCard}><Text style={s.emptyText}>No trading income yet</Text><Text style={s.emptySubtext}>Log Drift perpetuals wins, crypto income, or any non-paycheck deposits here.</Text></View>
           ) : (
@@ -414,6 +452,17 @@ const s = StyleSheet.create({
   assetIncomeTotalLabel: { fontSize: 11, color: T.green + 'bb', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8, fontFamily: T.fontBold },
   assetIncomeTotalAmount: { fontSize: 28, color: T.green, fontFamily: T.fontExtraBold },
   assetIncomeTotalAnnual: { fontSize: 14, color: T.textMuted, marginTop: 4, fontFamily: T.fontSemiBold },
+
+  // Drift CTA
+  driftCtaCard: { ...T.cardBase, borderWidth: 1.5, borderColor: T.blue + '50', marginBottom: 14 },
+  driftCtaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  driftCtaTitle: { fontSize: 15, color: T.textPrimary, fontFamily: T.fontBold },
+  driftCtaBadge: { backgroundColor: T.blue + '22', borderWidth: 1, borderColor: T.blue, borderRadius: 16, paddingHorizontal: 8, paddingVertical: 2 },
+  driftCtaBadgeText: { fontSize: 11, color: T.blue, fontFamily: T.fontBold },
+  driftCtaSub: { fontSize: 13, color: T.textSecondary, marginBottom: 10, fontFamily: T.fontRegular },
+  driftCtaDesc: { fontSize: 13, color: T.textSecondary, lineHeight: 19, marginTop: 4, marginBottom: 12, fontFamily: T.fontRegular },
+  driftCtaBtn: { backgroundColor: T.blue, borderRadius: T.radius.sm, paddingVertical: 10, alignItems: 'center' },
+  driftCtaBtnText: { color: '#fff', fontSize: 14, fontFamily: T.fontBold },
 
   // Empty
   emptyCard: { padding: 30, alignItems: 'center' },
