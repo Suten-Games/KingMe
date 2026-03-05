@@ -199,6 +199,7 @@ export type ScenarioType =
   | 'hysa_transfer'
   | 'drift_yield'
   | 'goal_upgrade'
+  | 'drift_withdraw'
   | 'custom';
 
 export interface WhatIfScenario {

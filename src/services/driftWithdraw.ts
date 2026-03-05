@@ -1,9 +1,10 @@
-// src/services/driftSwap.ts
+// src/services/driftWithdraw.ts
 // ==============================================================
-// Client-side Drift spot swap service.
-// Calls the Vercel API to build an unsigned placeAndTakeSpotOrder
+// Client-side Drift withdrawal service.
+// Calls the Vercel API to build an unsigned withdrawal
 // transaction, then signs via wallet and submits to Solana RPC.
-// Uses signAndSendTransaction on web (Phantom requires it).
+// Mirrors driftSwap.ts — web uses signAndSendTransaction,
+// mobile uses signTransaction + manual RPC submit.
 // ==============================================================
 
 import {
@@ -19,21 +20,18 @@ const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 // ── Types ────────────────────────────────────────────────────
-export interface DriftSwapParams {
+export interface DriftWithdrawParams {
   wallet: string;
   subAccount?: number;
-  fromSymbol: string;
-  toSymbol: string;
-  /** Amount in token units (e.g., 100 syrupUSDC) */
-  amount: number;
+  amount: number;    // token units (e.g., 100 = 100 USDC)
+  symbol?: string;   // defaults to 'USDC'
 }
 
-export interface DriftSwapResult {
+export interface DriftWithdrawResult {
   success: boolean;
   signature?: string;
   error?: string;
-  fromSymbol?: string;
-  toSymbol?: string;
+  symbol?: string;
   amount?: number;
 }
 
@@ -53,28 +51,26 @@ function base64ToUint8Array(base64: string): Uint8Array {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Execute a Drift collateral swap.
+ * Execute a Drift withdrawal (token from Drift account → Solana wallet).
  *
- * On web: uses signAndSendTransaction (Phantom blocks signTransaction on
- * untrusted domains — signAndSendTransaction shows tx details and is allowed).
- *
+ * On web: uses signAndSendTransaction (Phantom requires it).
  * On mobile: uses signTransaction + manual RPC submit (MWA pattern).
  */
-export async function executeDriftSwap(
-  params: DriftSwapParams,
+export async function executeDriftWithdraw(
+  params: DriftWithdrawParams,
   signTransaction: (transaction: any) => Promise<any>,
   signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
-): Promise<DriftSwapResult> {
-  const { wallet, subAccount, fromSymbol, toSymbol, amount } = params;
+): Promise<DriftWithdrawResult> {
+  const { wallet, subAccount, amount, symbol = 'USDC' } = params;
 
   if (!API_BASE || API_BASE === 'https://your-app.example.com') {
     return { success: false, error: 'EXPO_PUBLIC_API_URL not configured' };
   }
 
-  const url = `${API_BASE}/api/drift/swap`;
+  const url = `${API_BASE}/api/drift/withdraw`;
   const isWeb = Platform.OS === 'web';
 
-  console.log(`[DRIFT-SWAP] Executing: ${amount} ${fromSymbol} → ${toSymbol} (${isWeb ? 'web' : 'mobile'})`);
+  console.log(`[DRIFT-WITHDRAW] Executing: ${amount} ${symbol} (${isWeb ? 'web' : 'mobile'})`);
 
   try {
     // ── 1. Get unsigned transaction from API ─────────────────
@@ -83,11 +79,11 @@ export async function executeDriftSwap(
       response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet, subAccount, fromSymbol, toSymbol, amount }),
+        body: JSON.stringify({ wallet, subAccount, amount, symbol }),
       });
     } catch (networkError: any) {
-      console.error(`[DRIFT-SWAP] Network error:`, networkError.message);
-      throw new Error('Cannot reach swap server. Check your connection.');
+      console.error(`[DRIFT-WITHDRAW] Network error:`, networkError.message);
+      throw new Error('Cannot reach withdrawal server. Check your connection.');
     }
 
     if (!response.ok) {
@@ -98,34 +94,32 @@ export async function executeDriftSwap(
       } catch {
         errorDetail = await response.text().catch(() => '');
       }
-      console.error(`[DRIFT-SWAP] API error: HTTP ${response.status}`, errorDetail);
-      throw new Error(errorDetail || `Drift swap server error (HTTP ${response.status})`);
+      console.error(`[DRIFT-WITHDRAW] API error: HTTP ${response.status}`, errorDetail);
+      throw new Error(errorDetail || `Drift withdrawal server error (HTTP ${response.status})`);
     }
 
     const { transaction: txBase64, lastValidBlockHeight } = await response.json();
 
     if (!txBase64) {
-      throw new Error('No transaction returned from Drift swap API');
+      throw new Error('No transaction returned from Drift withdrawal API');
     }
 
     // ── 2. Deserialize the versioned transaction ─────────────
     const transactionBuffer = base64ToUint8Array(txBase64);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...');
+    console.log('[DRIFT-WITHDRAW] Transaction deserialized, requesting signature...');
 
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
     if (isWeb && signAndSendTransaction) {
-      // Web: Phantom requires signAndSendTransaction (it handles RPC submission)
-      console.log('[DRIFT-SWAP] Using signAndSendTransaction (web/Phantom)...');
+      console.log('[DRIFT-WITHDRAW] Using signAndSendTransaction (web/Phantom)...');
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
-      console.log(`[DRIFT-SWAP] Phantom submitted: ${signature}`);
+      console.log(`[DRIFT-WITHDRAW] Phantom submitted: ${signature}`);
     } else {
-      // Mobile (MWA): sign locally, then submit to RPC ourselves
-      console.log('[DRIFT-SWAP] Using signTransaction + manual submit (mobile)...');
+      console.log('[DRIFT-WITHDRAW] Using signTransaction + manual submit (mobile)...');
       const signedTransaction = await signTransaction(transaction);
 
       const connection = new Connection(RPC_URL, 'confirmed');
@@ -138,13 +132,10 @@ export async function executeDriftSwap(
         maxRetries: 3,
         preflightCommitment: 'confirmed',
       });
-      console.log(`[DRIFT-SWAP] Submitted: ${signature}`);
+      console.log(`[DRIFT-WITHDRAW] Submitted: ${signature}`);
     }
 
     // ── 4. Confirm transaction ───────────────────────────────
-    // When Phantom submitted via signAndSendTransaction, it already
-    // handled submission — skip client-side confirmation to avoid
-    // hitting the rate-limited public RPC.
     if (!(isWeb && signAndSendTransaction)) {
       const connection = new Connection(RPC_URL, 'confirmed');
       const latestBlockhash = await connection.getLatestBlockhash('confirmed');
@@ -158,29 +149,28 @@ export async function executeDriftSwap(
       const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
 
       if (confirmation.value.err) {
-        console.error('[DRIFT-SWAP] Transaction failed on-chain:', confirmation.value.err);
+        console.error('[DRIFT-WITHDRAW] Transaction failed on-chain:', confirmation.value.err);
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
     }
 
-    console.log(`[DRIFT-SWAP] Confirmed: ${signature}`);
+    console.log(`[DRIFT-WITHDRAW] Confirmed: ${signature}`);
 
     return {
       success: true,
       signature,
-      fromSymbol,
-      toSymbol,
+      symbol,
       amount,
     };
 
   } catch (error: any) {
-    console.error('[DRIFT-SWAP] Error:', error);
+    console.error('[DRIFT-WITHDRAW] Error:', error);
 
-    let message = error.message || 'Drift swap failed';
+    let message = error.message || 'Drift withdrawal failed';
     if (message.includes('User rejected') || message.includes('user rejected')) {
       message = 'Transaction cancelled by user';
     } else if (message.includes('insufficient')) {
-      message = 'Insufficient balance for this swap';
+      message = 'Insufficient balance for this withdrawal';
     } else if (message.includes('Blocked')) {
       message = 'Phantom blocked the request. Try clicking "Proceed anyway" in the Phantom popup.';
     }
@@ -193,8 +183,8 @@ export async function executeDriftSwap(
 }
 
 /**
- * Check if Drift swap service is configured.
+ * Check if Drift withdraw service is configured.
  */
-export function isDriftSwapConfigured(): boolean {
+export function isDriftWithdrawConfigured(): boolean {
   return !!API_BASE && API_BASE !== 'https://your-app.example.com';
 }

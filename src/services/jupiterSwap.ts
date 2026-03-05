@@ -15,7 +15,7 @@ import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
 // Point to your Vercel deployment. In dev, this might be localhost.
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
 
 // Helius or other Solana RPC (you already have HELIUS_API_KEY server-side;
 // for client-side RPC you can use the public endpoint or a dedicated one)
@@ -23,11 +23,11 @@ const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.
 
 // ── Validate API_BASE at module load ─────────────────────────
 function getApiBase(): string {
-  if (!API_BASE || API_BASE === 'https://your-app.vercel.app') {
+  if (!API_BASE || API_BASE === 'https://your-app.example.com') {
     console.error(
       '[JUPITER] ❌ EXPO_PUBLIC_API_URL is not set or is still the placeholder!\n' +
       '  Current value: "' + API_BASE + '"\n' +
-      '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://your-actual-vercel-url.vercel.app`\n' +
+      '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://kingme.money`\n' +
       '  Then rebuild with `eas build`'
     );
     throw new Error(
@@ -422,14 +422,14 @@ export function scenarioToSwapParams(
  * Check if a scenario has an executable on-chain action.
  */
 export function isOnChainScenario(scenarioType: string): boolean {
-  return ['invest_cash', 'perena_yield', 'stake_crypto', 'drift_yield'].includes(scenarioType);
+  return ['invest_cash', 'perena_yield', 'stake_crypto', 'drift_yield', 'drift_withdraw'].includes(scenarioType);
 }
 
 /**
  * Check if a scenario should use Drift's native swap instead of Jupiter.
  */
 export function isDriftSwapScenario(scenarioType: string): boolean {
-  return ['drift_yield'].includes(scenarioType);
+  return ['drift_yield', 'drift_withdraw'].includes(scenarioType);
 }
 
 /**
@@ -464,7 +464,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
  * Use this to conditionally show/hide swap buttons.
  */
 export function isSwapConfigured(): boolean {
-  return !!API_BASE && API_BASE !== 'https://your-app.vercel.app';
+  return !!API_BASE && API_BASE !== 'https://your-app.example.com';
 }
 
 /**

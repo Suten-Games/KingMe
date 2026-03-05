@@ -22,6 +22,7 @@ import {
   type SwapParams,
 } from '../services/jupiterSwap';
 import { executeDriftSwap, isDriftSwapConfigured, type DriftSwapResult } from '../services/driftSwap';
+import { executeDriftWithdraw, type DriftWithdrawResult } from '../services/driftWithdraw';
 import { updateGoal } from '../services/goals';
 import type { WhatIfScenario } from '../types';
 import { useWallet } from '@/providers/wallet-provider';
@@ -179,6 +180,72 @@ export function useSwapScenario() {
         Alert.alert('Error', error.message || 'Failed to apply scenario');
         return false;
       }
+    }
+
+    // ── Drift withdraw scenario ─────────────────────────────
+    if (scenario.type === 'drift_withdraw') {
+      if (!connected || !publicKey) {
+        Alert.alert('Wallet Required', 'Connect your Solana wallet to execute this withdrawal.');
+        return false;
+      }
+
+      const withdrawMeta = (scenario as any)._driftWithdraw;
+      if (!withdrawMeta?.amount) {
+        Alert.alert('Error', 'Missing withdrawal metadata');
+        return false;
+      }
+
+      setSwapState((prev) => ({ ...prev, state: 'signing' }));
+
+      const withdrawResult = await executeDriftWithdraw(
+        {
+          wallet: publicKey.toBase58(),
+          amount: withdrawMeta.amount,
+          symbol: withdrawMeta.symbol || 'USDC',
+        },
+        signTransaction,
+        signAndSendTransaction,
+      );
+
+      if (!withdrawResult.success) {
+        setSwapState((prev) => ({
+          ...prev,
+          state: 'error',
+          error: withdrawResult.error || 'Drift withdrawal failed',
+        }));
+        if (withdrawResult.error !== 'Transaction cancelled by user') {
+          Alert.alert('Withdrawal Failed', withdrawResult.error || 'Something went wrong');
+        }
+        return false;
+      }
+
+      setSwapState((prev) => ({ ...prev, state: 'submitting' }));
+      console.log(`[SWAP_HOOK] Drift withdrawal confirmed: ${withdrawResult.signature}`);
+
+      // Re-sync balances
+      try {
+        if (wallets.length > 0) {
+          await syncWalletAssets(wallets[0]);
+        }
+      } catch (err) {
+        console.warn('[SWAP_HOOK] Post-withdraw sync failed (non-critical):', err);
+      }
+
+      try {
+        await applyScenario(scenario);
+      } catch (err) {
+        console.warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
+      }
+
+      setSwapState({
+        state: 'success',
+        quote: null,
+        result: { success: true, signature: withdrawResult.signature },
+        error: null,
+        isOnChain: true,
+      });
+
+      return true;
     }
 
     // ── Drift swap scenarios (drift_yield, goal_upgrade) ────

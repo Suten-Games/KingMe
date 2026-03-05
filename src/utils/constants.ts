@@ -123,6 +123,9 @@ export const OBLIGATION_CATEGORIES = {
   other: 'Other',
 } as const;
 
+// Drift trading: minimum USDC collateral to keep in account
+export const DRIFT_MIN_COLLATERAL_USD = 500;
+
 // Default APYs for opportunity cost calculations
 export const DEFAULT_APYS = {
   STABLECOIN: 0.08, // 8% for stablecoin yields

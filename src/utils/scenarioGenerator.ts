@@ -4,6 +4,7 @@ import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } f
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 import { detectRecurring } from './csvBankImport';
 import type { Goal } from '../services/goals';
+import { DRIFT_MIN_COLLATERAL_USD } from './constants';
 
 interface UserProfile {
   assets: Asset[];
@@ -140,6 +141,18 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     profile.driftRates || {}
   );
   if (driftYieldScenario) scenarios.push(driftYieldScenario);
+
+  // 13. DRIFT USDC WITHDRAWAL — excess collateral back to wallet
+  const driftWithdrawScenario = generateDriftWithdrawScenario(
+    assets,
+    obligations,
+    debts,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds,
+    profile.goals || []
+  );
+  if (driftWithdrawScenario) scenarios.push(driftWithdrawScenario);
 
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
@@ -1768,6 +1781,120 @@ function generateDriftYieldScenario(
       ...altLines.map(l => `Alternative: ${l}`),
     ],
   };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 13. DRIFT USDC WITHDRAWAL
+// ═══════════════════════════════════════════════════════════════
+
+function generateDriftWithdrawScenario(
+  assets: Asset[],
+  obligations: Obligation[],
+  debts: Debt[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number,
+  goals: Goal[]
+): WhatIfScenario | null {
+  // Find Drift USDC balance
+  const driftUsdc = assets.find(a =>
+    (a.type === 'crypto' || a.type === 'defi') &&
+    ((a.metadata as any)?.protocol?.toLowerCase() === 'drift') &&
+    ((a.metadata as any)?.symbol?.toUpperCase() === 'USDC')
+  );
+
+  if (!driftUsdc) return null;
+
+  // Calculate total Drift collateral value (all Drift assets)
+  const allDriftAssets = assets.filter(a =>
+    (a.type === 'crypto' || a.type === 'defi') &&
+    ((a.metadata as any)?.protocol?.toLowerCase() === 'drift')
+  );
+  const totalDriftCollateral = allDriftAssets.reduce((sum, a) => sum + a.value, 0);
+
+  // Withdrawable = total collateral minus minimum reserve
+  const withdrawableUsd = totalDriftCollateral - DRIFT_MIN_COLLATERAL_USD;
+  // Cap at actual USDC value (don't withdraw non-USDC collateral)
+  const withdrawUsd = Math.min(withdrawableUsd, driftUsdc.value);
+
+  if (withdrawUsd < 50) return null; // not worth suggesting
+
+  // Convert USD to USDC tokens (1:1 for USDC)
+  const withdrawTokens = Math.floor(withdrawUsd);
+
+  // Determine best use case
+  let useCase: string;
+  let description: string;
+  let emoji = '💸';
+
+  // Check if Perena buffer is underfunded
+  const perenaGoal = goals.find(g =>
+    !g.completedAt &&
+    g.strategy === 'accumulate' &&
+    (g.symbol || '').toUpperCase() === 'USD*'
+  );
+  const perenaBalance = assets.find(a =>
+    (a.metadata as any)?.symbol?.toUpperCase() === 'USD*'
+  );
+
+  // Check bank balance relative to monthly expenses
+  const bankAssets = assets.filter(a => a.type === 'bank_account');
+  const totalBankBalance = bankAssets.reduce((sum, a) => sum + a.value, 0);
+
+  if (perenaGoal && perenaBalance && perenaGoal.targetAmount && perenaBalance.value < perenaGoal.targetAmount) {
+    useCase = 'Fund Perena buffer';
+    description = `Withdraw $${withdrawTokens.toLocaleString()} USDC from Drift to fund your Perena USD* position. Your trading buffer goal needs more capital.`;
+    emoji = '🛡️';
+  } else if (monthlyNeeds > 0 && totalBankBalance < monthlyNeeds) {
+    useCase = 'Top up bank account';
+    description = `Withdraw $${withdrawTokens.toLocaleString()} USDC from Drift to your wallet — your bank balance is below 1 month of expenses. Convert to fiat via on-ramp.`;
+    emoji = '🏦';
+  } else {
+    useCase = 'Withdraw excess USDC';
+    description = `You have $${Math.round(totalDriftCollateral).toLocaleString()} in Drift collateral. Withdraw $${withdrawTokens.toLocaleString()} USDC to your wallet while keeping $${DRIFT_MIN_COLLATERAL_USD} minimum for trading.`;
+    emoji = '💸';
+  }
+
+  return {
+    id: 'drift_withdraw',
+    type: 'drift_withdraw',
+    title: `Withdraw $${withdrawTokens.toLocaleString()} USDC from Drift — ${useCase}`,
+    description,
+    emoji,
+    difficulty: 'easy',
+    timeframe: 'Today',
+
+    _driftWithdraw: {
+      symbol: 'USDC',
+      amount: withdrawTokens,
+    },
+
+    changes: {},
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: currentFreedom, // withdrawal doesn't change freedom directly
+      freedomDelta: 0,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+    },
+
+    reasoning: `Your Drift account has $${Math.round(totalDriftCollateral).toLocaleString()} in collateral. Only $${DRIFT_MIN_COLLATERAL_USD} is needed as minimum trading collateral. The excess $${withdrawTokens.toLocaleString()} USDC can be put to better use — ${useCase.toLowerCase()}.`,
+
+    risks: [
+      'Reduces Drift trading collateral (maintains $500 minimum)',
+      'Withdrawal requires on-chain transaction + gas fees',
+    ],
+
+    steps: [
+      `Withdraw ${withdrawTokens} USDC from Drift to your Solana wallet`,
+      '$500 minimum collateral preserved for trading',
+      useCase,
+    ],
+  } as any;
 }
 
 // ═══════════════════════════════════════════════════════════════

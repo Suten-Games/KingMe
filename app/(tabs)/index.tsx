@@ -192,6 +192,15 @@ export default function HomeScreen() {
       return;
     }
 
+    // Drift withdraw: withdraw USDC from Drift to wallet
+    if (s.type === 'drift_withdraw') {
+      const success = await applyWithSwap(s);
+      if (success) {
+        // On-chain: modal stays open showing success + tx signature
+      }
+      return;
+    }
+
     const success = await applyWithSwap(s);
     if (success) {
       const onChain = isOnChainScenario(s.type);
