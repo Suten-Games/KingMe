@@ -29,6 +29,22 @@ export default function TradingScreen() {
 
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // ── month navigation ────────────────────────────────────────────────────────
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth()); // 0-indexed
+
+  const goToPrevMonth = () => {
+    if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
+    else setSelectedMonth(m => m - 1);
+  };
+  const goToNextMonth = () => {
+    if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
+    else setSelectedMonth(m => m + 1);
+  };
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
+  const monthLabel = new Date(selectedYear, selectedMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   // ── trade form state ───────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
@@ -92,12 +108,9 @@ export default function TradingScreen() {
 
   // ── monthly stats ──────────────────────────────────────────────────────────
   const { thisMonthPnL, thisMonthWins, thisMonthLosses, thisMonthTotalAllocated, thisMonthTotalFees } = useMemo(() => {
-    const now = new Date();
-    const thisYear = now.getFullYear();
-    const thisMonth = now.getMonth();
     const monthTrades = driftTrades.filter((t) => {
       const td = new Date(t.date);
-      return td.getFullYear() === thisYear && td.getMonth() === thisMonth;
+      return td.getFullYear() === selectedYear && td.getMonth() === selectedMonth;
     });
     const pnl = monthTrades.reduce((sum, t) => sum + t.pnlUsdc, 0);
     const wins = monthTrades.filter((t) => t.pnlUsdc > 0).length;
@@ -122,13 +135,13 @@ export default function TradingScreen() {
       thisMonthTotalAllocated: totalAlloc,
       thisMonthTotalFees: totalFees,
     };
-  }, [driftTrades]);
+  }, [driftTrades, selectedYear, selectedMonth]);
 
   // ── sync handler ──────────────────────────────────────────────────────────
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const result = await syncDriftTradeHistory();
+      const result = await syncDriftTradeHistory({ year: selectedYear, month: selectedMonth + 1 });
       if (result.error) {
         Alert.alert('Sync Error', result.error);
       } else if (result.imported === 0) {
@@ -317,17 +330,30 @@ export default function TradingScreen() {
     removeDriftTrade(tradeId);
   };
 
-  // ── sorted trades ──────────────────────────────────────────────────────────
-  const sortedTrades = [...driftTrades].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  // ── sorted trades (filtered to selected month) ────────────────────────────
+  const sortedTrades = driftTrades
+    .filter((t) => {
+      const td = new Date(t.date);
+      return td.getFullYear() === selectedYear && td.getMonth() === selectedMonth;
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Month Navigation */}
+        <View style={styles.monthNav}>
+          <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
+            <Text style={styles.monthArrowText}>{'<'}</Text>
+          </TouchableOpacity>
+          <Text style={styles.monthLabel}>{monthLabel}</Text>
+          <TouchableOpacity onPress={goToNextMonth} style={[styles.monthArrow, isCurrentMonth && { opacity: 0.3 }]} disabled={isCurrentMonth}>
+            <Text style={styles.monthArrowText}>{'>'}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Monthly Summary */}
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryTitle}>This Month</Text>
           <View style={styles.summaryRow}>
             <View style={styles.summaryCol}>
               <Text style={styles.summaryLabel}>Net PnL</Text>
@@ -835,6 +861,10 @@ export default function TradingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
   scroll: { flex: 1, padding: 20 },
+  monthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12, gap: 16 },
+  monthArrow: { paddingHorizontal: 14, paddingVertical: 6 },
+  monthArrowText: { fontSize: 22, fontWeight: 'bold', color: '#60a5fa' },
+  monthLabel: { fontSize: 18, fontWeight: '600', color: '#fff', minWidth: 160, textAlign: 'center' },
   summaryBox: {
     backgroundColor: '#1a1f2e',
     borderRadius: 14,
@@ -843,7 +873,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2a2f3e',
   },
-  summaryTitle: { fontSize: 13, color: '#666', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-around' },
   summaryCol: { alignItems: 'center' },
   summaryLabel: { fontSize: 11, color: '#666', marginBottom: 4 },

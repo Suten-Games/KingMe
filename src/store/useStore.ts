@@ -69,7 +69,7 @@ interface AppState extends UserProfile {
   addDriftTrade: (trade: DriftTrade) => void;
   removeDriftTrade: (tradeId: string) => void;
   updateDriftTrade: (tradeId: string, trade: Partial<DriftTrade>) => void;
-  syncDriftTradeHistory: () => Promise<{ imported: number; error?: string }>;
+  syncDriftTradeHistory: (opts?: { year: number; month: number }) => Promise<{ imported: number; error?: string }>;
   addDailyExpense: (expense: DailyExpense) => void;
   removeDailyExpense: (expenseId: string) => void;
   updateDailyExpense: (expenseId: string, expense: Partial<DailyExpense>) => void;
@@ -838,7 +838,7 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
-  syncDriftTradeHistory: async () => {
+  syncDriftTradeHistory: async (opts) => {
     const state = get();
     const wallet = state.wallets?.[0];
     if (!wallet) return { imported: 0, error: 'No wallet connected' };
@@ -850,7 +850,11 @@ export const useStore = create<AppState>((set, get) => ({
       const headers: Record<string, string> = {};
       if (RPC_URL) headers['X-RPC-URL'] = RPC_URL;
 
-      const resp = await fetch(`${API_BASE}/api/drift/history?wallet=${wallet}&limit=200`, { headers });
+      let url = `${API_BASE}/api/drift/history?wallet=${wallet}&limit=200`;
+      if (opts?.year && opts?.month) {
+        url += `&year=${opts.year}&month=${opts.month}`;
+      }
+      const resp = await fetch(url, { headers });
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({ error: resp.statusText }));
         return { imported: 0, error: body.error || `HTTP ${resp.status}` };
