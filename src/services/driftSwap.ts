@@ -142,20 +142,25 @@ export async function executeDriftSwap(
     }
 
     // ── 4. Confirm transaction ───────────────────────────────
-    const connection = new Connection(RPC_URL, 'confirmed');
-    const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+    // When Phantom submitted via signAndSendTransaction, it already
+    // handled submission — skip client-side confirmation to avoid
+    // hitting the rate-limited public RPC.
+    if (!(isWeb && signAndSendTransaction)) {
+      const connection = new Connection(RPC_URL, 'confirmed');
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
 
-    const confirmStrategy: TransactionConfirmationStrategy = {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
-    };
+      const confirmStrategy: TransactionConfirmationStrategy = {
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
+      };
 
-    const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
+      const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
 
-    if (confirmation.value.err) {
-      console.error('[DRIFT-SWAP] Transaction failed on-chain:', confirmation.value.err);
-      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      if (confirmation.value.err) {
+        console.error('[DRIFT-SWAP] Transaction failed on-chain:', confirmation.value.err);
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      }
     }
 
     console.log(`[DRIFT-SWAP] Confirmed: ${signature}`);
