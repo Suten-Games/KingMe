@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import '../src/polyfills';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Stack } from 'expo-router';
 import { WalletProvider } from '@/providers/wallet-provider';
@@ -17,7 +17,7 @@ import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
 import { useAutoBackup } from '../src/hooks/useAutoBackup';
 import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
-import { Analytics } from '@vercel/analytics/react';
+import { inject } from '@vercel/analytics';
 
 /** Runs hooks that depend on WalletProvider context. */
 function WalletHooks() {
@@ -36,6 +36,9 @@ export default function RootLayout() {
 
   useBadgeChecker();
 
+  // Inject Vercel Analytics on web
+  useEffect(() => { inject(); }, []);
+
   // Show splash while fonts load
   if (!fontsLoaded) {
     return (
@@ -51,7 +54,6 @@ export default function RootLayout() {
 
   return (
     <PrivyWrapper>
-      <Analytics />
       <BadgeToast />
       <WalletProvider>
         <WalletHooks />
