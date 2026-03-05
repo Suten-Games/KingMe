@@ -214,6 +214,7 @@ export function useSwapScenario() {
       const driftResult = await executeDriftSwap(
         {
           wallet: publicKey.toBase58(),
+          subAccount: 1,
           fromSymbol,
           toSymbol,
           amount: upgrade?.amount || 0,
