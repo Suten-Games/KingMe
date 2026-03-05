@@ -13,6 +13,8 @@ import { useStore } from '../../src/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import { parseCSVTransactions, detectRecurring, autoCategorize } from '../../src/utils/csvBankImport';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 // If you have a theme file:
 // import { T } from '../../src/theme';
@@ -532,6 +534,18 @@ export default function BankAccountDetailScreen() {
   };
 
   // ── CSV Import ──
+  const handlePickCSVFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/*'], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      const text = await FileSystem.readAsStringAsync(file.uri);
+      setCsvText(text);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to read file');
+    }
+  };
+
   const handleParseCSV = () => {
     if (!csvText.trim() || !id) return;
     const result = parseCSVTransactions(csvText, id);
@@ -1281,6 +1295,11 @@ export default function BankAccountDetailScreen() {
                 Supported formats: Chase, BoA, Wells Fargo, Capital One, and most standard CSVs with Date, Description, and Amount columns.
               </Text>
 
+              <TouchableOpacity style={s.pickFileBtn} onPress={handlePickCSVFile}>
+                <Text style={s.pickFileBtnText}>Choose CSV File</Text>
+              </TouchableOpacity>
+              <Text style={[s.importHelp, { textAlign: 'center', marginTop: 4, marginBottom: 8 }]}>or paste below</Text>
+
               <TextInput
                 style={s.csvInput}
                 placeholder={`Date,Description,Amount\n01/15/2026,Walmart,-45.67\n01/15/2026,Payroll Deposit,3500.00`}
@@ -1599,6 +1618,8 @@ const s = StyleSheet.create({
 
   // Import
   importHelp: { fontSize: 13, color: '#888', lineHeight: 20, marginBottom: 10, fontFamily: 'Inter_400Regular' },
+  pickFileBtn: { backgroundColor: '#1a2040', borderRadius: 12, paddingVertical: 14, alignItems: 'center' as const, borderWidth: 1.5, borderColor: '#f4c430', borderStyle: 'dashed' as const, marginBottom: 4 },
+  pickFileBtnText: { color: '#f4c430', fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   csvInput: { backgroundColor: '#0c1020', borderRadius: 12, padding: 14, fontSize: 13, color: '#fff', borderWidth: 1.5, borderColor: '#1a2040', minHeight: 160, fontFamily: 'Inter_400Regular' },
   importPreviewBox: { backgroundColor: '#0c1020', borderRadius: 12, padding: 16, marginTop: 16, borderWidth: 1.5, borderColor: '#4ade8040' },
   importPreviewTitle: { fontSize: 16, color: '#4ade80', marginBottom: 8, fontFamily: 'Inter_700Bold' },

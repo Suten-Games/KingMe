@@ -13,6 +13,8 @@ import { useStore } from '../../src/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import { parseCSVTransactions, detectRecurring, autoCategorize } from '../../src/utils/csvBankImport';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { T } from '../../src/theme';
 
 // ─── View modes ────────────────────────────────────────────────────────────────
@@ -213,6 +215,17 @@ export default function DebtDetailScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => removeBankTransaction(txId) },
     ]);
+  };
+  const handlePickCSVFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/*'], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      const text = await FileSystem.readAsStringAsync(file.uri);
+      setCsvText(text);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to read file');
+    }
   };
   const handleParseCSV = () => {
     if (!csvText.trim() || !id) return;
@@ -615,6 +628,11 @@ export default function DebtDetailScreen() {
               <Text style={s.modalHelper}>
                 Paste your credit card statement CSV below. Supports Capital One, Chase, Discover, Amex, and most standard formats.
               </Text>
+              <TouchableOpacity style={s.pickFileBtn} onPress={handlePickCSVFile}>
+                <Text style={s.pickFileBtnText}>Choose CSV File</Text>
+              </TouchableOpacity>
+              <Text style={[s.modalHelper, { textAlign: 'center', marginTop: 4, marginBottom: 8 }]}>or paste below</Text>
+
               <TextInput style={[s.modalInput, { height: 200, textAlignVertical: 'top' }]} multiline
                 placeholder="Paste CSV data here..." placeholderTextColor="#555"
                 value={csvText} onChangeText={(t) => { setCsvText(t); setImportPreview(null); }} />
@@ -800,6 +818,8 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 22, color: T.redBright, marginBottom: 16, fontFamily: T.fontExtraBold },
   modalHelper: { fontSize: 13, color: T.textMuted, marginBottom: 12, lineHeight: 18, fontFamily: T.fontRegular },
   modalLabel: { fontSize: 15, color: T.textPrimary, marginBottom: 6, marginTop: 12, fontFamily: T.fontBold },
+  pickFileBtn: { backgroundColor: T.bgCard, borderRadius: T.radius.md, paddingVertical: 14, alignItems: 'center' as const, borderWidth: 1.5, borderColor: T.gold, borderStyle: 'dashed' as const, marginBottom: 4 },
+  pickFileBtnText: { color: T.gold, fontFamily: T.fontSemiBold, fontSize: 15 },
   modalInput: { backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 14, fontSize: 15, color: T.textPrimary, borderWidth: 1.5, borderColor: T.border, fontFamily: T.fontRegular },
   typeRow: { flexDirection: 'row', gap: 8 },
   typePill: { flex: 1, padding: 10, borderRadius: T.radius.sm, borderWidth: 1.5, borderColor: T.border, alignItems: 'center', backgroundColor: T.bgCard },

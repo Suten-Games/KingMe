@@ -17,6 +17,7 @@ import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
 import { useAutoBackup } from '../src/hooks/useAutoBackup';
 import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import { Analytics } from '@vercel/analytics/react';
 
 /** Runs hooks that depend on WalletProvider context. */
 function WalletHooks() {
@@ -50,6 +51,7 @@ export default function RootLayout() {
 
   return (
     <PrivyWrapper>
+      <Analytics />
       <BadgeToast />
       <WalletProvider>
         <WalletHooks />
