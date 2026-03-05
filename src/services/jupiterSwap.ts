@@ -15,7 +15,7 @@ import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
 // Point to your Vercel deployment. In dev, this might be localhost.
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || '';
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
 
 // Helius or other Solana RPC (you already have HELIUS_API_KEY server-side;
 // for client-side RPC you can use the public endpoint or a dedicated one)
