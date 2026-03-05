@@ -33,9 +33,19 @@ export function useAutoBackup() {
         if (Date.now() - lastBackup < BACKUP_INTERVAL_MS) return;
 
         runningRef.current = true;
-        console.log('[AUTO-BACKUP] Starting hourly backup...');
 
         const storeData = useStore.getState();
+
+        // Don't overwrite a good backup with empty/fresh state
+        const hasData = (storeData.assets?.length > 0)
+          || (storeData.wallets?.length > 0 && storeData.obligations?.length > 0)
+          || (storeData.income?.salary > 0);
+        if (!hasData) {
+          console.log('[AUTO-BACKUP] Skipped — store looks empty, not overwriting cloud backup');
+          return;
+        }
+
+        console.log('[AUTO-BACKUP] Starting hourly backup...');
         const fullBackup = await buildFullBackup(storeData);
         await saveBackup(fullBackup, signMessage, walletAddress);
 
