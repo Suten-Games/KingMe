@@ -1817,6 +1817,29 @@ export const useStore = create<AppState>((set, get) => ({
       }
       console.log(`[DRIFT-SYNC] Prices from store: ${Object.entries(prices).map(([s,p]) => `${s}=$${(p as number).toFixed(2)}`).join(', ')}`);
 
+      // Fetch missing prices from Jupiter for Drift tokens we have balances for
+      const missingMints: { symbol: string; mint: string }[] = [];
+      for (const b of spotBalances.filter((b: any) => b.balanceType === 'deposit' && b.scaledBalance > 0.001)) {
+        const sym = b.symbol;
+        if (!prices[sym.toUpperCase()] && !prices[sym] && DRIFT_MINTS[sym]) {
+          missingMints.push({ symbol: sym, mint: DRIFT_MINTS[sym] });
+        }
+      }
+      if (missingMints.length > 0) {
+        try {
+          const { fetchPrices } = await import('../services/priceTracker');
+          const fetched = await fetchPrices(missingMints.map(m => m.mint));
+          for (const { symbol, mint } of missingMints) {
+            if (fetched[mint]) {
+              prices[symbol.toUpperCase()] = fetched[mint];
+              console.log(`[DRIFT-SYNC] Fetched ${symbol} price: $${fetched[mint].toFixed(4)}`);
+            }
+          }
+        } catch (err) {
+          console.warn('[DRIFT-SYNC] Failed to fetch missing prices:', err);
+        }
+      }
+
       // 3. Build/merge assets — currentAssets already fetched above for prices
 
       // Index existing Drift assets by symbol for merging
