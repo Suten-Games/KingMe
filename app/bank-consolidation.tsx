@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
 import { getInsightColor } from '../src/services/tradeInsights';
 import {
@@ -160,6 +161,7 @@ export default function BankConsolidation() {
           </Text>
         </View>
       )}
+      <KingMeFooter />
     </ScrollView>
     </View>
   );

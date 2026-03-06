@@ -11,6 +11,7 @@ import { useStore } from '../src/store/useStore';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 
 const DRIFT_LOGO = 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png';
 
@@ -822,6 +823,7 @@ export default function TradingScreen() {
             </View>
           ))
         )}
+        <KingMeFooter />
       </ScrollView>
 
       {/* Modal */}

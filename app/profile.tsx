@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
+import KingMeFooter from '../src/components/KingMeFooter';
 
 /** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
 function crossConfirm(title: string, message: string, onConfirm: () => void) {
@@ -563,6 +564,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <KingMeFooter />
 
       {/* Bank account modals removed — accounts managed in Assets tab */}
 

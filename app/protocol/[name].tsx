@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useMemo } from 'react';
 import { useStore } from '../../src/store/useStore';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
+import KingMeFooter from '../../src/components/KingMeFooter';
 import type { Asset } from '../../src/types';
 
 // ── Protocol info map ────────────────────────────────────────
@@ -314,6 +315,7 @@ export default function ProtocolDetailScreen() {
             );
           })
         )}
+        <KingMeFooter />
       </ScrollView>
 
       {/* AddAssetModal for full edit */}

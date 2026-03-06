@@ -14,6 +14,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '@/store/useStore';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import type { ObligationCategory } from '@/types';
@@ -398,6 +399,7 @@ export default function SpendingPage() {
             <Text style={styles.ctaBtnArrow}>{'\u203A'}</Text>
           </TouchableOpacity>
         )}
+        <KingMeFooter />
       </ScrollView>
 
       {/* Edit Transaction Modal */}

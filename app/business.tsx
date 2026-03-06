@@ -17,6 +17,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
 
 const STORAGE_KEY = 'business_dashboard_data';
@@ -848,6 +849,7 @@ export default function BusinessDashboard() {
           </View>
         </View>
       </Modal>
+      <KingMeFooter />
     </ScrollView>
     </View>
   );

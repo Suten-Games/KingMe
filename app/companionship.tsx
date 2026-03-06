@@ -17,6 +17,7 @@ import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
 import {
   generateCompanionshipInsights, getInsightColor,
@@ -746,6 +747,7 @@ export default function CompanionshipTracker() {
       </Modal>
 
       {/* Import modal removed — companion transactions auto-sync */}
+      <KingMeFooter />
     </ScrollView>
     </View>
   );
