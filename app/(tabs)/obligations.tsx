@@ -103,6 +103,7 @@ function ObligationCategoryPicker({ value, onChange }: { value: BankTransactionC
 export default function ObligationsScreen() {
   const obligations = useStore((state) => state.obligations);
   const bankAccounts = useStore((state) => state.bankAccounts);
+  const bankTransactions = useStore((state) => state.bankTransactions) || [];
   const debts = useStore((state) => state.debts);
   const addObligation = useStore((state) => state.addObligation);
   const removeObligation = useStore((state) => state.removeObligation);
@@ -126,6 +127,28 @@ export default function ObligationsScreen() {
     }
     prevTotalRef.current = totalObligations;
   }, [totalObligations]);
+
+  // Find matching bank transaction for paid obligations
+  const paidTxMap = useMemo(() => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthTx = bankTransactions.filter(t => t.type !== 'income' && t.date.startsWith(currentMonth));
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const map: Record<string, { description: string; amount: number; date: string }> = {};
+    for (const ob of obligations) {
+      if (!ob.isPaidThisMonth) continue;
+      const oName = normalize(ob.name);
+      const oPayee = normalize(ob.payee || '');
+      const match = monthTx.find(t => {
+        const desc = normalize(t.description);
+        const nameMatch = (oName.length > 2 && desc.includes(oName)) || (oPayee.length > 2 && desc.includes(oPayee));
+        const amtClose = ob.amount > 0 && Math.abs(t.amount - ob.amount) / ob.amount < 0.3;
+        return nameMatch || amtClose;
+      });
+      if (match) map[ob.id] = { description: match.description, amount: match.amount, date: match.date };
+    }
+    return map;
+  }, [obligations, bankTransactions]);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
@@ -361,19 +384,28 @@ export default function ObligationsScreen() {
               const category = ob.category || 'other';
               const questions = CHALLENGE_QUESTIONS[category] || CHALLENGE_QUESTIONS.other;
 
+              const paidTx = paidTxMap[ob.id];
+
               return (
               <TouchableOpacity key={ob.id} onPress={() => auditMode ? setExpandedAuditId(isExpanded ? null : ob.id) : handleEditObligation(ob)}>
-                <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                <LinearGradient
+                  colors={ob.isPaidThisMonth ? ['#0a1a0f', '#0f1f14'] : T.gradients.card}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={[
                     s.obligationCard,
-                    { borderColor: auditMode ? ratingMeta.color + '60' : T.gold + '40' },
+                    { borderColor: ob.isPaidThisMonth ? '#22c55e40' : (auditMode ? ratingMeta.color + '60' : T.gold + '40') },
                     auditMode && rating === 'cuttable' && s.obligationCardCuttable,
                   ]}>
                   <View style={s.obligationHeader}>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={s.obligationName}>{ob.name}</Text>
-                        {auditMode && (
+                        {ob.isPaidThisMonth && (
+                          <View style={s.paidStamp}>
+                            <Text style={s.paidStampText}>PAID</Text>
+                          </View>
+                        )}
+                        {auditMode && !ob.isPaidThisMonth && (
                           <View style={[s.ratingBadge, { backgroundColor: ratingMeta.color + '20', borderColor: ratingMeta.color + '60' }]}>
                             <Text style={[s.ratingBadgeText, { color: ratingMeta.color }]}>{ratingMeta.emoji} {ratingMeta.label}</Text>
                           </View>
@@ -391,6 +423,16 @@ export default function ObligationsScreen() {
                         <Text style={s.obligationDueDate}>
                           📅 Due on the {ob.dueDate}{getDaySuffix(ob.dueDate)} of each month
                         </Text>
+                      )}
+                      {ob.isPaidThisMonth && paidTx && (
+                        <View style={s.paidTxRow}>
+                          <Text style={s.paidTxLabel}>✅ Paid {paidTx.date}</Text>
+                          <Text style={s.paidTxDesc} numberOfLines={1}>{paidTx.description}</Text>
+                          <Text style={s.paidTxAmount}>${paidTx.amount.toFixed(2)}</Text>
+                        </View>
+                      )}
+                      {ob.isPaidThisMonth && !paidTx && ob.lastPaidDate && (
+                        <Text style={s.paidTxLabel}>✅ Paid {ob.lastPaidDate}</Text>
                       )}
                     </View>
                     {!ob.isPaidThisMonth && (
@@ -724,6 +766,12 @@ const s = StyleSheet.create({
   cutBtn: { backgroundColor: '#22c55e', borderRadius: T.radius.md, padding: 14, alignItems: 'center' },
   cutBtnText: { color: T.bg, fontSize: 15, fontFamily: T.fontBold },
   paidHint: { fontSize: 13, color: T.textMuted, fontFamily: T.fontRegular, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
+  paidStamp: { backgroundColor: '#22c55e', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
+  paidStampText: { fontSize: 11, fontFamily: T.fontExtraBold, color: '#0a0e1a', letterSpacing: 1.5 },
+  paidTxRow: { backgroundColor: '#22c55e10', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#22c55e20' },
+  paidTxLabel: { fontSize: 12, color: '#22c55e', fontFamily: T.fontMedium, marginTop: 4 },
+  paidTxDesc: { fontSize: 12, color: T.textSecondary, fontFamily: T.fontRegular, marginTop: 2 },
+  paidTxAmount: { fontSize: 13, color: '#22c55e', fontFamily: T.fontBold, marginTop: 2 },
 
   // Tap hint
   auditTapHint: { fontSize: 11, color: T.textDim, marginTop: 8, fontFamily: T.fontRegular, textAlign: 'right' },
