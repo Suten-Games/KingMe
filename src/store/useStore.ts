@@ -609,7 +609,7 @@ export const useStore = create<AppState>((set, get) => ({
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const allTx = state.bankTransactions || [];
-    const monthTx = allTx.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth));
+    const monthTx = allTx.filter(t => t.type !== 'income' && t.date.startsWith(currentMonth));
     if (monthTx.length === 0) return;
 
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -621,10 +621,10 @@ export const useStore = create<AppState>((set, get) => ({
       const oPayee = normalize(o.payee || '');
       const match = monthTx.find(t => {
         const desc = normalize(t.description);
-        const nameMatch = (oName.length > 2 && desc.includes(oName))
-          || (oPayee.length > 2 && desc.includes(oPayee));
+        const nameMatch = (oName.length >= 4 && desc.includes(oName))
+          || (oPayee.length >= 4 && desc.includes(oPayee));
         const catMatch = o.transactionCategory && t.category === o.transactionCategory;
-        const amtClose = o.amount > 0 && Math.abs(t.amount - o.amount) / o.amount < 0.2;
+        const amtClose = o.amount > 0 && Math.abs(t.amount - o.amount) / o.amount < 0.3;
         return (nameMatch || catMatch) && amtClose;
       });
       if (match) {
@@ -641,10 +641,10 @@ export const useStore = create<AppState>((set, get) => ({
       const dPayee = normalize(d.payee || '');
       const match = monthTx.find(t => {
         const desc = normalize(t.description);
-        const nameMatch = (dName.length > 2 && desc.includes(dName))
-          || (dPayee.length > 2 && desc.includes(dPayee));
+        const nameMatch = (dName.length >= 4 && desc.includes(dName))
+          || (dPayee.length >= 4 && desc.includes(dPayee));
         const catMatch = d.transactionCategory && t.category === d.transactionCategory;
-        const amtClose = d.monthlyPayment > 0 && Math.abs(t.amount - d.monthlyPayment) / d.monthlyPayment < 0.2;
+        const amtClose = d.monthlyPayment > 0 && Math.abs(t.amount - d.monthlyPayment) / d.monthlyPayment < 0.3;
         return (nameMatch || catMatch) && amtClose;
       });
       if (match) {

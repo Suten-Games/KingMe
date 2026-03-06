@@ -133,7 +133,9 @@ export default function ObligationsScreen() {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const monthTx = bankTransactions.filter(t => t.type !== 'income' && t.date.startsWith(currentMonth));
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const tokenize = (s: string) => normalize(s).split(' ').filter(t => t.length >= 3);
+    const GENERIC = new Set(['the','and','for','from','with','payment','pay','card','bill','loan','auto','online','transfer','ach','debit','credit','monthly','subscription']);
     const map: Record<string, { description: string; amount: number; date: string }> = {};
     for (const ob of obligations) {
       if (!ob.isPaidThisMonth) continue;
@@ -141,9 +143,14 @@ export default function ObligationsScreen() {
       const oPayee = normalize(ob.payee || '');
       const match = monthTx.find(t => {
         const desc = normalize(t.description);
-        const nameMatch = (oName.length > 2 && desc.includes(oName)) || (oPayee.length > 2 && desc.includes(oPayee));
-        const amtClose = ob.amount > 0 && Math.abs(t.amount - ob.amount) / ob.amount < 0.3;
-        return nameMatch || amtClose;
+        // Require name or payee substring match (min 4 chars)
+        const nameMatch = oName.length >= 4 && desc.includes(oName);
+        const payeeMatch = oPayee.length >= 4 && desc.includes(oPayee);
+        // Token overlap: at least one meaningful token from obligation found in description
+        const obTokens = tokenize(ob.name + ' ' + (ob.payee || '')).filter(t => !GENERIC.has(t));
+        const descTokens = tokenize(t.description);
+        const tokenMatch = obTokens.length > 0 && obTokens.some(tok => descTokens.includes(tok));
+        return nameMatch || payeeMatch || tokenMatch;
       });
       if (match) map[ob.id] = { description: match.description, amount: match.amount, date: match.date };
     }
