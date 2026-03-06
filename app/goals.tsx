@@ -360,6 +360,13 @@ export default function GoalsScreen() {
                     {goal.notes ? ` · ${goal.notes}` : ''}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  style={st.goalDeleteBtn}
+                  onPress={(e) => { e.stopPropagation(); handleDelete(goal); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={st.goalDeleteText}>✕</Text>
+                </TouchableOpacity>
                 <View style={st.goalPctCircle}>
                   <Text style={[st.goalPctText, { color: pColor }]}>
                     {goal.progressPct.toFixed(0)}%
@@ -840,6 +847,8 @@ const st = StyleSheet.create({
   goalName: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 2 },
   goalNameComplete: { textDecorationLine: 'line-through', color: '#888' },
   goalType: { fontSize: 11, color: '#888' },
+  goalDeleteBtn: { padding: 4, marginRight: 4 },
+  goalDeleteText: { fontSize: 16, color: '#ff444480', fontWeight: 'bold' },
   goalPctCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#080c18', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#1a204060' },
   goalPctText: { fontSize: 15, fontWeight: '800' },
 
