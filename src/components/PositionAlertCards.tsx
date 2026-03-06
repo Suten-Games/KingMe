@@ -257,16 +257,6 @@ export default function PositionAlertCards() {
     }
   }, [router, assets, connected, publicKey, signTransaction, handleDismiss, showToast]);
 
-  // Filter out dismissed alerts
-  const visibleAlerts = alerts.filter(a => {
-    const baseId = a.id.replace(/-\d+$/, '');
-    return !dismissed.has(baseId);
-  });
-
-  if (loading && visibleAlerts.length === 0) {
-    return null;
-  }
-
   const confirmSwap = useCallback(async () => {
     if (!pendingSwap || !publicKey) return;
     const { alert, asset, fromMint, toMint, fromSymbol, percentage, dollarValue } = pendingSwap;
@@ -311,6 +301,16 @@ export default function PositionAlertCards() {
       showToast({ type: 'error', message: e.message });
     }
   }, [pendingSwap, publicKey, signTransaction, showToast, handleDismiss]);
+
+  // Filter out dismissed alerts
+  const visibleAlerts = alerts.filter(a => {
+    const baseId = a.id.replace(/-\d+$/, '');
+    return !dismissed.has(baseId);
+  });
+
+  if (loading && visibleAlerts.length === 0) {
+    return null;
+  }
 
   if (visibleAlerts.length === 0 && !pendingSwap) return null;
 
