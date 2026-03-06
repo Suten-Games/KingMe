@@ -8,11 +8,15 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, ActivityIndicator, LayoutAnimation,
-  Platform, UIManager,
+  Platform, UIManager, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import { useStore } from '../src/store/useStore';
 import {
   generateCompanionshipInsights, getInsightColor,
@@ -127,6 +131,8 @@ function currentMonthKey(): string {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function CompanionshipTracker() {
+  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const storeIncome = useStore(s => s.income);
   const bankTransactions = useStore(s => s.bankTransactions || []);
@@ -383,16 +389,35 @@ export default function CompanionshipTracker() {
   const hiddenInsightCount = insights.length - 3;
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 60 }}>
-      {/* ── Header ──────────────────────────────────────────── */}
-      <View style={st.headerRow}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}>
-          <Text style={st.backBtn}>← Back</Text>
-        </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: '#0a0e1a' }}>
+      <LinearGradient
+        colors={['#10162a', '#0c1020', '#080c18']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ paddingHorizontal: 16, paddingBottom: 8, paddingTop: Math.max(insets.top, 14) }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ padding: 8, marginRight: 2 }}>
+            <Text style={{ fontSize: 20, color: '#60a5fa', fontWeight: '600' }}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} activeOpacity={0.7} onPress={() => router.replace('/')}>
+            <Image source={require('../src/assets/images/kingmelogo.jpg')} style={{ width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' }} resizeMode="cover" />
+            <MaskedView maskElement={<Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>}>
+              <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, opacity: 0, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>
+              </LinearGradient>
+            </MaskedView>
+          </TouchableOpacity>
+          <View style={{ marginLeft: 'auto' }}><WalletHeaderButton /></View>
+        </View>
+        <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1.5, marginTop: 10, borderRadius: 1 }} />
+      </LinearGradient>
+
+      <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 60 }}>
+        {/* ── Companion name ──────────────────────────────────── */}
         <TouchableOpacity onPress={openProfileModal}>
           <Text style={st.pageTitle}>💜 {data.profile.alias || 'Companionship'}</Text>
         </TouchableOpacity>
-      </View>
       {data.profile.startDate ? (
         <Text style={st.subLabel}>{durationString(data.profile.startDate)} · {FREQUENCIES[data.profile.meetingFrequency]} · Tap name to edit</Text>
       ) : (
@@ -722,6 +747,7 @@ export default function CompanionshipTracker() {
 
       {/* Import modal removed — companion transactions auto-sync */}
     </ScrollView>
+    </View>
   );
 }
 
