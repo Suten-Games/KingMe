@@ -846,14 +846,14 @@ export const useStore = create<AppState>((set, get) => ({
     const wallet = state.wallets?.[0];
     if (!wallet) return { imported: 0, error: 'No wallet connected' };
 
-    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+    const DRIFT_API_BASE = 'https://kingme-api.vercel.app/api/drift';
     const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
 
     try {
       const headers: Record<string, string> = {};
       if (RPC_URL) headers['X-RPC-URL'] = RPC_URL;
 
-      let url = `${API_BASE}/api/drift/history?wallet=${wallet}&limit=200`;
+      let url = `${DRIFT_API_BASE}/history?wallet=${wallet}&limit=200`;
       if (opts?.year && opts?.month) {
         url += `&year=${opts.year}&month=${opts.month}`;
       }
