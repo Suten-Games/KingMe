@@ -217,10 +217,7 @@ export default function BusinessDashboard() {
     }
     setSyncing(true);
     try {
-      const HELIUS_KEY = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
-      const rpcUrl = HELIUS_KEY
-        ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`
-        : 'https://api.mainnet-beta.solana.com';
+      const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
       // SOL balance
       const balResp = await fetch(rpcUrl, {

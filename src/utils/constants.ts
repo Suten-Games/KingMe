@@ -77,11 +77,6 @@ export const API_ENDPOINTS = {
   CLAUDE_API: 'https://api.anthropic.com/v1/messages',
 } as const;
 
-// API Keys (will be set via environment variables)
-export const API_KEYS = {
-  HELIUS: process.env.EXPO_PUBLIC_HELIUS_API_KEY || '',
-  CLAUDE: process.env.EXPO_PUBLIC_CLAUDE_API_KEY || '',
-} as const;
 
 // Default values for new user
 export const DEFAULT_USER_PROFILE = {

@@ -25,15 +25,15 @@ const SKR_APY = 0.209; // 20.9% APY from Guardian staking
  */
 export async function fetchSKRHolding(walletAddress: string): Promise<SKRHolding | null> {
   try {
-    const HELIUS_API_KEY = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
-    
+    const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+
     console.log('═══════════════════════════════════════════════');
     console.log('🔍 FETCHING SKR VIA HELIUS DAS API');
     console.log('Wallet:', walletAddress);
     console.log('═══════════════════════════════════════════════');
-    
+
     // Use getAssetsByOwner to get all fungible tokens
-    const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`, {
+    const response = await fetch(RPC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -162,14 +162,13 @@ export async function fetchSKRHolding(walletAddress: string): Promise<SKRHolding
  */
 async function fetchSKRFallback(walletAddress: string): Promise<SKRHolding | null> {
   try {
-    const HELIUS_API_KEY = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
-    const HELIUS_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+    const FALLBACK_RPC = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
     console.log('\n═══════════════════════════════════════════════');
     console.log('🔄 FALLBACK: getTokenAccountsByOwner');
     console.log('═══════════════════════════════════════════════');
 
-    const response = await fetch(HELIUS_RPC, {
+    const response = await fetch(FALLBACK_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -446,7 +446,7 @@ export default function HomeScreen() {
       <WhatIfModal
         visible={showModal}
         scenario={selectedScenario}
-        onClose={() => { setShowModal(false); setSelectedScenario(null); reset(); }}
+        onClose={() => { setShowModal(false); setSelectedScenario(null); reset(); generateScenarios(); }}
         onApply={handleApplyScenario}
         swapState={swapState}
       />  

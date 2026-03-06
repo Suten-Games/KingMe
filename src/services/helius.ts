@@ -1,8 +1,7 @@
 // src/services/helius.ts - With SKR staking detection
 import type { Asset, CryptoAsset } from '../types';
 
-const HELIUS_API_KEY = process.env.EXPO_PUBLIC_HELIUS_API_KEY || 'YOUR_HELIUS_API_KEY_HERE';
-const HELIUS_RPC = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const HELIUS_RPC = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
 
 const SKR_MINT = 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3';
 const SKR_STAKING_APY = 0.18; // 18% APY
@@ -215,7 +214,7 @@ export async function getDeFiProtocols() {
 }
 
 export function isHeliusConfigured(): boolean {
-  return HELIUS_API_KEY !== 'YOUR_HELIUS_API_KEY_HERE' && HELIUS_API_KEY.length > 0;
+  return !!HELIUS_RPC && HELIUS_RPC !== 'https://api.mainnet-beta.solana.com';
 }
 
 export async function syncAllWallets(walletAddresses: string[]): Promise<Asset[]> {

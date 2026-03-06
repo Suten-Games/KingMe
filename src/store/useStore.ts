@@ -1728,10 +1728,8 @@ export const useStore = create<AppState>((set, get) => ({
   // ─── Drift Balance Sync ──────────────────────────────────────────────────
   syncDriftAssets: async (walletAddress: string) => {
     const DRIFT_API_BASE = 'https://kingme-api.vercel.app/api/drift';
-    // RPC URL: try client env vars, but API has its own fallback via HELIUS_RPC_URL
-    const heliusKey = process.env.EXPO_PUBLIC_HELIUS_API_KEY || '';
-    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC
-      || (heliusKey ? `https://mainnet.helius-rpc.com/?api-key=${heliusKey}` : '');
+    // RPC URL: pass to API via header so server can use its own keyed RPC
+    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
 
     // Mint addresses for Drift spot tokens (for Jupiter price lookup)
     const DRIFT_MINTS: Record<string, string> = {
