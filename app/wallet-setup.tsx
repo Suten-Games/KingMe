@@ -28,13 +28,21 @@ interface WalletGuide {
 
 const WALLET_GUIDES: WalletGuide[] = isWeb ? [
   {
+    name: 'Jupiter',
+    emoji: '\u{1FA90}',
+    description: 'The leading Solana DEX aggregator — now with a built-in wallet extension. Swap, DCA, and limit orders baked in.',
+    platforms: 'Chrome, Brave, Edge',
+    url: 'https://www.jup.ag/download-extension',
+    color: '#c7f284',
+    recommended: true,
+  },
+  {
     name: 'Phantom',
     emoji: '\u{1F47B}',
     description: 'The most popular Solana wallet. Install the browser extension to connect instantly.',
     platforms: 'Chrome, Brave, Firefox, Edge',
     url: 'https://phantom.app/download',
     color: '#ab9ff2',
-    recommended: true,
   },
   {
     name: 'Solflare',
