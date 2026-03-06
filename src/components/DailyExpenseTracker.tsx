@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView 
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import type { DailyExpense, DailyExpenseCategory, BankAccount } from '../types';
+import type { BankTransaction } from '../types/bankTransactionTypes';
 
 // ─── category labels ──────────────────────────────────────────────────────────
 const CATEGORY_LABELS: Record<DailyExpenseCategory, { label: string; emoji: string }> = {
@@ -22,6 +23,23 @@ const CATEGORY_LABELS: Record<DailyExpenseCategory, { label: string; emoji: stri
 };
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+/** Map bank transaction categories to daily expense categories for display */
+function mapBankCategory(cat: string): DailyExpenseCategory {
+  if (cat.startsWith('food_grocery')) return 'food_grocery';
+  if (cat.startsWith('food_restaurant') || cat === 'food_delivery' || cat === 'food_coffee') return 'food_restaurants';
+  if (cat.startsWith('housing')) return 'housing';
+  if (cat.startsWith('utilities')) return 'utilities';
+  if (cat.startsWith('transport')) return 'transport';
+  if (cat.startsWith('medical')) return 'medical';
+  if (cat.startsWith('entertainment')) return 'entertainment';
+  if (cat.startsWith('business') || cat === 'business_expense') return 'business';
+  if (cat === 'smoking') return 'smoking';
+  if (cat.startsWith('transfer') || cat === 'financial_savings_transfer') return 'transfer';
+  if (cat.startsWith('income')) return 'transfer'; // deposits show as transfers
+  return 'daily_spend';
+}
+
 function formatDate(dateStr: string): string {
   // Handle both "YYYY-MM-DD" and ISO strings like "2026-02-04T07:00:00.000Z"
   const d = new Date(dateStr + 'T12:00:00'); // Add noon to avoid timezone issues
@@ -51,6 +69,7 @@ interface DailyExpenseTrackerProps {
 
 export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const dailyExpenses         = useStore((s) => s.dailyExpenses || []);
+  const bankTransactions      = useStore((s) => s.bankTransactions || []);
   const expenseTrackingMode   = useStore((s) => s.expenseTrackingMode || 'estimate');
   const cryptoCardBalance     = useStore((s) => s.cryptoCardBalance);
   const bankAccounts          = useStore((s) => s.bankAccounts);
@@ -95,6 +114,23 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
     .reduce((sum, o) => sum + o.amount, 0);
   const estimatedDailySpend = dailyLivingMonthly / 30;
 
+  // When a bank account is linked, show its imported transactions instead of manual entries
+  const displayExpenses: DailyExpense[] = useMemo(() => {
+    if (linkedAccount) {
+      return bankTransactions
+        .filter((t) => t.bankAccountId === linkedAccount.id)
+        .map((t): DailyExpense => ({
+          id: t.id,
+          date: t.date,
+          category: mapBankCategory(t.category),
+          description: t.description,
+          amount: t.amount, // positive = expense, negative = income (same convention)
+          notes: t.notes,
+        }));
+    }
+    return dailyExpenses;
+  }, [linkedAccount, bankTransactions, dailyExpenses]);
+
   // ── manual tracking stats ──────────────────────────────────────────────────
   const { todaySpend, weekSpend, monthSpend } = useMemo(() => {
     const now = new Date();
@@ -102,22 +138,22 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const today = dailyExpenses
+    const today = displayExpenses
       .filter((e) => e.date.split('T')[0] === todayStr && e.amount > 0)
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const week = dailyExpenses
+    const week = displayExpenses
       .filter((e) => new Date(e.date) >= weekAgo && e.amount > 0)
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const month = dailyExpenses
+    const month = displayExpenses
       .filter((e) => new Date(e.date) >= monthStart && e.amount > 0)
       .reduce((sum, e) => sum + e.amount, 0);
 
     return { todaySpend: today, weekSpend: week, monthSpend: month };
-  }, [dailyExpenses]);
+  }, [displayExpenses]);
 
-  const grouped = groupByDate(dailyExpenses);
+  const grouped = groupByDate(displayExpenses);
 
   // ── handlers ───────────────────────────────────────────────────────────────
   const resetForm = () => {
