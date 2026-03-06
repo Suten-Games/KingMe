@@ -330,4 +330,61 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       postTaxDeductions: [],
     },
   },
+  {
+    id: 'crypto_trader',
+    name: 'Crypto Trader',
+    emoji: '\u{1F4B9}',
+    description: 'Full-time on-chain degen. SOL ecosystem, perps, yield farming.',
+    color: '#14f195',
+    profile: {
+      income: {
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'trading', name: 'Drift Perps PnL', amount: 8500, frequency: 'monthly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_2', source: 'other', name: 'Yield Farming', amount: 3200, frequency: 'monthly', bankAccountId: 'ba_demo_1' },
+        ],
+      },
+      bankAccounts: [
+        { id: 'ba_demo_1', name: 'Checking', type: 'checking', currentBalance: 18000, institution: 'Mercury', isPrimaryIncome: true },
+        { id: 'ba_demo_2', name: 'Savings', type: 'savings', currentBalance: 35000, institution: 'Marcus', isPrimaryIncome: false },
+      ],
+      assets: [
+        { id: 'a_demo_1', type: 'crypto', name: 'Solana', value: 185000, annualIncome: 0, metadata: { symbol: 'SOL', quantity: 1250 } },
+        { id: 'a_demo_2', type: 'crypto', name: 'Bitcoin', value: 95000, annualIncome: 0, metadata: { symbol: 'BTC', quantity: 0.95 } },
+        { id: 'a_demo_3', type: 'crypto', name: 'Ethereum', value: 42000, annualIncome: 0, metadata: { symbol: 'ETH', quantity: 18 } },
+        { id: 'a_demo_4', type: 'crypto', name: 'JupSOL', value: 28000, annualIncome: 2100, metadata: { symbol: 'JupSOL', quantity: 190 } },
+        { id: 'a_demo_5', type: 'defi', name: 'USD* Yield Vault', value: 75000, annualIncome: 7000, metadata: { symbol: 'USD*' } },
+        { id: 'a_demo_6', type: 'defi', name: 'Kamino USDC Supply', value: 40000, annualIncome: 3600, metadata: { symbol: 'USDC' } },
+        { id: 'a_demo_7', type: 'crypto', name: 'WHALE', value: 12000, annualIncome: 0, metadata: { symbol: 'WHALE', quantity: 850000 } },
+        { id: 'a_demo_8', type: 'crypto', name: 'WIF', value: 8500, annualIncome: 0, metadata: { symbol: 'WIF', quantity: 15000 } },
+        { id: 'a_demo_9', type: 'other', name: '2020 Tesla Model 3', value: 18000, annualIncome: 0, metadata: {} },
+      ],
+      obligations: [
+        { id: 'ob_demo_1', name: 'Rent', payee: 'Landlord', amount: 1800, category: 'housing', isRecurring: true, dueDate: 1 },
+        { id: 'ob_demo_2', name: 'Electric', payee: 'APS', amount: 120, category: 'utilities', isRecurring: true, dueDate: 10 },
+        { id: 'ob_demo_3', name: 'Internet', payee: 'Starlink', amount: 120, category: 'utilities', isRecurring: true, dueDate: 15 },
+        { id: 'ob_demo_4', name: 'Phone', payee: 'Google Fi', amount: 35, category: 'utilities', isRecurring: true, dueDate: 5 },
+        { id: 'ob_demo_5', name: 'Car Insurance', payee: 'Root', amount: 95, category: 'insurance', isRecurring: true, dueDate: 20 },
+        { id: 'ob_demo_6', name: 'Health Insurance', payee: 'ACA Marketplace', amount: 450, category: 'insurance', isRecurring: true, dueDate: 1 },
+        { id: 'ob_demo_7', name: 'Crypto.com Card', payee: 'Crypto.com', amount: 0, category: 'other', isRecurring: true, dueDate: 1 },
+      ],
+      debts: [
+        { id: 'd_demo_1', name: 'Auto Loan', principal: 20000, interestRate: 0.049, monthlyPayment: 380, minimumPayment: 380, dueDate: 10, balance: 8500, payee: 'Tesla' },
+      ],
+      desires: [
+        { id: 'des_demo_1', name: 'Hardware Wallet Vault Setup', estimatedCost: 500, priority: 'high' },
+        { id: 'des_demo_2', name: 'Crypto Tax CPA', estimatedCost: 3000, priority: 'medium' },
+      ],
+      driftTrades: [
+        { id: 'dt_1', symbol: 'SOL-PERP', side: 'long', entryPrice: 120, exitPrice: 148, size: 50, pnlUsdc: 1400, date: new Date(Date.now() - 5 * 86400000).toISOString(), fees: 12 },
+        { id: 'dt_2', symbol: 'ETH-PERP', side: 'long', entryPrice: 2200, exitPrice: 2450, size: 5, pnlUsdc: 1250, date: new Date(Date.now() - 12 * 86400000).toISOString(), fees: 8 },
+        { id: 'dt_3', symbol: 'BTC-PERP', side: 'short', entryPrice: 98000, exitPrice: 95500, size: 0.5, pnlUsdc: 1250, date: new Date(Date.now() - 18 * 86400000).toISOString(), fees: 15 },
+        { id: 'dt_4', symbol: 'SOL-PERP', side: 'long', entryPrice: 135, exitPrice: 128, size: 80, pnlUsdc: -560, date: new Date(Date.now() - 25 * 86400000).toISOString(), fees: 10 },
+      ],
+      dailyExpenses: [],
+      preTaxDeductions: [],
+      taxes: [],
+      postTaxDeductions: [],
+    },
+  },
 ];

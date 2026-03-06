@@ -505,21 +505,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── Business ── */}
-        <View style={styles.section}>
-          <TouchableOpacity onPress={() => router.push('/business' as any)} style={styles.businessLink}>
-            <LinearGradient colors={['#1a2a40', '#101828', '#0a0e1a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={styles.businessLinkInner}>
-              <Text style={styles.businessEmoji}>🏢</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.businessTitle}>Suten LLC</Text>
-                <Text style={styles.businessSub}>Business dashboard, revenue & expenses</Text>
-              </View>
-              <Text style={styles.businessArrow}>→</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-
         {/* ── Premium Tools ── */}
         <View style={styles.section}>
           <PaidAddOns />
@@ -920,12 +905,6 @@ const styles = StyleSheet.create({
   confirmDeleteText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
 
   // Business link
-  businessLink: { marginBottom: 0 },
-  businessLinkInner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2f3e', gap: 12 },
-  businessEmoji: { fontSize: 28 },
-  businessTitle: { fontSize: 16, fontWeight: '700', color: '#f4c430' },
-  businessSub: { fontSize: 12, color: '#888', marginTop: 2 },
-  businessArrow: { fontSize: 18, color: '#555', fontWeight: '700' },
 
   // Alert modal
   alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 },
