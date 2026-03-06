@@ -10,6 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
+import WalletHeaderButton from '../src/components/WalletHeaderButton';
+
+const DRIFT_LOGO = 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function formatDate(isoDate: string): string {
@@ -432,7 +435,9 @@ export default function TradingScreen() {
             </MaskedView>
           </TouchableOpacity>
 
-          <Text style={styles.headerPageTitle}>Trading</Text>
+          <View style={{ marginLeft: 'auto' }}>
+            <WalletHeaderButton />
+          </View>
         </View>
 
         <LinearGradient
@@ -444,15 +449,21 @@ export default function TradingScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Month Navigation */}
-        <View style={styles.monthNav}>
-          <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
-            <Text style={styles.monthArrowText}>{'<'}</Text>
-          </TouchableOpacity>
-          <Text style={styles.monthLabel}>{monthLabel}</Text>
-          <TouchableOpacity onPress={goToNextMonth} style={[styles.monthArrow, isCurrentMonth && { opacity: 0.3 }]} disabled={isCurrentMonth}>
-            <Text style={styles.monthArrowText}>{'>'}</Text>
-          </TouchableOpacity>
+        {/* Drift Trading label + Month Navigation */}
+        <View style={styles.monthNavRow}>
+          <View style={styles.driftLabel}>
+            <Image source={{ uri: DRIFT_LOGO }} style={styles.driftLogo} />
+            <Text style={styles.driftLabelText}>Drift Trading</Text>
+          </View>
+          <View style={styles.monthNav}>
+            <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
+              <Text style={styles.monthArrowText}>{'<'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.monthLabel}>{monthLabel}</Text>
+            <TouchableOpacity onPress={goToNextMonth} style={[styles.monthArrow, isCurrentMonth && { opacity: 0.3 }]} disabled={isCurrentMonth}>
+              <Text style={styles.monthArrowText}>{'>'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Monthly Summary */}
@@ -1139,13 +1150,16 @@ const styles = StyleSheet.create({
   headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28 },
-  headerPageTitle: { fontSize: 16, color: '#8892b0', fontWeight: '600', marginLeft: 'auto' },
   headerAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
   scroll: { flex: 1, padding: 20 },
-  monthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12, gap: 16 },
-  monthArrow: { paddingHorizontal: 14, paddingVertical: 6 },
-  monthArrowText: { fontSize: 22, fontWeight: 'bold', color: '#60a5fa' },
-  monthLabel: { fontSize: 18, fontWeight: '600', color: '#fff', minWidth: 160, textAlign: 'center' },
+  monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  driftLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  driftLogo: { width: 22, height: 22, borderRadius: 11 },
+  driftLabelText: { fontSize: 15, fontWeight: '700', color: '#e8e0d0' },
+  monthNav: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  monthArrow: { paddingHorizontal: 10, paddingVertical: 6 },
+  monthArrowText: { fontSize: 20, fontWeight: 'bold', color: '#60a5fa' },
+  monthLabel: { fontSize: 15, fontWeight: '600', color: '#fff', minWidth: 130, textAlign: 'center' },
   summaryBox: {
     backgroundColor: '#1a1f2e',
     borderRadius: 14,

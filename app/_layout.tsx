@@ -80,7 +80,7 @@ export default function RootLayout() {
           <Stack.Screen name="bank/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="debt/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ title: 'Profile' }} />
-          <Stack.Screen name="trading" options={{ title: 'Trading' }} />
+          <Stack.Screen name="trading" options={{ headerShown: false }} />
           <Stack.Screen name="expenses" options={{ title: 'Daily Expenses' }} />
           <Stack.Screen name="business" options={{ headerShown: false }} />
           <Stack.Screen name="divorce-simulator" options={{ headerShown: false }} />
