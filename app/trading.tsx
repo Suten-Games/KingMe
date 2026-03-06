@@ -499,9 +499,6 @@ export default function TradingScreen() {
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>No active positions</Text>
                 <Text style={styles.emptySubtext}>Open a trade on Drift to see it here</Text>
-                <Text style={[styles.emptySubtext, { fontSize: 10, marginTop: 6, color: '#555' }]}>
-                  Debug: wallet={walletAddr ? `${walletAddr.slice(0, 6)}...${walletAddr.slice(-4)}` : 'none'}
-                </Text>
               </View>
             )}
             {driftPositions.perpPositions.map((pos) => (

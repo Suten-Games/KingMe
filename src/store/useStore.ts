@@ -1946,30 +1946,22 @@ export const useStore = create<AppState>((set, get) => ({
       const data = await response.json();
       const { spotBalances, perpPositions: rawPerps } = data;
 
-      // Populate basic perp positions from balances endpoint as fallback
+      // Populate perp positions from balances endpoint (now includes enriched data)
       if (rawPerps && rawPerps.length > 0) {
         console.log(`[DRIFT-SYNC] Got ${rawPerps.length} perp positions from balances endpoint`);
-        const PERP_NAMES: Record<number, string> = {
-          0: 'SOL-PERP', 1: 'BTC-PERP', 2: 'ETH-PERP', 3: 'APT-PERP',
-          4: '1MBONK-PERP', 7: 'DOGE-PERP', 9: 'SUI-PERP', 13: 'XRP-PERP',
-          23: 'WIF-PERP', 24: 'JUP-PERP', 30: 'DRIFT-PERP', 64: 'TRUMP-PERP',
-        };
         const existingPositions = get().driftPositions;
-        // Only populate if the dedicated positions endpoint hasn't already set data
-        if (!existingPositions?.perpPositions?.length) {
-          const basicPerps = rawPerps.map((p: any) => ({
-            marketIndex: p.marketIndex,
-            symbol: PERP_NAMES[p.marketIndex] || `PERP_${p.marketIndex}`,
-            direction: p.baseAssetAmount > 0 ? 'long' as const : 'short' as const,
-            sizeBase: Math.abs(p.baseAssetAmount),
-            sizeQuote: Math.abs(p.quoteAssetAmount),
-            entryPrice: 0,
-            unrealizedPnl: 0,
-            breakEvenPrice: 0,
-          }));
-          set({ driftPositions: { perpPositions: basicPerps, openOrders: existingPositions?.openOrders || [] } });
-          console.log(`[DRIFT-SYNC] Set ${basicPerps.length} basic perp positions as fallback`);
-        }
+        const perps = rawPerps.map((p: any) => ({
+          marketIndex: p.marketIndex,
+          symbol: p.symbol || `PERP_${p.marketIndex}`,
+          direction: (p.direction || (p.baseAssetAmount > 0 ? 'long' : 'short')) as 'long' | 'short',
+          sizeBase: Math.abs(p.baseAssetAmount),
+          sizeQuote: Math.abs(p.quoteEntryAmount ?? p.quoteAssetAmount),
+          entryPrice: p.entryPrice ?? 0,
+          unrealizedPnl: (p.quoteAssetAmount ?? 0) + (p.quoteEntryAmount ?? 0),
+          breakEvenPrice: p.breakEvenPrice ?? 0,
+        }));
+        set({ driftPositions: { perpPositions: perps, openOrders: existingPositions?.openOrders || [] } });
+        console.log(`[DRIFT-SYNC] Set ${perps.length} perp positions with entry/break-even data`);
       }
 
       if (!spotBalances || spotBalances.length === 0) {
