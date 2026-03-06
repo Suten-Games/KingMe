@@ -1542,34 +1542,42 @@ export const useStore = create<AppState>((set, get) => ({
         const existing = existingAutoMap.get(sa.mint) || existingAutoMap.get(assetId);
         const existingMeta = (existing?.metadata || {}) as any;
 
-        // Preserve user-set fields from existing asset
-        const preservedApy = existingMeta.apy > 0 ? existingMeta.apy : (safeApy > 0 ? safeApy : 0);
+        // If existing asset was a Drift position, treat as NEW — don't preserve
+        // stale Drift name/APY/type now that the token is in the wallet
+        const wasDrift = existingMeta.protocol?.toLowerCase() === 'drift';
+        const effectiveExisting = wasDrift ? undefined : existing;
+        const effectiveExistingMeta = wasDrift ? {} as any : existingMeta;
+
+        // Preserve user-set fields from existing asset (unless it was Drift)
+        const preservedApy = effectiveExistingMeta.apy > 0 ? effectiveExistingMeta.apy : (safeApy > 0 ? safeApy : 0);
 
         // Preserve value if API returns $0 but we had a real value (price feed outage)
         const preservedValue = safeValue > 0 ? safeValue :
-          (existing?.value && existing.value > 0 ? existing.value : 0);
+          (effectiveExisting?.value && effectiveExisting.value > 0 ? effectiveExisting.value : 0);
         const preservedPrice = safePrice > 0 ? safePrice :
-          (existingMeta.priceUSD > 0 ? existingMeta.priceUSD : 0);
+          (effectiveExistingMeta.priceUSD > 0 ? effectiveExistingMeta.priceUSD : 0);
 
         const preservedAnnualIncome = preservedApy > 0
           ? (preservedValue * preservedApy) / 100
-          : (existing?.annualIncome || 0);
+          : (effectiveExisting?.annualIncome || 0);
 
-        if (safeValue === 0 && existing?.value && existing.value > 0) {
-          console.log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${existing.value.toFixed(2)} — preserving`);
+        if (safeValue === 0 && effectiveExisting?.value && effectiveExisting.value > 0) {
+          console.log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${effectiveExisting.value.toFixed(2)} — preserving`);
         }
 
         // USER-PRESERVED FIELDS: type, name, protocol, positionType, leverage, etc.
         // Only use sync values for NEW tokens; preserve user edits on existing ones
-        const preservedType = existing
-          ? existing.type                                  // keep user's type (e.g. 'defi')
+        // Ex-Drift assets are treated as new (wasDrift flag)
+        const preservedType = effectiveExisting
+          ? effectiveExisting.type                         // keep user's type (e.g. 'defi')
           : mapCategoryToAssetType(effectiveCategory);     // new token: use Helius category
-        const preservedSubtype = existing
-          ? (existing as any).subtype
+        const preservedSubtype = effectiveExisting
+          ? (effectiveExisting as any).subtype
           : (effectiveCategory === 'crypto' ? undefined : effectiveCategory);
-        const preservedName = existing
-          ? existing.name                                  // keep user's rename
+        const preservedName = effectiveExisting
+          ? effectiveExisting.name                         // keep user's rename
           : sa.name;                                       // new token: use Helius name
+        if (wasDrift) console.log(`[SYNC] 🔄 ${sa.symbol}: was Drift position, resetting to wallet token`);
 
         console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apy=${preservedApy} | type=${preservedType} | ${existing ? 'EXISTING' : 'NEW'}`);
 
@@ -1587,22 +1595,21 @@ export const useStore = create<AppState>((set, get) => ({
           lastSynced: new Date().toISOString(),
           metadata: {
             // Start with existing metadata to preserve ALL user-set fields
-            ...(existing ? existingMeta : {}),
+            // (use effectiveExistingMeta which is empty if asset was ex-Drift)
+            ...(effectiveExisting ? effectiveExistingMeta : {}),
             // Always update from sync: balance, price, logo, symbol, mint
-            type: existingMeta.type || ('other' as const),
-            description: existingMeta.description || sa.name,
+            type: effectiveExistingMeta.type || ('other' as const),
+            description: effectiveExistingMeta.description || sa.name,
             apy: preservedApy,
             balance: sa.balance || 0,
             quantity: sa.balance || 0,
             priceUSD: preservedPrice,
             mint: sa.mint,
             symbol: sa.symbol,
-            decimals: sa.decimals ?? existingMeta.decimals,  // store token decimals for accurate swaps
-            logoURI: existingMeta.logoURI || sa.logoURI,
-            // Wallet-synced tokens are NOT in Drift — if the existing asset
-            // had protocol:'Drift' (from a previous Drift sync), clear it so
-            // the Drift sync won't confuse this wallet token with a Drift position.
-            protocol: existingMeta.protocol?.toLowerCase() === 'drift' ? undefined : existingMeta.protocol,
+            decimals: sa.decimals ?? effectiveExistingMeta.decimals,
+            logoURI: effectiveExistingMeta.logoURI || sa.logoURI,
+            // Never carry protocol:'Drift' on wallet tokens
+            protocol: effectiveExistingMeta.protocol,
           },
         };
       });
