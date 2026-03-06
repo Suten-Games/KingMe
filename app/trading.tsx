@@ -1,7 +1,8 @@
 // app/(tabs)/trading.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useStore } from '../src/store/useStore';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
@@ -26,8 +27,18 @@ export default function TradingScreen() {
   const updateDriftTrade = useStore((s) => s.updateDriftTrade);
   const removeDriftTrade = useStore((s) => s.removeDriftTrade);
   const syncDriftTradeHistory = useStore((s) => s.syncDriftTradeHistory);
+  const settings = useStore((s) => s.settings);
+  const updateSettings = useStore((s) => s.updateSettings);
+
+  const tradingPlatform = settings.tradingPlatform;
+  const isDrift = tradingPlatform === 'drift';
+  const isManual = tradingPlatform === 'manual';
+  const hasChosenPlatform = !!tradingPlatform;
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [otherPlatformName, setOtherPlatformName] = useState('');
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [interestSent, setInterestSent] = useState(false);
 
   // ── month navigation ────────────────────────────────────────────────────────
   const now = new Date();
@@ -154,6 +165,22 @@ export default function TradingScreen() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  // ── platform choice handlers ──────────────────────────────────────────────
+  const chooseDrift = () => updateSettings({ tradingPlatform: 'drift' });
+  const chooseManual = () => {
+    updateSettings({ tradingPlatform: 'manual' });
+    setShowOtherInput(false);
+  };
+  const resetPlatformChoice = () => updateSettings({ tradingPlatform: undefined as any });
+
+  const handleRequestIntegration = async () => {
+    if (!otherPlatformName.trim()) return;
+    const key = `@kingme:platform_interest:${otherPlatformName.trim().toLowerCase()}`;
+    await AsyncStorage.setItem(key, JSON.stringify({ name: otherPlatformName.trim(), requestedAt: new Date().toISOString() }));
+    setInterestSent(true);
+    Alert.alert('Noted!', `We'll consider adding ${otherPlatformName.trim()} integration if enough users request it.`);
   };
 
   // ── handlers ───────────────────────────────────────────────────────────────
@@ -302,6 +329,7 @@ export default function TradingScreen() {
       pnlUsdc: realPnL,
       fees: fees,
       notes: notes || undefined,
+      platform: isDrift ? 'drift' : (otherPlatformName.trim() || 'manual'),
       allocation: isProfitable
         ? {
             toCryptoComCard: parseFloat(allocCryptoComCard) || 0,
@@ -382,38 +410,105 @@ export default function TradingScreen() {
           </View>
         </View>
 
+        {/* Platform Choice Banner */}
+        {!hasChosenPlatform && (
+          <View style={pf.banner}>
+            <Text style={pf.bannerTitle}>Where do you trade?</Text>
+            <Text style={pf.bannerSubtext}>This helps us tailor your trading journal experience.</Text>
+
+            <TouchableOpacity style={pf.driftBtn} onPress={chooseDrift}>
+              <Text style={pf.driftBtnText}>Drift (Recommended)</Text>
+              <Text style={pf.driftBtnSub}>Decentralized perps on Solana — auto-sync trades on-chain</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={pf.otherBtn} onPress={() => setShowOtherInput(true)}>
+              <Text style={pf.otherBtnText}>Other Platform</Text>
+              <Text style={pf.otherBtnSub}>Log trades manually from any exchange</Text>
+            </TouchableOpacity>
+
+            {showOtherInput && (
+              <View style={pf.otherInputRow}>
+                <TextInput
+                  style={pf.otherInput}
+                  placeholder="Platform name (e.g. Binance)"
+                  placeholderTextColor="#666"
+                  value={otherPlatformName}
+                  onChangeText={setOtherPlatformName}
+                />
+                <TouchableOpacity style={pf.confirmBtn} onPress={chooseManual}>
+                  <Text style={pf.confirmBtnText}>Go</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Manual platform integration request */}
+        {isManual && !interestSent && (
+          <View style={pf.integrationBanner}>
+            <Text style={pf.integrationText}>Want auto-sync for your platform?</Text>
+            <View style={pf.otherInputRow}>
+              <TextInput
+                style={[pf.otherInput, { flex: 1 }]}
+                placeholder="Platform name"
+                placeholderTextColor="#666"
+                value={otherPlatformName}
+                onChangeText={setOtherPlatformName}
+              />
+              <TouchableOpacity style={pf.confirmBtn} onPress={handleRequestIntegration}>
+                <Text style={pf.confirmBtnText}>Request</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={resetPlatformChoice}>
+              <Text style={pf.switchText}>Switch to Drift</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Trade List Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Trade Journal</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              style={styles.syncButton}
-              onPress={handleSync}
-              disabled={isSyncing}
-            >
-              {isSyncing ? (
-                <ActivityIndicator size="small" color="#60a5fa" />
-              ) : (
-                <Text style={styles.syncButtonText}>Sync Drift</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                resetForm();
-                setShowModal(true);
-              }}
-            >
-              <Text style={styles.addButtonText}>+ Log Trade</Text>
-            </TouchableOpacity>
+            {isDrift && (
+              <>
+                <TouchableOpacity
+                  style={pf.openDriftBtn}
+                  onPress={() => Linking.openURL('https://app.drift.trade')}
+                >
+                  <Text style={pf.openDriftText}>Open Drift</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.syncButton}
+                  onPress={handleSync}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <ActivityIndicator size="small" color="#60a5fa" />
+                  ) : (
+                    <Text style={styles.syncButtonText}>Sync Drift</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+            {hasChosenPlatform && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  resetForm();
+                  setShowModal(true);
+                }}
+              >
+                <Text style={styles.addButtonText}>+ Log Trade</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {sortedTrades.length === 0 ? (
+        {sortedTrades.length === 0 && hasChosenPlatform ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No trades logged yet</Text>
             <Text style={styles.emptySubtext}>
-              Tap "+ Log Trade" to record your first Drift perpetuals trade.
+              Tap "+ Log Trade" to record your first {isDrift ? 'Drift perpetuals' : ''} trade.
             </Text>
           </View>
         ) : (
@@ -645,8 +740,8 @@ export default function TradingScreen() {
                 </View>
               )}
 
-              <Text style={styles.label}>Actual PnL (from Drift)</Text>
-              <Text style={styles.helperText}>Copy the exact P&L from Drift — this includes fees</Text>
+              <Text style={styles.label}>Actual PnL{isDrift ? ' (from Drift)' : ''}</Text>
+              <Text style={styles.helperText}>{isDrift ? 'Copy the exact P&L from Drift — this includes fees' : 'Enter your realized P&L after fees'}</Text>
               <View style={styles.inputRow}>
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
@@ -674,7 +769,7 @@ export default function TradingScreen() {
               {isProfitable && (
                 <>
                   <Text style={[styles.label, { marginTop: 20 }]}>Profit Allocation</Text>
-                  <Text style={styles.helperText}>Withdraw USDC from Drift, then route it:</Text>
+                  <Text style={styles.helperText}>{isDrift ? 'Withdraw USDC from Drift, then route it:' : 'Route your profits:'}</Text>
 
                   {/* Cash card / daily spending */}
                   <View style={styles.allocRow}>
@@ -797,7 +892,7 @@ export default function TradingScreen() {
 
                   {/* Left in Drift with auto-fill */}
                   <View style={styles.allocRow}>
-                    <Text style={styles.allocLabel}>🎯 Left in Drift</Text>
+                    <Text style={styles.allocLabel}>🎯 Left in {isDrift ? 'Drift' : 'Account'}</Text>
                     <View style={[styles.inputRow, { flex: 1 }]}>
                       <Text style={styles.currencySymbol}>$</Text>
                       <TextInput
@@ -996,4 +1091,74 @@ const ga = StyleSheet.create({
   swapBtnText: { fontSize: 11, fontWeight: '700', color: '#60a5fa' },
   transferBadge: { backgroundColor: '#4ade8010', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   transferBadgeText: { fontSize: 11, color: '#4ade80', fontWeight: '600' },
+});
+
+// ── Platform choice styles ──────────────────────────────────────────────────
+const pf = StyleSheet.create({
+  banner: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 14,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#f4c43030',
+  },
+  bannerTitle: { fontSize: 18, fontWeight: 'bold', color: '#f4c430', marginBottom: 6 },
+  bannerSubtext: { fontSize: 13, color: '#a0a0a0', marginBottom: 16 },
+  driftBtn: {
+    backgroundColor: '#4ade8015',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#4ade8030',
+  },
+  driftBtnText: { fontSize: 15, fontWeight: 'bold', color: '#4ade80' },
+  driftBtnSub: { fontSize: 12, color: '#a0a0a0', marginTop: 4 },
+  otherBtn: {
+    backgroundColor: '#60a5fa10',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#60a5fa30',
+  },
+  otherBtnText: { fontSize: 15, fontWeight: 'bold', color: '#60a5fa' },
+  otherBtnSub: { fontSize: 12, color: '#a0a0a0', marginTop: 4 },
+  otherInputRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  otherInput: {
+    flex: 1,
+    backgroundColor: '#0a0e1a',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+  },
+  confirmBtn: {
+    backgroundColor: '#4ade80',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  confirmBtnText: { color: '#0a0e1a', fontWeight: 'bold', fontSize: 14 },
+  integrationBanner: {
+    backgroundColor: '#60a5fa10',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#60a5fa20',
+  },
+  integrationText: { fontSize: 13, color: '#60a5fa', fontWeight: '600', marginBottom: 8 },
+  switchText: { fontSize: 12, color: '#a0a0a0', textAlign: 'center', marginTop: 10, textDecorationLine: 'underline' },
+  openDriftBtn: {
+    backgroundColor: '#4ade8015',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4ade8030',
+  },
+  openDriftText: { color: '#4ade80', fontWeight: 'bold', fontSize: 14 },
 });

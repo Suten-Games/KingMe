@@ -433,6 +433,7 @@ export interface DriftTrade {
   pnlUsdc: number;                  // realized profit/loss in USDC (can be negative) — ACTUAL from Drift
   fees?: number;                    // trading fees (theoretical PnL - actual PnL)
   notes?: string;                   // optional — e.g. "caught the breakout", "stopped out"
+  platform?: string;                // 'drift', 'robinhood', 'binance', etc. Defaults to 'drift'
   allocation?: DriftProfitAllocation; // where the profit went (only relevant if pnlUsdc > 0)
 }
 
@@ -496,6 +497,7 @@ export interface UserSettings {
   darkMode: boolean;
   defaultExpandAssetSections: boolean;
   dailyExpenseAccountId?: string;
+  tradingPlatform?: 'drift' | 'manual';  // which trading platform the user uses
 }
 
 export interface UserProfile {

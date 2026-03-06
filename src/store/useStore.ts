@@ -1494,7 +1494,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       // Call your Vercel API
-      const response = await fetch('https://kingme-api.vercel.app/api/wallet/sync', {
+      const response = await fetch('https://kingme.money/api/wallet/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress, manualMints }),
