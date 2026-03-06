@@ -9,6 +9,12 @@ import {
 } from 'react-native';
 import { useState, useMemo, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'react-native';
+import WalletHeaderButton from '../../src/components/WalletHeaderButton';
+import KingMeFooter from '../../src/components/KingMeFooter';
 import { useStore } from '../../src/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
@@ -60,6 +66,8 @@ const ALL_CATEGORIES: BankTransactionCategory[] = CATEGORY_OPTIONS.flatMap(g => 
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function DebtDetailScreen() {
+  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
@@ -268,12 +276,31 @@ export default function DebtDetailScreen() {
 
   return (
     <View style={s.container}>
-      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
+      {/* KingMe branded header */}
+      <LinearGradient
+        colors={['#10162a', '#0c1020', '#080c18']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ paddingHorizontal: 16, paddingBottom: 8, paddingTop: Math.max(insets.top, 14) }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ padding: 8, marginRight: 2 }}>
+            <Text style={{ fontSize: 20, color: '#60a5fa', fontWeight: '600' }}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} activeOpacity={0.7} onPress={() => router.replace('/')}>
+            <Image source={require('../../src/assets/images/kingmelogo.jpg')} style={{ width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' }} resizeMode="cover" />
+            <MaskedView maskElement={<Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>}>
+              <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, opacity: 0, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>
+              </LinearGradient>
+            </MaskedView>
+          </TouchableOpacity>
+          <View style={{ marginLeft: 'auto' }}><WalletHeaderButton /></View>
+        </View>
+        <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1.5, marginTop: 10, borderRadius: 1 }} />
+      </LinearGradient>
 
-        {/* ── Back button ── */}
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backButton}>
-          <Text style={s.backLink}>← Back</Text>
-        </TouchableOpacity>
+      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
 
         {/* ── Debt Header ── */}
         <LinearGradient colors={T.gradients.red} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -557,7 +584,7 @@ export default function DebtDetailScreen() {
           </View>
         )}
 
-        <View style={{ height: 40 }} />
+        <KingMeFooter />
       </ScrollView>
 
       {/* ══════════════════════════════════════════════════════════════
