@@ -1995,7 +1995,14 @@ export const useStore = create<AppState>((set, get) => ({
             if (sym) kaminoRates[sym] = { supplyApr: r.supplyApr || r.supplyApy || 0, borrowApr: r.borrowApr || r.borrowApy || 0, tvl: r.tvl || 0 };
           }
         } else if (typeof reserves === 'object') {
-          kaminoRates = reserves;
+          // Normalize field names: API may return supplyApy/borrowApy
+          for (const [sym, r] of Object.entries(reserves) as [string, any][]) {
+            kaminoRates[sym] = {
+              supplyApr: r.supplyApr || r.supplyApy || 0,
+              borrowApr: r.borrowApr || r.borrowApy || 0,
+              tvl: r.tvl || r.totalSupply || 0,
+            };
+          }
         }
         set({ kaminoRates });
         console.log(`[KAMINO-SYNC] Got rates for ${Object.keys(kaminoRates).length} reserves`);
