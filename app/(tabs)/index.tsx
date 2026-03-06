@@ -25,6 +25,7 @@ import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 import WindfallAlertCard from '@/components/WindfallAlertCard';
 import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 import TradeInsightCards from '@/components/TradeInsightCards';
+import WatchlistAlerts from '@/components/WatchlistAlerts';
 import TargetIcon from '@/components/icons/TargetIcon';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
@@ -343,6 +344,7 @@ export default function HomeScreen() {
           />
         ))
       }
+      <WatchlistAlerts />
       <AccumulationAlerts />
       
 

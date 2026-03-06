@@ -20,6 +20,7 @@ import {
 import {
   addGoal, loadGoals, removeGoal, makeTokenGoal, formatNum,
 } from '@/services/goals';
+import { addToWatchlist } from '@/services/priceTracker';
 import TargetIcon from './icons/TargetIcon';
 import ConfirmModal from './ConfirmModal';
 
@@ -80,6 +81,8 @@ export default function AssetTargetSection({ asset }: Props) {
       const goals = await loadGoals();
       for (const g of goals.filter(g => g.mint === mint)) await removeGoal(g.id);
     } catch {}
+    // Add to watchlist so user can still track price
+    try { await addToWatchlist(mint, symbol, 'Removed accumulation target'); } catch {}
     setPlan(null);
     setStats(null);
     setConfirmRemove(false);
