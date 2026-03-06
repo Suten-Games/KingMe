@@ -843,7 +843,7 @@ export const useStore = create<AppState>((set, get) => ({
     const wallet = state.wallets?.[0];
     if (!wallet) return { imported: 0, error: 'No wallet connected' };
 
-    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
     const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
 
     try {
