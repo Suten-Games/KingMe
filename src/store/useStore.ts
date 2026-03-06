@@ -2062,7 +2062,7 @@ export const useStore = create<AppState>((set, get) => ({
 
         const mint = dep.mint || '';
         const price = dep.price || prices[sym.toUpperCase()] || 0;
-        const value = dep.valueUsd || dep.value || balance * price;
+        const value = dep.marketValueUsd || dep.valueUsd || dep.value || balance * price;
         const assetId = `kamino_${sym}_deposit`;
         kaminoAssetIds.add(assetId);
 
@@ -2115,7 +2115,7 @@ export const useStore = create<AppState>((set, get) => ({
 
         const mint = bor.mint || '';
         const price = bor.price || prices[sym.toUpperCase()] || 0;
-        const value = bor.valueUsd || bor.value || balance * price;
+        const value = bor.marketValueUsd || bor.valueUsd || bor.value || balance * price;
         const assetId = `kamino_${sym}_borrow`;
         kaminoAssetIds.add(assetId);
 
