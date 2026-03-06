@@ -73,6 +73,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const expenseTrackingMode   = useStore((s) => s.expenseTrackingMode || 'estimate');
   const cryptoCardBalance     = useStore((s) => s.cryptoCardBalance);
   const bankAccounts          = useStore((s) => s.bankAccounts);
+  const debts                 = useStore((s) => s.debts || []);
   const settings              = useStore((s) => s.settings);
   const addDailyExpense       = useStore((s) => s.addDailyExpense);
   const removeDailyExpense    = useStore((s) => s.removeDailyExpense);
@@ -83,17 +84,27 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const updateSettings        = useStore((s) => s.updateSettings);
   const updateBankAccount     = useStore((s) => s.updateBankAccount);
 
-  // Linked account resolution
+  // Linked account resolution — can be a bank account or credit card (debt)
   const linkedAccount = useMemo(() => {
     if (!settings.dailyExpenseAccountId) return null;
     return bankAccounts.find((a) => a.id === settings.dailyExpenseAccountId) || null;
   }, [settings.dailyExpenseAccountId, bankAccounts]);
 
+  const linkedCreditCard = useMemo(() => {
+    if (!settings.dailyExpenseAccountId) return null;
+    if (linkedAccount) return null; // already found as bank account
+    return debts.find((d) => d.id === settings.dailyExpenseAccountId) || null;
+  }, [settings.dailyExpenseAccountId, linkedAccount, debts]);
+
   const activeBalance = linkedAccount
     ? linkedAccount.currentBalance
+    : linkedCreditCard
+    ? linkedCreditCard.principal // outstanding balance
     : cryptoCardBalance.currentBalance;
 
-  const activeAccountName = linkedAccount ? linkedAccount.name : 'Crypto.com Card';
+  const activeAccountName = linkedAccount ? linkedAccount.name
+    : linkedCreditCard ? linkedCreditCard.name
+    : 'Crypto.com Card';
 
   const [showModal, setShowModal]           = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -114,22 +125,23 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
     .reduce((sum, o) => sum + o.amount, 0);
   const estimatedDailySpend = dailyLivingMonthly / 30;
 
-  // When a bank account is linked, show its imported transactions instead of manual entries
+  // When a bank account or credit card is linked, show its imported transactions
+  const linkedId = linkedAccount?.id || linkedCreditCard?.id;
   const displayExpenses: DailyExpense[] = useMemo(() => {
-    if (linkedAccount) {
+    if (linkedId) {
       return bankTransactions
-        .filter((t) => t.bankAccountId === linkedAccount.id)
+        .filter((t) => t.bankAccountId === linkedId)
         .map((t): DailyExpense => ({
           id: t.id,
           date: t.date,
           category: mapBankCategory(t.category),
           description: t.description,
-          amount: t.amount, // positive = expense, negative = income (same convention)
+          amount: t.amount,
           notes: t.notes,
         }));
     }
     return dailyExpenses;
-  }, [linkedAccount, bankTransactions, dailyExpenses]);
+  }, [linkedId, bankTransactions, dailyExpenses]);
 
   // ── manual tracking stats ──────────────────────────────────────────────────
   const { todaySpend, weekSpend, monthSpend } = useMemo(() => {
@@ -258,31 +270,43 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
       {expenseTrackingMode === 'manual' && (
         <>
           {/* Card Balance / Account Picker */}
-          {!linkedAccount && !settings.dailyExpenseAccountId ? (
+          {!linkedAccount && !linkedCreditCard && !settings.dailyExpenseAccountId ? (
             <View style={styles.balanceCard}>
-              <Text style={styles.balanceTitle}>Link a Bank Account</Text>
+              <Text style={styles.balanceTitle}>Link an Account</Text>
               <Text style={[styles.balanceSubtext, { marginTop: 4, marginBottom: 12 }]}>
-                Choose which account your daily expenses deduct from
+                Choose which account or card your daily expenses deduct from
               </Text>
-              {bankAccounts.length === 0 ? (
-                <Text style={styles.balanceSubtext}>No bank accounts yet. Add one in Settings.</Text>
+              {bankAccounts.length === 0 && debts.length === 0 ? (
+                <Text style={styles.balanceSubtext}>No accounts yet. Add one from the Home tab.</Text>
               ) : (
-                bankAccounts.map((acct) => (
-                  <TouchableOpacity
-                    key={acct.id}
-                    style={styles.accountPickerRow}
-                    onPress={() => updateSettings({ dailyExpenseAccountId: acct.id })}
-                  >
-                    <Text style={styles.accountPickerName}>{acct.name}</Text>
-                    <Text style={styles.accountPickerBalance}>${acct.currentBalance.toFixed(2)}</Text>
-                  </TouchableOpacity>
-                ))
+                <>
+                  {bankAccounts.map((acct) => (
+                    <TouchableOpacity
+                      key={acct.id}
+                      style={styles.accountPickerRow}
+                      onPress={() => updateSettings({ dailyExpenseAccountId: acct.id })}
+                    >
+                      <Text style={styles.accountPickerName}>🏦 {acct.name}</Text>
+                      <Text style={styles.accountPickerBalance}>${acct.currentBalance.toFixed(2)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {debts.map((debt) => (
+                    <TouchableOpacity
+                      key={debt.id}
+                      style={styles.accountPickerRow}
+                      onPress={() => updateSettings({ dailyExpenseAccountId: debt.id })}
+                    >
+                      <Text style={styles.accountPickerName}>💳 {debt.name}</Text>
+                      <Text style={[styles.accountPickerBalance, { color: '#ff6b6b' }]}>${debt.principal.toFixed(2)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
               )}
             </View>
           ) : (
             <View style={styles.balanceCard}>
               <View style={styles.balanceHeader}>
-                <Text style={styles.balanceTitle}>{linkedAccount ? '🏦' : '💳'} {activeAccountName}</Text>
+                <Text style={styles.balanceTitle}>{linkedCreditCard ? '💳' : linkedAccount ? '🏦' : '💳'} {activeAccountName}</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <TouchableOpacity onPress={() => setShowAccountPicker(true)}>
                     <Text style={styles.balanceEditBtn}>Change</Text>
@@ -293,7 +317,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                 </View>
               </View>
               <Text style={styles.balanceAmount}>${activeBalance.toFixed(2)}</Text>
-              {!linkedAccount && (
+              {!linkedAccount && !linkedCreditCard && (
                 <Text style={styles.balanceSubtext}>
                   Updated {new Date(cryptoCardBalance.lastUpdated).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                 </Text>
@@ -574,7 +598,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Link Account</Text>
-            <Text style={styles.helperText}>Choose which bank account expenses deduct from</Text>
+            <Text style={styles.helperText}>Choose which account or card expenses deduct from</Text>
 
             <ScrollView style={{ marginTop: 12 }}>
               {bankAccounts.map((acct) => (
@@ -590,10 +614,29 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                   }}
                 >
                   <View>
-                    <Text style={styles.accountPickerName}>{acct.name}</Text>
+                    <Text style={styles.accountPickerName}>🏦 {acct.name}</Text>
                     <Text style={styles.accountPickerInstitution}>{acct.institution}</Text>
                   </View>
                   <Text style={styles.accountPickerBalance}>${acct.currentBalance.toFixed(2)}</Text>
+                </TouchableOpacity>
+              ))}
+              {debts.map((debt) => (
+                <TouchableOpacity
+                  key={debt.id}
+                  style={[
+                    styles.accountPickerRow,
+                    debt.id === settings.dailyExpenseAccountId && styles.accountPickerRowActive,
+                  ]}
+                  onPress={() => {
+                    updateSettings({ dailyExpenseAccountId: debt.id });
+                    setShowAccountPicker(false);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.accountPickerName}>💳 {debt.name}</Text>
+                    <Text style={styles.accountPickerInstitution}>Credit Card</Text>
+                  </View>
+                  <Text style={[styles.accountPickerBalance, { color: '#ff6b6b' }]}>${debt.principal.toFixed(2)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
