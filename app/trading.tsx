@@ -558,6 +558,13 @@ export default function TradingScreen() {
                       <Text style={styles.positionDetailValue}>{formatCurrency(pos.sizeQuote)}</Text>
                     </View>
                   </View>
+                  <TouchableOpacity
+                    style={styles.openDriftBtn}
+                    onPress={() => Linking.openURL(`https://app.drift.trade/${pos.symbol}`)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.openDriftBtnText}>Open on Drift</Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}
@@ -1228,6 +1235,21 @@ const styles = StyleSheet.create({
     color: '#ccd6f6',
     fontSize: 13,
     fontWeight: '600',
+  },
+  openDriftBtn: {
+    backgroundColor: '#60a5fa20',
+    borderWidth: 1,
+    borderColor: '#60a5fa40',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center' as const,
+    marginTop: 10,
+  },
+  openDriftBtnText: {
+    color: '#60a5fa',
+    fontSize: 13,
+    fontWeight: '700' as const,
+    letterSpacing: 0.5,
   },
   orderType: {
     color: '#8892b0',
