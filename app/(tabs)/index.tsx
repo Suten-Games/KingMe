@@ -418,7 +418,7 @@ export default function HomeScreen() {
         </View>
       </LinearGradient>
 
-      <PortfolioTrendCard />
+      <PortfolioTrendCard onPress={() => router.push('/net-worth')} />
 
       <TradingIncomeWarning />
 

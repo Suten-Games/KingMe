@@ -99,7 +99,7 @@ const METRIC_LABELS: Record<MetricKey, string> = {
 
 type PeriodKey = '1d' | '7d' | '30d' | '90d' | 'YTD' | '1y';
 
-export default function PortfolioTrendCard() {
+export default function PortfolioTrendCard({ onPress }: { onPress?: () => void } = {}) {
   const assets = useStore(s => s.assets);
   const bankAccounts = useStore(s => s.bankAccounts);
   const debts = useStore(s => s.debts);
@@ -142,7 +142,7 @@ export default function PortfolioTrendCard() {
     : 0;
 
   return (
-    <View style={st.container}>
+    <TouchableOpacity style={st.container} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
       {/* Header: metric + value */}
       <TouchableOpacity
         style={st.header}
@@ -228,7 +228,7 @@ export default function PortfolioTrendCard() {
           </View>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
