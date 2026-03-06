@@ -103,7 +103,7 @@ export default function IncomeScreen() {
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Top-level empty state when no income at all */}
-        {incomeSources.length === 0 && (
+        {incomeSources.length === 0 && assetTotal <= 0 && (
           <EmptyStateCard category="income" onAction={() => { setSrcType('salary'); setShowIncomeModal(true); }} />
         )}
 

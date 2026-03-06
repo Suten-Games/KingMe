@@ -29,7 +29,8 @@ export default function SetupChecklist() {
   const debts = useStore(s => s.debts);
   const wallets = useStore(s => s.wallets);
 
-  const hasIncome = income.salary > 0 || income.otherIncome > 0 || (income.sources?.length ?? 0) > 0;
+  const assetIncome = assets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
+  const hasIncome = income.salary > 0 || income.otherIncome > 0 || (income.sources?.length ?? 0) > 0 || assetIncome > 0;
   const hasObligations = obligations.length > 0;
   const hasBankAccounts = bankAccounts.length > 0;
   const hasAssets = assets.length > 0;
