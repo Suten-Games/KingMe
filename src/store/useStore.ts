@@ -1574,7 +1574,9 @@ export const useStore = create<AppState>((set, get) => ({
         console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apy=${preservedApy} | type=${preservedType} | ${existing ? 'EXISTING' : 'NEW'}`);
 
         return {
-          id: existing?.id || assetId,
+          // Use auto_ ID for wallet-synced assets. If existing asset had a
+          // drift_ ID, switch to auto_ so Drift sync won't confuse it.
+          id: (existing?.id && !existing.id.startsWith('drift_')) ? existing.id : assetId,
           type: preservedType,
           subtype: preservedSubtype,
           name: preservedName,
@@ -1597,9 +1599,10 @@ export const useStore = create<AppState>((set, get) => ({
             symbol: sa.symbol,
             decimals: sa.decimals ?? existingMeta.decimals,  // store token decimals for accurate swaps
             logoURI: existingMeta.logoURI || sa.logoURI,
-            // These are PRESERVED from existing (spread above handles it,
-            // but listed here for clarity of what we protect):
-            // protocol, positionType, supplied, borrowed, leverage, healthFactor
+            // Wallet-synced tokens are NOT in Drift — if the existing asset
+            // had protocol:'Drift' (from a previous Drift sync), clear it so
+            // the Drift sync won't confuse this wallet token with a Drift position.
+            protocol: existingMeta.protocol?.toLowerCase() === 'drift' ? undefined : existingMeta.protocol,
           },
         };
       });
@@ -1911,16 +1914,24 @@ export const useStore = create<AppState>((set, get) => ({
         });
 
       // 4. Merge: replace matching Drift assets, keep everything else
+      //    IMPORTANT: Only remove assets that are actually Drift positions
+      //    (drift_ prefixed ID or non-wallet-synced protocol:drift assets).
+      //    Wallet-synced tokens (auto_ prefixed) should NEVER be removed here,
+      //    even if they share the same symbol (e.g. USDC in wallet vs USDC in Drift).
       const nonDriftAssets = currentAssets.filter(a => {
-        // Remove old manual Drift assets that are now auto-synced
-        const meta = a.metadata as any;
-        const sym = (meta?.symbol || '').toUpperCase();
-        if (meta?.protocol?.toLowerCase() === 'drift' && driftAssetIds.has(`drift_${sym}`)) {
-          console.log(`[DRIFT-SYNC] Replacing manual "${a.name}" with auto-synced`);
-          return false;
-        }
+        // Never touch wallet-synced assets (auto_ prefix = from wallet sync)
+        if (a.id.startsWith('auto_')) return true;
+
         // Remove old auto-synced drift assets (will be replaced)
         if (a.id.startsWith('drift_') && driftAssetIds.has(a.id)) {
+          return false;
+        }
+        // Remove old manual Drift assets that are now auto-synced
+        // Only if they have a drift_ style ID or were manually tagged as Drift
+        const meta = a.metadata as any;
+        const sym = (meta?.symbol || '').toUpperCase();
+        if (meta?.protocol?.toLowerCase() === 'drift' && !a.id.startsWith('auto_') && driftAssetIds.has(`drift_${sym}`)) {
+          console.log(`[DRIFT-SYNC] Replacing manual "${a.name}" with auto-synced`);
           return false;
         }
         return true;
