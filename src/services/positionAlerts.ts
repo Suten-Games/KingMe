@@ -108,10 +108,38 @@ export function generatePositionAlerts(
     const mint = meta.tokenMint || meta.mint || '';
     const symbol = meta.symbol || asset.name;
 
-    // Skip stablecoins
-    if (STABLE_MINTS.has(mint)) continue;
-
+    const isStable = STABLE_MINTS.has(mint);
     const price = priceData[mint];
+
+    // Stablecoins: skip price-based alerts but still check idle capital
+    if (isStable) {
+      // ── Idle stablecoin — suggest yield deployment ───────────────
+      if (asset.value >= 100 && asset.annualIncome === 0) {
+        const kaminoRate = (context as any)?.kaminoRates?.['USDC'] || (context as any)?.kaminoRates?.[symbol];
+        const kaminoApy = kaminoRate?.supplyApr || 0;
+        const monthlyYield = asset.value * (kaminoApy || 9.3) / 100 / 12;
+
+        alerts.push({
+          id: `idle-stable-${mint}-${now}`,
+          assetId: asset.id, assetName: asset.name, symbol, mint,
+          priority: asset.value >= 500 ? 'high' : 'medium',
+          action: 'deploy_yield',
+          title: `$${fmtNum(asset.value)} ${symbol} sitting idle`,
+          message: `Put your ${symbol} to work earning yield.`,
+          detail: kaminoApy > 0
+            ? `Deposit to Kamino Lend for ${kaminoApy.toFixed(1)}% APY (+$${monthlyYield.toFixed(0)}/mo).`
+            : `Deploy to Perena USD* (9.3% APY) or Kamino Lend for yield (+$${monthlyYield.toFixed(0)}/mo).`,
+          emoji: '💰',
+          actionLabel: kaminoApy > 0 ? `Lend on Kamino (${kaminoApy.toFixed(1)}%)` : 'Earn Yield',
+          actionParams: kaminoApy > 0
+            ? { type: 'kamino_deposit', mint, symbol }
+            : { type: 'deposit', protocol: 'perena' },
+          value: asset.value, change: null, timestamp: now,
+        });
+      }
+      continue;
+    }
+
     if (!price) continue;
 
     const positionPct = totalPortfolioValue > 0
