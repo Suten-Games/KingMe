@@ -74,22 +74,49 @@ export default function ProfileScreen() {
   const [activePersona, setActivePersona] = useState<string | null>(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
 
-  const handleLoadPersona = (persona: DemoPersona) => {
+  const handleLoadPersona = async (persona: DemoPersona) => {
     // Save real profile first (only on first demo load)
     if (!savedRealProfile) {
       const backup = exportBackup();
       setSavedRealProfile(backup);
+      // Also stash goals & accumulation plans so they don't bleed into demo
+      try {
+        const [goals, plans] = await Promise.all([
+          AsyncStorage.getItem('kingme_goals'),
+          AsyncStorage.getItem('accumulation_plans'),
+        ]);
+        await AsyncStorage.setItem('_demo_saved_goals', goals || '[]');
+        await AsyncStorage.setItem('_demo_saved_plans', plans || '{}');
+      } catch {}
     }
+    // Clear goals & plans for demo persona
+    await Promise.all([
+      AsyncStorage.setItem('kingme_goals', '[]'),
+      AsyncStorage.setItem('accumulation_plans', '{}'),
+    ]);
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     setActivePersona(persona.id);
     setIsDemoMode(true);
     setShowDemoModal(false);
   };
 
-  const handleExitDemo = () => {
+  const handleExitDemo = async () => {
     if (savedRealProfile) {
       importBackup(savedRealProfile);
       setSavedRealProfile(null);
+      // Restore saved goals & accumulation plans
+      try {
+        const [goals, plans] = await Promise.all([
+          AsyncStorage.getItem('_demo_saved_goals'),
+          AsyncStorage.getItem('_demo_saved_plans'),
+        ]);
+        await Promise.all([
+          AsyncStorage.setItem('kingme_goals', goals || '[]'),
+          AsyncStorage.setItem('accumulation_plans', plans || '{}'),
+          AsyncStorage.removeItem('_demo_saved_goals'),
+          AsyncStorage.removeItem('_demo_saved_plans'),
+        ]);
+      } catch {}
     }
     setIsDemoMode(false);
     setActivePersona(null);
