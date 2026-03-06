@@ -179,6 +179,7 @@ export default function SpendingPage() {
     // 1) Bank transactions — skip transfers & categories that duplicate Debt/Obligation objects
     const EXCLUDED_CATS = new Set([
       'transfer_between_accounts', 'transfer_to_other',   // account movements, not spending
+      'financial_debt_payment',                            // credit card payments are transfers, not spending
       'financial_investment', 'financial_savings_transfer', // account movements, not spending
     ]);
 
