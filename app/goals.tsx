@@ -7,14 +7,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, Platform, Alert as RNAlert, RefreshControl,
+  Modal, TextInput, Platform, Alert as RNAlert, RefreshControl, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '../src/store/useStore';
 import ConfirmModal from '../src/components/ConfirmModal';
 import { SwapEvents } from '../src/utils/swapEvents';
 import TargetIcon from '../src/components/icons/TargetIcon';
+import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import {
   loadGoals, saveGoals, addGoal, updateGoal, removeGoal,
   refreshGoalProgress, calcGoalProgress, sortByReachability,
@@ -52,6 +57,8 @@ const TYPE_EMOJIS: Record<GoalType, string> = {
 
 // ══════════════════════════════════════════════════════════════════
 export default function GoalsScreen() {
+  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const debts = useStore(s => s.debts);
   const bankAccounts = useStore(s => s.bankAccounts);
@@ -285,7 +292,32 @@ export default function GoalsScreen() {
 
   // ══════════════════════════════════════════════════════════════
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: '#080c18' }}>
+    <LinearGradient
+      colors={['#10162a', '#0c1020', '#080c18']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[st.kmHeader, { paddingTop: Math.max(insets.top, 14) }]}
+    >
+      <View style={st.kmHeaderRow}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={st.kmBackButton}>
+          <Text style={st.kmBackText}>{'\u2190'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={st.kmBrand} activeOpacity={0.7} onPress={() => router.replace('/')}>
+          <Image source={require('../src/assets/images/kingmelogo.jpg')} style={st.kmLogo} resizeMode="cover" />
+          <MaskedView maskElement={<Text style={[st.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>KingMe</Text>}>
+            <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <Text style={[st.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}>KingMe</Text>
+            </LinearGradient>
+          </MaskedView>
+        </TouchableOpacity>
+        <View style={{ marginLeft: 'auto' }}>
+          <WalletHeaderButton />
+        </View>
+      </View>
+      <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.kmAccent} />
+    </LinearGradient>
+
     <ScrollView
       style={st.container}
       contentContainerStyle={st.content}
@@ -780,6 +812,8 @@ export default function GoalsScreen() {
           </View>
         </View>
       </Modal>
+
+      <KingMeFooter />
     </ScrollView>
 
     <ConfirmModal
@@ -792,7 +826,7 @@ export default function GoalsScreen() {
       onConfirm={confirmDeleteGoal}
       onCancel={() => setConfirmDelete(null)}
     />
-    </>
+    </View>
   );
 }
 
@@ -831,7 +865,17 @@ function ManualUpdater({ goal, onUpdate }: { goal: GoalWithProgress; onUpdate: (
 // ══════════════════════════════════════════════════════════════════
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080c18' },
-  content: { padding: 16, paddingTop: Platform.OS === 'ios' ? 60 : 20 },
+  content: { padding: 16, paddingBottom: 40 },
+
+  // KingMe header
+  kmHeader: { paddingHorizontal: 16, paddingBottom: 8 },
+  kmHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kmBackButton: { padding: 8, marginRight: 2 },
+  kmBackText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
+  kmBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  kmLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
+  kmTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28 },
+  kmAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
 
   title: { fontSize: 28, fontWeight: '800', color: '#f4c430', marginBottom: 2 },
   subtitle: { fontSize: 13, color: '#888', marginBottom: 16 },

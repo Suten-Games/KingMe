@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView 
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import type { DailyExpense, DailyExpenseCategory, BankAccount } from '../types';
+import KingMeFooter from './KingMeFooter';
 import type { BankTransaction, CustomCategoryDef } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META } from '../types/bankTransactionTypes';
 
@@ -460,6 +461,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                 );
               })
             )}
+            <KingMeFooter />
           </ScrollView>
         </>
       )}
