@@ -14,13 +14,14 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Asset } from '@/types';
 import {
-  getPlan, createPlan, addEntry, computePlanStats,
+  getPlan, createPlan, addEntry, deletePlan, computePlanStats,
   type AccumulationPlan, type PlanStats,
 } from '@/services/accumulationPlan';
 import {
-  addGoal, loadGoals, makeTokenGoal, formatNum,
+  addGoal, loadGoals, removeGoal, makeTokenGoal, formatNum,
 } from '@/services/goals';
 import TargetIcon from './icons/TargetIcon';
+import ConfirmModal from './ConfirmModal';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -47,6 +48,9 @@ export default function AssetTargetSection({ asset }: Props) {
   const [targetInput, setTargetInput] = useState('');
   const [avgPriceInput, setAvgPriceInput] = useState('');
 
+  // Remove plan
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
   // Quick log entry
   const [showLogEntry, setShowLogEntry] = useState(false);
   const [entryType, setEntryType] = useState<'buy' | 'sell'>('buy');
@@ -67,6 +71,19 @@ export default function AssetTargetSection({ asset }: Props) {
   }, [mint, pricePerToken]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const handleRemovePlan = async () => {
+    if (!mint) return;
+    await deletePlan(mint);
+    // Also remove linked goals
+    try {
+      const goals = await loadGoals();
+      for (const g of goals.filter(g => g.mint === mint)) await removeGoal(g.id);
+    } catch {}
+    setPlan(null);
+    setStats(null);
+    setConfirmRemove(false);
+  };
 
   if (!mint || loading) return null;
 
@@ -182,9 +199,14 @@ export default function AssetTargetSection({ asset }: Props) {
 
   return (
     <View style={st.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <TargetIcon size={18} color="#4ade80" />
-        <Text style={[st.sectionTitle, { marginBottom: 0 }]}>Accumulation Target</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TargetIcon size={18} color="#4ade80" />
+          <Text style={[st.sectionTitle, { marginBottom: 0 }]}>Accumulation Target</Text>
+        </View>
+        <TouchableOpacity onPress={() => setConfirmRemove(true)} hitSlop={8}>
+          <Text style={{ color: '#666', fontSize: 13 }}>Remove</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Progress card */}
@@ -350,6 +372,17 @@ export default function AssetTargetSection({ asset }: Props) {
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={confirmRemove}
+        title="Remove Target"
+        message={`Remove the accumulation target for ${symbol}? This will also delete any linked goals.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={handleRemovePlan}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </View>
   );
 }
