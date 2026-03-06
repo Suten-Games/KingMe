@@ -1611,7 +1611,7 @@ export const useStore = create<AppState>((set, get) => ({
             mint: sa.mint,
             symbol: sa.symbol,
             decimals: sa.decimals ?? effectiveExistingMeta.decimals,
-            logoURI: effectiveExistingMeta.logoURI || sa.logoURI,
+            logoURI: effectiveExistingMeta.logoURI || sa.logoURI || lookupToken(sa.symbol)?.logoURI || '',
             // Never carry protocol:'Drift' on wallet tokens
             protocol: effectiveExistingMeta.protocol,
           },
@@ -2144,6 +2144,7 @@ export const useStore = create<AppState>((set, get) => ({
             protocol: 'Kamino',
             positionType: 'borrow',
             apy: -borrowApr,
+            logoURI: lookupToken(sym)?.logoURI || '',
             description: `${sym} borrowed on Kamino Lend`,
           },
         });

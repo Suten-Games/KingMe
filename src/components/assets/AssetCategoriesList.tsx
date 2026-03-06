@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useState, useMemo } from 'react';
 import AssetSection from '../AssetSection';
 import { getCategoryIcon, getCategoryLabel, calculateCategoryTotal, calculateCategoryIncome } from '../../utils/assetCalculations';
+import { lookupToken } from '../../utils/tokenRegistry';
 import type { CategorizedAssets } from '../../utils/assetCalculations';
 import type { Asset } from '../../types';
 
@@ -139,7 +140,7 @@ function ProtocolSubSection({
 
       {expanded && group.assets.map(asset => {
         const meta = asset.metadata as any;
-        const logoURI = meta?.logoURI;
+        const logoURI = meta?.logoURI || lookupToken(meta?.symbol)?.logoURI;
         const symbol = meta?.symbol;
         const quantity = meta?.balance || meta?.quantity;
         const apy = meta?.apy;
