@@ -123,7 +123,8 @@ export default function HomeScreen() {
   );
 
   const wallets = useStore((state) => state.wallets);
-
+  const syncWalletAssets = useStore(s => s.syncWalletAssets);
+  const lastAssetSync = useStore(s => s.lastAssetSync);
 
   const lastPriceRefresh = useStore(s => s.lastPriceRefresh);
   const refreshMarketPrices = useStore(s => s.refreshMarketPrices);
@@ -136,6 +137,17 @@ export default function HomeScreen() {
     const STALE_MS = 5 * 60 * 1000;
     const isStale = !lastPriceRefresh || (Date.now() - new Date(lastPriceRefresh).getTime() > STALE_MS);
     if (isStale) refreshMarketPrices().catch(console.error);
+  }, []);
+
+  // Auto-sync wallet tokens if stale (>5min) or never synced
+  useEffect(() => {
+    if (wallets.length === 0) return;
+    const STALE_MS = 5 * 60 * 1000;
+    const isStale = !lastAssetSync || (Date.now() - new Date(lastAssetSync).getTime() > STALE_MS);
+    if (isStale) {
+      console.log('[AUTO-SYNC] Wallet sync triggered (stale or first run)');
+      syncWalletAssets(wallets[0]).catch(console.error);
+    }
   }, []);
 
   useEffect(() => { generateScenarios(); }, []);
