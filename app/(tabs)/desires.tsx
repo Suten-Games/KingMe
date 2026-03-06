@@ -133,11 +133,11 @@ export default function DesiresScreen() {
     setManualCost('');
   };
 
-  // View a previously saved desire's plan
+  // View a previously saved desire's cached plan (no API call)
+  const [viewingDesire, setViewingDesire] = useState<Desire | null>(null);
+
   const handleViewDesire = (desire: Desire) => {
-    // Re-run the plan for this desire
-    setDesireName(desire.name);
-    handleStartResearch();
+    setViewingDesire(desire);
   };
 
   const totalDesires = desires.reduce((sum, d) => sum + d.estimatedCost, 0);
@@ -285,6 +285,61 @@ export default function DesiresScreen() {
                 <Text style={s.modalAddText}>Add Desire</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ═══ View Saved Desire Modal ═══ */}
+      <Modal visible={!!viewingDesire} animationType="slide" transparent={false} onRequestClose={() => setViewingDesire(null)}>
+        <View style={s.planContainer}>
+          <ScrollView style={s.planScroll} showsVerticalScrollIndicator={false}>
+            {viewingDesire && (
+              <View>
+                <Text style={s.viewTitle}>{viewingDesire.name}</Text>
+                <Text style={s.viewCost}>${viewingDesire.estimatedCost.toLocaleString()}</Text>
+
+                {viewingDesire.notes && (
+                  <View style={s.viewSection}>
+                    <Text style={s.viewSectionTitle}>Summary</Text>
+                    <Text style={s.viewBody}>{viewingDesire.notes}</Text>
+                  </View>
+                )}
+
+                {viewingDesire.aiResearch && (
+                  <View style={s.viewSection}>
+                    <Text style={s.viewSectionTitle}>Action Plan</Text>
+                    {viewingDesire.aiResearch.recommendation.split('\n').map((line, i) => (
+                      <View key={i} style={s.viewStepRow}>
+                        <Text style={s.viewStepNum}>{i + 1}</Text>
+                        <Text style={s.viewStepText}>{line}</Text>
+                      </View>
+                    ))}
+                    <Text style={s.viewResearchedAt}>Researched {new Date(viewingDesire.aiResearch.researchedAt).toLocaleDateString()}</Text>
+                  </View>
+                )}
+
+                {viewingDesire.researchedProduct && (
+                  <View style={s.viewSection}>
+                    <Text style={s.viewSectionTitle}>Recommended Product</Text>
+                    <Text style={s.viewBody}>{viewingDesire.researchedProduct.name} — ${viewingDesire.researchedProduct.price.toLocaleString()}</Text>
+                    {viewingDesire.researchedProduct.description && <Text style={s.viewBody}>{viewingDesire.researchedProduct.description}</Text>}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[s.modalAddButton, { marginTop: 20, backgroundColor: PURPLE }]}
+                  onPress={() => { setViewingDesire(null); setDesireName(viewingDesire.name); handleStartResearch(); }}
+                >
+                  <Text style={s.modalAddText}>🤖 Regenerate Plan</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={s.planBottomBar}>
+            <TouchableOpacity style={s.planCancelButton} onPress={() => setViewingDesire(null)}>
+              <Text style={s.planCancelText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -441,4 +496,15 @@ const s = StyleSheet.create({
   planCancelText: { color: T.textSecondary, fontSize: 16, fontFamily: T.fontMedium },
   planSaveButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: PURPLE, alignItems: 'center' },
   planSaveText: { color: T.textPrimary, fontSize: 16, fontFamily: T.fontBold },
+
+  // View saved desire
+  viewTitle: { fontSize: 24, color: T.textPrimary, fontFamily: T.fontExtraBold, marginBottom: 4 },
+  viewCost: { fontSize: 28, color: PURPLE, fontFamily: T.fontExtraBold, marginBottom: 20 },
+  viewSection: { marginBottom: 20, backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, borderWidth: 1, borderColor: T.border },
+  viewSectionTitle: { fontSize: 14, color: PURPLE, fontFamily: T.fontBold, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  viewBody: { fontSize: 15, color: T.textSecondary, lineHeight: 22, fontFamily: T.fontRegular },
+  viewStepRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  viewStepNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: PURPLE + '20', color: PURPLE, fontSize: 12, fontFamily: T.fontBold, textAlign: 'center', lineHeight: 22, overflow: 'hidden' },
+  viewStepText: { flex: 1, fontSize: 14, color: T.textSecondary, lineHeight: 20, fontFamily: T.fontRegular },
+  viewResearchedAt: { fontSize: 12, color: T.textDim, marginTop: 10, fontFamily: T.fontRegular },
 });
