@@ -429,12 +429,12 @@ export async function executeSwap(
 
     // Friendly error messages
     let message = error.message || 'Swap failed';
-    if (message.includes('User rejected')) {
+    if (message.includes('User rejected') || message.includes('cancelled')) {
       message = 'Transaction cancelled by user';
-    } else if (message.includes('insufficient')) {
+    } else if (message.includes('0x1788') || message.includes('6024') || message.includes('SlippageTolerance') || message.includes('slippage')) {
+      message = 'Slippage exceeded — increase slippage tolerance and try again';
+    } else if (message.includes('insufficient') || message.includes('not enough')) {
       message = 'Insufficient balance for this swap';
-    } else if (message.includes('slippage')) {
-      message = 'Price moved too much — try again with higher slippage';
     }
 
     return {
