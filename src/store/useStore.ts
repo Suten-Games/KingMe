@@ -23,7 +23,7 @@ import { loadAllPlans, computePlanStats } from '../services/accumulationPlan';
 import { loadGoals } from '../services/goals';
 import { fetchAllMarketPrices } from '../services/marketPriceService';
 import { lookupToken } from '../utils/tokenRegistry';
-import type { CryptoAsset, StockAsset } from '../types';
+import type { CryptoAsset, StockAsset, DriftPerpPosition, DriftOpenOrder } from '../types';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -103,6 +103,8 @@ interface AppState extends UserProfile {
   syncWalletAssets: (walletAddress: string) => Promise<void>;
   syncDriftAssets: (walletAddress: string) => Promise<void>;
   driftRates: Record<string, { depositApy: number; borrowApy: number }>;
+  driftPositions: { perpPositions: DriftPerpPosition[]; openOrders: DriftOpenOrder[] };
+  syncDriftPositions: (walletAddress: string) => Promise<void>;
   syncKaminoAssets: (walletAddress: string) => Promise<void>;
   kaminoRates: Record<string, { supplyApr: number; borrowApr: number; tvl: number }>;
 
@@ -287,6 +289,7 @@ export const useStore = create<AppState>((set, get) => ({
   // What-If Scenarios
   whatIfScenarios: [],
   driftRates: {},
+  driftPositions: { perpPositions: [], openOrders: [] },
   kaminoRates: {},
 
   // ──────────────────────────────────────────────────────────────
@@ -2096,6 +2099,40 @@ export const useStore = create<AppState>((set, get) => ({
 
     } catch (error: any) {
       console.error('[DRIFT-SYNC] Error:', error.message);
+    }
+  },
+
+  // ─── Drift Active Positions Sync ────────────────────────────────────────
+  syncDriftPositions: async (walletAddress: string) => {
+    const DRIFT_API_BASE = 'https://kingme-api.vercel.app/api/drift';
+    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
+
+    try {
+      const headers: Record<string, string> = {};
+      if (rpcUrl) headers['X-RPC-URL'] = rpcUrl;
+
+      const url = `${DRIFT_API_BASE}/positions?wallet=${walletAddress}&subAccount=1`;
+      console.log('[DRIFT-POS] Fetching active positions...');
+      const resp = await fetch(url, { headers });
+
+      if (!resp.ok) {
+        if (resp.status === 404) {
+          console.log('[DRIFT-POS] No Drift account, skipping');
+          return;
+        }
+        throw new Error(`Drift positions API error: ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      set({
+        driftPositions: {
+          perpPositions: data.perpPositions || [],
+          openOrders: data.openOrders || [],
+        },
+      });
+      console.log(`[DRIFT-POS] Got ${data.perpPositions?.length || 0} perp positions, ${data.openOrders?.length || 0} open orders`);
+    } catch (error: any) {
+      console.error('[DRIFT-POS] Error:', error.message);
     }
   },
 

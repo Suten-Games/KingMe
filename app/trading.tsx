@@ -35,6 +35,10 @@ export default function TradingScreen() {
   const isManual = tradingPlatform === 'manual';
   const hasChosenPlatform = !!tradingPlatform;
 
+  const driftPositions = useStore((s) => s.driftPositions);
+  const syncDriftPositions = useStore((s) => s.syncDriftPositions);
+  const wallets = useStore((s) => s.wallets);
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [otherPlatformName, setOtherPlatformName] = useState('');
   const [showOtherInput, setShowOtherInput] = useState(false);
@@ -83,6 +87,13 @@ export default function TradingScreen() {
   const [goalAmounts, setGoalAmounts] = useState<Record<string, string>>({});  // goalId → amount string
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
+
+  // Fetch active Drift positions on mount
+  useEffect(() => {
+    if (isDrift && wallets?.[0]) {
+      syncDriftPositions(wallets[0]);
+    }
+  }, [isDrift]);
 
   useEffect(() => {
     loadGoals().then(raw => {
@@ -152,7 +163,10 @@ export default function TradingScreen() {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const result = await syncDriftTradeHistory({ year: selectedYear, month: selectedMonth + 1 });
+      const [result] = await Promise.all([
+        syncDriftTradeHistory({ year: selectedYear, month: selectedMonth + 1 }),
+        wallets?.[0] ? syncDriftPositions(wallets[0]) : Promise.resolve(),
+      ]);
       if (result.error) {
         Alert.alert('Sync Error', result.error);
       } else if (result.imported === 0) {
@@ -409,6 +423,86 @@ export default function TradingScreen() {
             </View>
           </View>
         </View>
+
+        {/* Active Drift Positions */}
+        {isDrift && (driftPositions.perpPositions.length > 0 || driftPositions.openOrders.length > 0) && (
+          <View style={styles.positionsSection}>
+            <Text style={styles.sectionTitle}>Active Positions</Text>
+            {driftPositions.perpPositions.map((pos) => (
+              <View key={`perp-${pos.marketIndex}`} style={styles.positionCard}>
+                <View style={styles.positionHeader}>
+                  <Text style={styles.positionSymbol}>{pos.symbol}</Text>
+                  <View style={[styles.directionBadge, { backgroundColor: pos.direction === 'long' ? '#1a3a2a' : '#3a1a2a' }]}>
+                    <Text style={[styles.directionText, { color: pos.direction === 'long' ? '#4ade80' : '#f87171' }]}>
+                      {pos.direction.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={[styles.positionPnl, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#ff6b6b' }]}>
+                    {pos.unrealizedPnl >= 0 ? '+' : ''}{formatCurrency(pos.unrealizedPnl)}
+                  </Text>
+                </View>
+                <View style={styles.positionDetails}>
+                  <View style={styles.positionDetail}>
+                    <Text style={styles.positionDetailLabel}>Size</Text>
+                    <Text style={styles.positionDetailValue}>{pos.sizeBase.toFixed(4)}</Text>
+                  </View>
+                  <View style={styles.positionDetail}>
+                    <Text style={styles.positionDetailLabel}>Entry</Text>
+                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.entryPrice)}</Text>
+                  </View>
+                  <View style={styles.positionDetail}>
+                    <Text style={styles.positionDetailLabel}>Break-even</Text>
+                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.breakEvenPrice)}</Text>
+                  </View>
+                  <View style={styles.positionDetail}>
+                    <Text style={styles.positionDetailLabel}>Notional</Text>
+                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.sizeQuote)}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+            {driftPositions.openOrders.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { fontSize: 14, marginTop: 12, marginBottom: 6 }]}>Open Orders</Text>
+                {driftPositions.openOrders.map((order) => (
+                  <View key={`order-${order.orderId}`} style={[styles.positionCard, { paddingVertical: 10 }]}>
+                    <View style={styles.positionHeader}>
+                      <Text style={styles.positionSymbol}>{order.symbol}</Text>
+                      <View style={[styles.directionBadge, { backgroundColor: order.direction === 'long' ? '#1a3a2a' : '#3a1a2a' }]}>
+                        <Text style={[styles.directionText, { color: order.direction === 'long' ? '#4ade80' : '#f87171' }]}>
+                          {order.direction.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={styles.orderType}>{order.orderType}</Text>
+                    </View>
+                    <View style={styles.positionDetails}>
+                      <View style={styles.positionDetail}>
+                        <Text style={styles.positionDetailLabel}>Price</Text>
+                        <Text style={styles.positionDetailValue}>{formatCurrency(order.price)}</Text>
+                      </View>
+                      <View style={styles.positionDetail}>
+                        <Text style={styles.positionDetailLabel}>Size</Text>
+                        <Text style={styles.positionDetailValue}>{order.size.toFixed(4)}</Text>
+                      </View>
+                      {order.triggerPrice && (
+                        <View style={styles.positionDetail}>
+                          <Text style={styles.positionDetailLabel}>Trigger</Text>
+                          <Text style={styles.positionDetailValue}>{formatCurrency(order.triggerPrice)}</Text>
+                        </View>
+                      )}
+                      {order.reduceOnly && (
+                        <View style={styles.positionDetail}>
+                          <Text style={styles.positionDetailLabel}>Type</Text>
+                          <Text style={[styles.positionDetailValue, { color: '#ff9f43' }]}>Reduce Only</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+        )}
 
         {/* Platform Choice Banner */}
         {!hasChosenPlatform && (
@@ -981,6 +1075,53 @@ const styles = StyleSheet.create({
   emptyCard: { padding: 30, alignItems: 'center' },
   emptyText: { fontSize: 16, color: '#666', marginBottom: 6 },
   emptySubtext: { fontSize: 13, color: '#444', textAlign: 'center' },
+  positionsSection: { marginBottom: 16 },
+  positionCard: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#60a5fa',
+  },
+  positionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  positionSymbol: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  positionPnl: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 'auto',
+  },
+  positionDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  positionDetail: {},
+  positionDetailLabel: {
+    color: '#8892b0',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  positionDetailValue: {
+    color: '#ccd6f6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  orderType: {
+    color: '#8892b0',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginLeft: 'auto',
+  },
   tradeCard: {
     backgroundColor: '#1a1f2e',
     borderRadius: 12,

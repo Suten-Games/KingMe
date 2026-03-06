@@ -458,6 +458,31 @@ export interface GoalAllocation {
   type: 'crypto' | 'bank' | 'other';
 }
 
+// ─── Drift Active Positions ──────────────────────────────────────────────────
+export interface DriftPerpPosition {
+  marketIndex: number;
+  symbol: string;
+  direction: 'long' | 'short';
+  sizeBase: number;
+  sizeQuote: number;
+  entryPrice: number;
+  unrealizedPnl: number;
+  breakEvenPrice: number;
+}
+
+export interface DriftOpenOrder {
+  orderId: number;
+  marketIndex: number;
+  symbol: string;
+  marketType: 'perp' | 'spot';
+  direction: 'long' | 'short';
+  orderType: string;
+  price: number;
+  size: number;
+  triggerPrice: number | null;
+  reduceOnly: boolean;
+}
+
 // ─── Daily Expense Tracker ───────────────────────────────────────────────────
 // Optional: track every expense manually (alternative to using daily_living estimate)
 export type DailyExpenseCategory =
