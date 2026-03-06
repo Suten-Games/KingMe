@@ -18,6 +18,7 @@ import KingMeFooter from '../src/components/KingMeFooter';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
 import type { ObligationCategory } from '@/types';
+import { autoCategorize } from '@/utils/csvBankImport';
 
 const fmt = (n: number) => '$' + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
@@ -201,8 +202,17 @@ export default function SpendingPage() {
 
     // 2) Obligations — monthly costs, always included
     for (const ob of obligations) {
-      const grp = OBLIGATION_GROUP_MAP[ob.category] || 'other';
-      const syntheticCat = `_obligation_${ob.category}`;
+      // Try to place 'other' obligations in a better group using autoCategorize
+      let grp: BankTransactionGroup = OBLIGATION_GROUP_MAP[ob.category] || 'other';
+      let obCatKey = ob.category as string;
+      if (grp === 'other') {
+        const autoCat = autoCategorize(ob.name + ' ' + (ob.payee || ''));
+        if (autoCat !== 'other') {
+          const autoGroup = resolveGroup(autoCat, customCategories);
+          if (autoGroup) { grp = autoGroup; obCatKey = autoCat; }
+        }
+      }
+      const syntheticCat = `_obligation_${obCatKey}`;
       ensureCat(grp, syntheticCat);
       // For "all time", scale by monthCount so proportions are fair against bank txn totals
       const amt = selectedMonth === 'all' ? ob.amount * monthCount : ob.amount;
@@ -252,11 +262,18 @@ export default function SpendingPage() {
               label = 'Debt Payments';
               emoji = '\u{1F4B3}';
             } else if (cat.startsWith('_obligation_')) {
-              const obCat = cat.replace('_obligation_', '') as ObligationCategory;
-              const groupForOb = OBLIGATION_GROUP_MAP[obCat];
-              const groupMeta = TRANSACTION_GROUP_META[groupForOb];
-              label = groupMeta ? `${groupMeta.label} (recurring)` : 'Recurring';
-              emoji = '\u{1F501}';
+              const obCatKey = cat.replace('_obligation_', '');
+              // Try built-in category meta first (e.g. medical_dental), then obligation group map
+              const catMeta = TRANSACTION_CATEGORY_META[obCatKey as keyof typeof TRANSACTION_CATEGORY_META];
+              if (catMeta) {
+                label = `${catMeta.label} (recurring)`;
+                emoji = catMeta.emoji;
+              } else {
+                const groupForOb = OBLIGATION_GROUP_MAP[obCatKey as ObligationCategory];
+                const groupMeta = groupForOb ? TRANSACTION_GROUP_META[groupForOb] : null;
+                label = groupMeta ? `${groupMeta.label} (recurring)` : 'Recurring';
+                emoji = '\u{1F501}';
+              }
             } else {
               const catMeta = resolveCategoryMeta(cat as BankTransactionCategory, customCategories);
               label = catMeta.label;
