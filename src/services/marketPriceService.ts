@@ -3,9 +3,11 @@
 // Solana tokens with a mint address are priced via Jupiter/DexScreener during wallet sync — not here.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const CACHE_KEY = 'market_price_cache';
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
+const isWeb = Platform.OS === 'web';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,31 +25,35 @@ export async function fetchStockPrices(tickers: string[]): Promise<Record<string
   const prices: Record<string, number> = {};
 
   try {
-    // Batch via v7 quote endpoint
     const symbols = tickers.join(',');
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; KingMe/1.0)',
-      },
-    });
 
-    if (!res.ok) throw new Error(`Yahoo Finance ${res.status}`);
-
-    const data = await res.json();
-    const results = data?.quoteResponse?.result || [];
-
-    for (const quote of results) {
-      const price = quote.regularMarketPrice;
-      if (quote.symbol && typeof price === 'number' && price > 0) {
-        prices[quote.symbol.toUpperCase()] = price;
+    if (isWeb) {
+      // On web, proxy through our own API to avoid CORS
+      const url = `https://kingme.money/api/market/stocks?symbols=${encodeURIComponent(symbols)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Stock proxy ${res.status}`);
+      const data = await res.json();
+      Object.assign(prices, data.prices || {});
+    } else {
+      // Native — call Yahoo directly (no CORS restriction)
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; KingMe/1.0)' },
+      });
+      if (!res.ok) throw new Error(`Yahoo Finance ${res.status}`);
+      const data = await res.json();
+      const results = data?.quoteResponse?.result || [];
+      for (const quote of results) {
+        const price = quote.regularMarketPrice;
+        if (quote.symbol && typeof price === 'number' && price > 0) {
+          prices[quote.symbol.toUpperCase()] = price;
+        }
       }
     }
 
     console.log(`[MARKET] Yahoo Finance: ${Object.keys(prices).length}/${tickers.length}`);
   } catch (err) {
-    // CORS may block on web — log and skip, prices stay at last-known value
-    console.warn('[MARKET] Yahoo Finance failed (may be CORS on web):', err);
+    console.warn('[MARKET] Yahoo Finance failed:', err);
   }
 
   return prices;
