@@ -200,6 +200,7 @@ export type ScenarioType =
   | 'drift_yield'
   | 'goal_upgrade'
   | 'drift_withdraw'
+  | 'kamino_lending'
   | 'custom';
 
 export interface WhatIfScenario {

@@ -88,6 +88,7 @@ export function generatePositionAlerts(
   assets: Asset[],
   priceData: Record<string, TokenPriceData>,
   accPlans?: AccPlanContext[],
+  context?: { kaminoRates?: Record<string, { supplyApr: number; borrowApr: number; tvl: number }> },
 ): PositionAlert[] {
   const alerts: PositionAlert[] = [];
   const now = Date.now();
@@ -380,21 +381,31 @@ export function generatePositionAlerts(
       }
     }
 
-    // ── 8. Idle capital — no yield ───────────────────────────────────
+    // ── 8. Idle capital — no yield (suggest Kamino or Perena) ───────
     if (asset.annualIncome === 0 && asset.value >= 500 && !meta.isStaked) {
       const hasHigherAlert = alerts.some(a => a.mint === mint && (a.priority === 'urgent' || a.priority === 'high'));
       if (!hasHigherAlert) {
+        // Check if Kamino has a rate for this token (passed via kaminoRates in context)
+        const kaminoRate = (context as any)?.kaminoRates?.[symbol] || (context as any)?.kaminoRates?.[symbol.toUpperCase()];
+        const kaminoApy = kaminoRate?.supplyApr || 0;
+
+        const detail = kaminoApy > 0
+          ? `Deposit to Kamino Lend for ${kaminoApy.toFixed(1)}% APY (+$${(asset.value * kaminoApy / 100 / 12).toFixed(0)}/mo).`
+          : `Deploy to Perena USD* (9.3% APY) or Kamino Lend for yield.`;
+
         alerts.push({
           id: `idle-${mint}-${now}`,
           assetId: asset.id, assetName: asset.name, symbol, mint,
-          priority: 'low',
+          priority: kaminoApy > 3 ? 'medium' : 'low',
           action: 'deploy_yield',
           title: `${symbol} isn't earning anything`,
           message: `$${fmtVal(asset.value)} sitting idle.`,
-          detail: `Deploy to Perena USD* (9.3% APY) or stake for yield.`,
+          detail,
           emoji: '💤',
-          actionLabel: 'Earn Yield',
-          actionParams: { type: 'deposit', protocol: 'perena' },
+          actionLabel: kaminoApy > 0 ? `Lend on Kamino (${kaminoApy.toFixed(1)}%)` : 'Earn Yield',
+          actionParams: kaminoApy > 0
+            ? { type: 'kamino_deposit', mint, symbol }
+            : { type: 'deposit', protocol: 'perena' },
           value: asset.value, change: price.change24h, timestamp: now,
         });
       }

@@ -16,6 +16,7 @@ interface UserProfile {
   driftTrades?: DriftTrade[];
   goals?: Goal[];
   driftRates?: Record<string, { depositApy: number; borrowApy: number }>;
+  kaminoRates?: Record<string, { supplyApr: number; borrowApr: number; tvl: number }>;
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -154,6 +155,16 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     profile.settings?.driftMinCollateral
   );
   if (driftWithdrawScenario) scenarios.push(driftWithdrawScenario);
+
+  // 14. KAMINO LENDING — deploy idle tokens for yield
+  const kaminoScenario = generateKaminoLendingScenario(
+    assets,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds,
+    profile.kaminoRates || {}
+  );
+  if (kaminoScenario) scenarios.push(kaminoScenario);
 
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
@@ -1948,6 +1959,135 @@ function calculateMonthlyNeeds(
 function formatCurrencyShort(amt: number): string {
   if (amt >= 1000) return `$${(amt / 1000).toFixed(1)}k`;
   return `$${Math.round(amt)}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 14. KAMINO LENDING — Scan tokens for yield opportunities
+// ═══════════════════════════════════════════════════════════════
+
+function generateKaminoLendingScenario(
+  assets: Asset[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number,
+  kaminoRates: Record<string, { supplyApr: number; borrowApr: number; tvl: number }>
+): WhatIfScenario | null {
+  if (Object.keys(kaminoRates).length === 0) return null;
+
+  // Find tokens that could earn more yield on Kamino
+  const opportunities: Array<{
+    asset: Asset;
+    symbol: string;
+    mint: string;
+    currentApy: number;
+    kaminoApy: number;
+    gain: number;
+    additionalAnnual: number;
+  }> = [];
+
+  for (const asset of assets) {
+    const meta = asset.metadata as any;
+    const mint = meta?.tokenMint || meta?.mint || '';
+    const symbol = (meta?.symbol || asset.name || '').toUpperCase();
+    if (!mint || asset.value < 50) continue;
+
+    // Skip if already on Kamino
+    if (meta?.protocol?.toLowerCase() === 'kamino') continue;
+    // Skip Drift positions (they have their own yield)
+    if (meta?.protocol?.toLowerCase() === 'drift') continue;
+
+    // Look up Kamino rate by symbol
+    const rate = kaminoRates[symbol] || kaminoRates[symbol.toLowerCase()];
+    if (!rate || rate.supplyApr <= 0) continue;
+
+    const currentApy = meta?.apy || 0;
+    const gain = rate.supplyApr - currentApy;
+
+    // Only suggest if meaningful improvement (>0.5% better or currently 0)
+    if (gain < 0.5 && currentApy > 0) continue;
+
+    opportunities.push({
+      asset,
+      symbol,
+      mint,
+      currentApy,
+      kaminoApy: rate.supplyApr,
+      gain,
+      additionalAnnual: asset.value * (gain / 100),
+    });
+  }
+
+  if (opportunities.length === 0) return null;
+
+  // Sort by additional income
+  opportunities.sort((a, b) => b.additionalAnnual - a.additionalAnnual);
+
+  const totalValue = opportunities.reduce((s, o) => s + o.asset.value, 0);
+  const totalAdditionalAnnual = opportunities.reduce((s, o) => s + o.additionalAnnual, 0);
+  const monthlyIncomeDelta = totalAdditionalAnnual / 12;
+  const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
+  const newFreedom = monthlyNeeds > 0 ? newMonthlyIncome / monthlyNeeds : 0;
+  const bestApy = Math.max(...opportunities.map(o => o.kaminoApy));
+
+  const tokenList = opportunities.slice(0, 4).map(o =>
+    `${o.symbol} ($${Math.round(o.asset.value).toLocaleString()}) → ${o.kaminoApy.toFixed(1)}%`
+  ).join(', ');
+
+  const description = opportunities.length === 1
+    ? `Deposit ${opportunities[0].symbol} ($${Math.round(opportunities[0].asset.value).toLocaleString()}) to Kamino for ${opportunities[0].kaminoApy.toFixed(1)}% APY`
+    : `Deposit ${opportunities.length} tokens worth $${Math.round(totalValue).toLocaleString()} into Kamino lending`;
+
+  return {
+    id: 'kamino_lending',
+    type: 'kamino_lending',
+    title: `Earn up to ${bestApy.toFixed(1)}% — Lend $${Math.round(totalValue).toLocaleString()} on Kamino`,
+    description,
+    emoji: '🏦',
+    difficulty: 'easy',
+    timeframe: 'Today',
+
+    changes: {
+      updateAssets: opportunities.map(o => ({
+        id: o.asset.id,
+        updates: {
+          annualIncome: o.asset.value * (o.kaminoApy / 100),
+          metadata: {
+            ...(o.asset.metadata as any),
+            apy: o.kaminoApy,
+            protocol: 'Kamino',
+            positionType: 'deposit',
+            description: `${o.symbol} supplied on Kamino Lend`,
+          },
+        },
+      })),
+    },
+
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta,
+      annualIncomeDelta: totalAdditionalAnnual,
+      investmentRequired: 0,
+      totalDeposit: totalValue,
+      roi: bestApy,
+    },
+
+    reasoning: `You have ${opportunities.length} token${opportunities.length > 1 ? 's' : ''} that could earn yield on Kamino Lending: ${tokenList}. ${opportunities.some(o => o.currentApy === 0) ? 'Some are currently earning nothing.' : `Current average APY is ${(opportunities.reduce((s, o) => s + o.currentApy, 0) / opportunities.length).toFixed(1)}%.`} Depositing to Kamino adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income.`,
+
+    risks: [
+      'Smart contract risk (Kamino protocol)',
+      'APY fluctuates with lending demand',
+      'Potential liquidation if borrowing against deposits',
+      'DeFi protocols are not FDIC insured',
+    ],
+
+    steps: opportunities.slice(0, 5).map(o =>
+      `Deposit ${o.symbol} ($${Math.round(o.asset.value).toLocaleString()}) → ${o.kaminoApy.toFixed(1)}% APY on Kamino`
+    ),
+  };
 }
 
 function cleanMerchantName(description: string): string {

@@ -152,7 +152,9 @@ export default function PositionAlertCards() {
           });
       }
 
-      const newAlerts = generatePositionAlerts(assets, priceData, accPlans);
+      // Pass kaminoRates for idle-capital yield suggestions
+      const kaminoRates = (useStore.getState() as any).kaminoRates || {};
+      const newAlerts = generatePositionAlerts(assets, priceData, accPlans, { kaminoRates });
 
       // ── TEST ALERT — remove after testing ──
       const bigTrout = assets.find(a => a.name?.toLowerCase().includes('trout'));
@@ -250,6 +252,9 @@ export default function PositionAlertCards() {
 
       // Show styled confirm modal
       setPendingSwap({ alert, asset, fromMint, toMint, fromSymbol, percentage, dollarValue });
+    } else if (alert.actionParams?.type === 'kamino_deposit') {
+      // Navigate to asset detail page where KaminoLendCard lives
+      router.push(`/asset/${alert.assetId}` as any);
     } else if (alert.actionParams?.type === 'deposit') {
       router.push('/(tabs)/desires');
     } else {

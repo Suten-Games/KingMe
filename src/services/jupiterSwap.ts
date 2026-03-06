@@ -171,9 +171,12 @@ export async function fetchLiveBalances(
   let solBalance = 0;
   let tokenBalance: number | null = null;
 
+  // Use the RPC proxy (Helius key stays server-side) so we don't get rate-limited
+  const rpcEndpoint = `${getApiBase()}/api/rpc/send`;
+
   try {
     // SOL balance
-    const solRes = await fetch(RPC_URL, {
+    const solRes = await fetch(rpcEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -184,6 +187,7 @@ export async function fetchLiveBalances(
     });
     const solData = await solRes.json();
     solBalance = (solData?.result?.value || 0) / 1e9;
+    console.log(`[JUPITER] Live SOL balance: ${solBalance} for ${walletAddress.slice(0, 8)}...`);
   } catch (e) {
     console.warn('[JUPITER] Failed to fetch SOL balance:', e);
   }
@@ -191,7 +195,7 @@ export async function fetchLiveBalances(
   // Token balance (if mint provided and not SOL itself)
   if (tokenMint && tokenMint !== MINTS.SOL) {
     try {
-      const tokenRes = await fetch(RPC_URL, {
+      const tokenRes = await fetch(rpcEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

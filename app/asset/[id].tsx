@@ -11,6 +11,7 @@ import ConfirmModal from '../../src/components/ConfirmModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import AssetTargetSection from '@/components/AssetTargetSection';
 import JupiterSwap from '../../src/components/JupiterSwap';
+import KaminoLendCard from '../../src/components/KaminoLendCard';
 import SparklineChart from '../../src/components/SparklineChart';
 import { loadSnapshotsForMint, fetchTokenInfo, getTokenPriceData, addToWatchlist } from '../../src/services/priceTracker';
 import type { TokenProjectInfo, TokenPriceData, PriceSnapshot } from '../../src/services/priceTracker';
@@ -40,6 +41,7 @@ export default function AssetDetailScreen() {
   const markThesisReviewed = useStore((s) => s.markThesisReviewed);
   const removeThesis = useStore((s) => s.removeThesis);
   const removeAsset = useStore((s) => s.removeAsset);
+  const kaminoRates = useStore((s) => s.kaminoRates);
 
   const [showThesisModal, setShowThesisModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -598,6 +600,17 @@ export default function AssetDetailScreen() {
             {/* JUPITER SWAP                                            */}
             {/* ═══════════════════════════════════════════════════════ */}
             <JupiterSwap asset={asset} />
+
+            {/* ═══════════════════════════════════════════════════════ */}
+            {/* KAMINO LENDING                                           */}
+            {/* ═══════════════════════════════════════════════════════ */}
+            {(() => {
+              const sym = (meta?.symbol || asset.name || '').toUpperCase();
+              const rate = kaminoRates[sym] || kaminoRates[sym.toLowerCase()];
+              return rate?.supplyApr > 0 ? (
+                <KaminoLendCard asset={asset} kaminoApy={rate.supplyApr} />
+              ) : null;
+            })()}
 
             {/* ═══════════════════════════════════════════════════════ */}
             {/* INVESTMENT THESIS (crypto — without target row)         */}
