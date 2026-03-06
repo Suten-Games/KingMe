@@ -95,13 +95,14 @@ export default function TradingScreen() {
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
 
-  // Fetch active Drift positions on mount
+  // Fetch active Drift positions on mount (re-run when wallet becomes available)
+  const walletAddr = wallets?.[0];
   useEffect(() => {
-    if (isDrift && wallets?.[0]) {
+    if (isDrift && walletAddr) {
       setIsSyncingPositions(true);
-      syncDriftPositions(wallets[0]).finally(() => setIsSyncingPositions(false));
+      syncDriftPositions(walletAddr).finally(() => setIsSyncingPositions(false));
     }
-  }, [isDrift]);
+  }, [isDrift, walletAddr]);
 
   useEffect(() => {
     loadGoals().then(raw => {
