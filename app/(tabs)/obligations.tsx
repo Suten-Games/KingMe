@@ -198,10 +198,11 @@ export default function ObligationsScreen() {
   };
 
   const handleCutAll = () => {
-    auditSummary.cuttable.forEach(o => removeObligation(o.id));
+    const eligible = auditSummary.cuttable.filter(o => !o.isPaidThisMonth);
+    eligible.forEach(o => removeObligation(o.id));
     setAuditRatings(prev => {
       const next = { ...prev };
-      auditSummary.cuttable.forEach(o => delete next[o.id]);
+      eligible.forEach(o => delete next[o.id]);
       return next;
     });
   };
@@ -392,9 +393,11 @@ export default function ObligationsScreen() {
                         </Text>
                       )}
                     </View>
-                    <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeObligation(ob.id); }} style={{ padding: 4 }}>
-                      <Text style={s.deleteButton}>✕</Text>
-                    </TouchableOpacity>
+                    {!ob.isPaidThisMonth && (
+                      <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeObligation(ob.id); }} style={{ padding: 4 }}>
+                        <Text style={s.deleteButton}>✕</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -464,10 +467,13 @@ export default function ObligationsScreen() {
                       </View>
 
                       {/* Quick actions */}
-                      {rating === 'cuttable' && (
+                      {rating === 'cuttable' && !ob.isPaidThisMonth && (
                         <TouchableOpacity style={s.cutBtn} onPress={() => { removeObligation(ob.id); setExpandedAuditId(null); }}>
                           <Text style={s.cutBtnText}>✂️ Cut this — save ${ob.amount.toFixed(0)}/month</Text>
                         </TouchableOpacity>
+                      )}
+                      {rating === 'cuttable' && ob.isPaidThisMonth && (
+                        <Text style={s.paidHint}>✅ Already paid this month — can be removed next month</Text>
                       )}
                     </View>
                   )}
@@ -717,6 +723,7 @@ const s = StyleSheet.create({
   // Cut button
   cutBtn: { backgroundColor: '#22c55e', borderRadius: T.radius.md, padding: 14, alignItems: 'center' },
   cutBtnText: { color: T.bg, fontSize: 15, fontFamily: T.fontBold },
+  paidHint: { fontSize: 13, color: T.textMuted, fontFamily: T.fontRegular, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
 
   // Tap hint
   auditTapHint: { fontSize: 11, color: T.textDim, marginTop: 8, fontFamily: T.fontRegular, textAlign: 'right' },
