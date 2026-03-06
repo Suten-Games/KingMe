@@ -11,15 +11,17 @@ import {
   TransactionConfirmationStrategy,
   PublicKey,
 } from '@solana/web3.js';
+import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
-// Point to your Vercel deployment. In dev, this might be localhost.
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
 
-// Helius or other Solana RPC (you already have HELIUS_API_KEY server-side;
-// for client-side RPC you can use the public endpoint or a dedicated one)
-const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+// On web, proxy RPC through our API to avoid public RPC rate limits / 403s.
+// On native, use the direct RPC (no CORS / rate-limit issues).
+const RPC_URL = Platform.OS === 'web'
+  ? 'https://kingme.money/api/rpc/send'
+  : (process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com');
 
 // ── Validate API_BASE at module load ─────────────────────────
 function getApiBase(): string {
