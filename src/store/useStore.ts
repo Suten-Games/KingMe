@@ -1946,7 +1946,7 @@ export const useStore = create<AppState>((set, get) => ({
       const data = await response.json();
       const { spotBalances, perpPositions: rawPerps } = data;
 
-      // Populate perp positions from balances endpoint (now includes enriched data)
+      // Populate perp positions from balances endpoint (includes oracle-based PnL)
       if (rawPerps && rawPerps.length > 0) {
         console.log(`[DRIFT-SYNC] Got ${rawPerps.length} perp positions from balances endpoint`);
         const existingPositions = get().driftPositions;
@@ -1955,13 +1955,13 @@ export const useStore = create<AppState>((set, get) => ({
           symbol: p.symbol || `PERP_${p.marketIndex}`,
           direction: (p.direction || (p.baseAssetAmount > 0 ? 'long' : 'short')) as 'long' | 'short',
           sizeBase: Math.abs(p.baseAssetAmount),
-          sizeQuote: Math.abs(p.quoteEntryAmount ?? p.quoteAssetAmount),
+          sizeQuote: p.notional ?? Math.abs(p.baseAssetAmount) * (p.markPrice ?? 0),
           entryPrice: p.entryPrice ?? 0,
-          unrealizedPnl: (p.quoteAssetAmount ?? 0) + (p.quoteEntryAmount ?? 0),
+          unrealizedPnl: p.unrealizedPnl ?? 0,
           breakEvenPrice: p.breakEvenPrice ?? 0,
         }));
         set({ driftPositions: { perpPositions: perps, openOrders: existingPositions?.openOrders || [] } });
-        console.log(`[DRIFT-SYNC] Set ${perps.length} perp positions with entry/break-even data`);
+        console.log(`[DRIFT-SYNC] Set ${perps.length} perp positions (PnL via oracle)`);
       }
 
       if (!spotBalances || spotBalances.length === 0) {

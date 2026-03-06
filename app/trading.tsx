@@ -501,39 +501,49 @@ export default function TradingScreen() {
                 <Text style={styles.emptySubtext}>Open a trade on Drift to see it here</Text>
               </View>
             )}
-            {driftPositions.perpPositions.map((pos) => (
-              <View key={`perp-${pos.marketIndex}`} style={styles.positionCard}>
-                <View style={styles.positionHeader}>
-                  <Text style={styles.positionSymbol}>{pos.symbol}</Text>
-                  <View style={[styles.directionBadge, { backgroundColor: pos.direction === 'long' ? '#1a3a2a' : '#3a1a2a' }]}>
-                    <Text style={[styles.directionText, { color: pos.direction === 'long' ? '#4ade80' : '#f87171' }]}>
-                      {pos.direction.toUpperCase()}
-                    </Text>
+            {driftPositions.perpPositions.map((pos) => {
+              const pnlPct = pos.entryPrice > 0 ? ((pos.unrealizedPnl / (pos.sizeBase * pos.entryPrice)) * 100) : 0;
+              return (
+                <View key={`perp-${pos.marketIndex}`} style={[styles.positionCard, { borderLeftColor: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>
+                  <View style={styles.positionHeader}>
+                    <Text style={styles.positionSymbol}>{pos.symbol}</Text>
+                    <View style={[styles.directionBadge, { backgroundColor: pos.direction === 'long' ? '#1a3a2a' : '#3a1a2a' }]}>
+                      <Text style={[styles.directionText, { color: pos.direction === 'long' ? '#4ade80' : '#f87171' }]}>
+                        {pos.direction.toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ marginLeft: 'auto', alignItems: 'flex-end' }}>
+                      <Text style={[styles.positionPnl, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#ff6b6b' }]}>
+                        {pos.unrealizedPnl >= 0 ? '+' : '-'}{formatCurrency(pos.unrealizedPnl)}
+                      </Text>
+                      {pos.entryPrice > 0 && (
+                        <Text style={{ color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#ff6b6b', fontSize: 11 }}>
+                          {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={[styles.positionPnl, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#ff6b6b' }]}>
-                    {pos.unrealizedPnl >= 0 ? '+' : ''}{formatCurrency(pos.unrealizedPnl)}
-                  </Text>
+                  <View style={styles.positionDetails}>
+                    <View style={styles.positionDetail}>
+                      <Text style={styles.positionDetailLabel}>Size</Text>
+                      <Text style={styles.positionDetailValue}>{pos.sizeBase.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.positionDetail}>
+                      <Text style={styles.positionDetailLabel}>Entry</Text>
+                      <Text style={styles.positionDetailValue}>{formatCurrency(pos.entryPrice)}</Text>
+                    </View>
+                    <View style={styles.positionDetail}>
+                      <Text style={styles.positionDetailLabel}>Break-even</Text>
+                      <Text style={styles.positionDetailValue}>{formatCurrency(pos.breakEvenPrice)}</Text>
+                    </View>
+                    <View style={styles.positionDetail}>
+                      <Text style={styles.positionDetailLabel}>Notional</Text>
+                      <Text style={styles.positionDetailValue}>{formatCurrency(pos.sizeQuote)}</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.positionDetails}>
-                  <View style={styles.positionDetail}>
-                    <Text style={styles.positionDetailLabel}>Size</Text>
-                    <Text style={styles.positionDetailValue}>{pos.sizeBase.toFixed(4)}</Text>
-                  </View>
-                  <View style={styles.positionDetail}>
-                    <Text style={styles.positionDetailLabel}>Entry</Text>
-                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.entryPrice)}</Text>
-                  </View>
-                  <View style={styles.positionDetail}>
-                    <Text style={styles.positionDetailLabel}>Break-even</Text>
-                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.breakEvenPrice)}</Text>
-                  </View>
-                  <View style={styles.positionDetail}>
-                    <Text style={styles.positionDetailLabel}>Notional</Text>
-                    <Text style={styles.positionDetailValue}>{formatCurrency(pos.sizeQuote)}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
+              );
+            })}
             {driftPositions.openOrders.length > 0 && (
               <>
                 <Text style={[styles.sectionTitle, { fontSize: 14, marginTop: 12, marginBottom: 6 }]}>Open Orders</Text>
