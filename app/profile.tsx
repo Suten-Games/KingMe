@@ -80,7 +80,7 @@ export default function ProfileScreen() {
       const backup = exportBackup();
       setSavedRealProfile(backup);
     }
-    importBackup(JSON.stringify(persona.profile));
+    importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     setActivePersona(persona.id);
     setIsDemoMode(true);
     setShowDemoModal(false);
