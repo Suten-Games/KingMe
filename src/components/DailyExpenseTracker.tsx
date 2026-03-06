@@ -3,24 +3,35 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView 
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import type { DailyExpense, DailyExpenseCategory, BankAccount } from '../types';
-import type { BankTransaction } from '../types/bankTransactionTypes';
+import type { BankTransaction, CustomCategoryDef } from '../types/bankTransactionTypes';
+import { TRANSACTION_CATEGORY_META } from '../types/bankTransactionTypes';
 
-// ─── category labels ──────────────────────────────────────────────────────────
-const CATEGORY_LABELS: Record<DailyExpenseCategory, { label: string; emoji: string }> = {
-  daily_spend:      { label: 'Daily Spend', emoji: '💳' },
-  transfer:         { label: 'Transfer', emoji: '↔️' },
-  smoking:          { label: 'Smoking', emoji: '🚬' },
-  food_grocery:     { label: 'Grocery', emoji: '🛒' },
-  food_dad_lunch:   { label: 'Dad Lunch', emoji: '🍔' },
-  food_restaurants: { label: 'Restaurants', emoji: '🍽️' },
-  medical:          { label: 'Medical', emoji: '🏥' },
-  business:         { label: 'Business', emoji: '💼' },
-  housing:          { label: 'Housing', emoji: '🏠' },
-  utilities:        { label: 'Utilities', emoji: '💡' },
-  transport:        { label: 'Transport', emoji: '🚗' },
-  entertainment:    { label: 'Entertainment', emoji: '🎬' },
-  other:            { label: 'Other', emoji: '📋' },
-};
+// ─── category labels — unified from TRANSACTION_CATEGORY_META + custom ────────
+function getCategoryMeta(
+  cat: string,
+  customCategories: Record<string, CustomCategoryDef>
+): { label: string; emoji: string } {
+  // Check centralized bank transaction categories first
+  const meta = (TRANSACTION_CATEGORY_META as any)[cat];
+  if (meta) return { label: meta.label, emoji: meta.emoji };
+  // Check user-defined custom categories
+  const custom = customCategories[cat];
+  if (custom) return { label: custom.label, emoji: custom.emoji };
+  // Legacy daily expense category fallback
+  const LEGACY: Record<string, { label: string; emoji: string }> = {
+    daily_spend: { label: 'Daily Spend', emoji: '💳' },
+    food_dad_lunch: { label: 'Dad Lunch', emoji: '🍔' },
+    food_restaurants: { label: 'Restaurants', emoji: '🍽️' },
+    business: { label: 'Business', emoji: '💼' },
+    housing: { label: 'Housing', emoji: '🏠' },
+    utilities: { label: 'Utilities', emoji: '💡' },
+    transport: { label: 'Transport', emoji: '🚗' },
+    entertainment: { label: 'Entertainment', emoji: '🎬' },
+    transfer: { label: 'Transfer', emoji: '↔️' },
+    medical: { label: 'Medical', emoji: '🏥' },
+  };
+  return LEGACY[cat] || { label: cat.replace(/_/g, ' '), emoji: '📋' };
+}
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +85,15 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const cryptoCardBalance     = useStore((s) => s.cryptoCardBalance);
   const bankAccounts          = useStore((s) => s.bankAccounts);
   const debts                 = useStore((s) => s.debts || []);
+  const customCategories      = useStore((s) => s.customCategories || {});
   const settings              = useStore((s) => s.settings);
+
+  // Build full category list: built-in + user-defined custom
+  const allCategoryKeys = useMemo(() => {
+    const builtIn = Object.keys(TRANSACTION_CATEGORY_META);
+    const custom = Object.keys(customCategories);
+    return [...builtIn, ...custom.filter(k => !builtIn.includes(k))];
+  }, [customCategories]);
   const addDailyExpense       = useStore((s) => s.addDailyExpense);
   const removeDailyExpense    = useStore((s) => s.removeDailyExpense);
   const updateDailyExpense    = useStore((s) => s.updateDailyExpense);
@@ -411,10 +430,10 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                       >
                         <View style={styles.expenseRow}>
                           <View style={styles.expenseLeft}>
-                            <Text style={styles.expenseEmoji}>{CATEGORY_LABELS[exp.category].emoji}</Text>
+                            <Text style={styles.expenseEmoji}>{getCategoryMeta(exp.category, customCategories).emoji}</Text>
                             <View style={{ flex: 1 }}>
                               <Text style={styles.expenseDesc}>{exp.description}</Text>
-                              <Text style={styles.expenseCategory}>{CATEGORY_LABELS[exp.category].label}</Text>
+                              <Text style={styles.expenseCategory}>{getCategoryMeta(exp.category, customCategories).label}</Text>
                               {exp.notes && <Text style={styles.expenseNotes}>{exp.notes}</Text>}
                             </View>
                           </View>
@@ -463,18 +482,21 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
               {/* Category */}
               <Text style={styles.label}>Category</Text>
               <View style={styles.categoryGrid}>
-                {(Object.keys(CATEGORY_LABELS) as DailyExpenseCategory[]).map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.categoryPill, category === cat && styles.categoryPillActive]}
-                    onPress={() => setCategory(cat)}
-                  >
-                    <Text style={styles.categoryEmoji}>{CATEGORY_LABELS[cat].emoji}</Text>
-                    <Text style={[styles.categoryText, category === cat && styles.categoryTextActive]}>
-                      {CATEGORY_LABELS[cat].label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {allCategoryKeys.map((cat) => {
+                  const meta = getCategoryMeta(cat, customCategories);
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.categoryPill, category === cat && styles.categoryPillActive]}
+                      onPress={() => setCategory(cat as DailyExpenseCategory)}
+                    >
+                      <Text style={styles.categoryEmoji}>{meta.emoji}</Text>
+                      <Text style={[styles.categoryText, category === cat && styles.categoryTextActive]}>
+                        {meta.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {/* Description */}
