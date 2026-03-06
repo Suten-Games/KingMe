@@ -102,6 +102,8 @@ interface AppState extends UserProfile {
   syncWalletAssets: (walletAddress: string) => Promise<void>;
   syncDriftAssets: (walletAddress: string) => Promise<void>;
   driftRates: Record<string, { depositApy: number; borrowApy: number }>;
+  syncKaminoAssets: (walletAddress: string) => Promise<void>;
+  kaminoRates: Record<string, { supplyApr: number; borrowApr: number; tvl: number }>;
 
   // Market price refresh (stocks via Yahoo, exchange crypto via CoinGecko)
   lastPriceRefresh?: string;
@@ -284,6 +286,7 @@ export const useStore = create<AppState>((set, get) => ({
   // What-If Scenarios
   whatIfScenarios: [],
   driftRates: {},
+  kaminoRates: {},
 
   // ──────────────────────────────────────────────────────────────
   // INVESTMENT THESIS ACTIONS
@@ -1728,6 +1731,11 @@ export const useStore = create<AppState>((set, get) => ({
         console.warn('[DRIFT-SYNC] Drift sync failed (non-blocking):', err.message)
       );
 
+      // Chain: sync Kamino lending positions after wallet sync
+      get().syncKaminoAssets(walletAddress).catch(err =>
+        console.warn('[KAMINO-SYNC] Kamino sync failed (non-blocking):', err.message)
+      );
+
     } catch (error: any) {
       console.error('[SYNC] Error:', error);
       set({ isLoadingAssets: false });
@@ -1954,6 +1962,206 @@ export const useStore = create<AppState>((set, get) => ({
 
     } catch (error: any) {
       console.error('[DRIFT-SYNC] Error:', error.message);
+    }
+  },
+
+  // ─── Kamino Lending Sync ─────────────────────────────────────────────────
+  syncKaminoAssets: async (walletAddress: string) => {
+    const KAMINO_API_BASE = 'https://kingme-api.vercel.app/api/kamino';
+    const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
+
+    console.log(`[KAMINO-SYNC] Starting Kamino sync for ${walletAddress.slice(0, 8)}...`);
+
+    try {
+      const fetchHeaders: Record<string, string> = {};
+      if (rpcUrl) fetchHeaders['X-RPC-URL'] = rpcUrl;
+
+      // Fetch balances and rates in parallel
+      const [balancesRes, ratesRes] = await Promise.all([
+        fetch(`${KAMINO_API_BASE}/balances?wallet=${walletAddress}`, { headers: fetchHeaders }),
+        fetch(`${KAMINO_API_BASE}/rates`, { headers: fetchHeaders }).catch(() => null),
+      ]);
+
+      // Parse rates (non-blocking)
+      let kaminoRates: Record<string, { supplyApr: number; borrowApr: number; tvl: number }> = {};
+      if (ratesRes?.ok) {
+        const ratesData = await ratesRes.json();
+        // Normalize: rates may come as array or object
+        const reserves = ratesData.reserves || ratesData.rates || ratesData;
+        if (Array.isArray(reserves)) {
+          for (const r of reserves) {
+            const sym = r.symbol || r.token;
+            if (sym) kaminoRates[sym] = { supplyApr: r.supplyApr || r.supplyApy || 0, borrowApr: r.borrowApr || r.borrowApy || 0, tvl: r.tvl || 0 };
+          }
+        } else if (typeof reserves === 'object') {
+          kaminoRates = reserves;
+        }
+        set({ kaminoRates });
+        console.log(`[KAMINO-SYNC] Got rates for ${Object.keys(kaminoRates).length} reserves`);
+      }
+
+      if (!balancesRes.ok) {
+        if (balancesRes.status === 404) {
+          console.log('[KAMINO-SYNC] No Kamino positions found, skipping');
+          return;
+        }
+        throw new Error(`Kamino API error: ${balancesRes.status}`);
+      }
+
+      const data = await balancesRes.json();
+      const deposits = data.deposits || data.positions || [];
+      const borrows = data.borrows || [];
+
+      if (deposits.length === 0 && borrows.length === 0) {
+        console.log('[KAMINO-SYNC] No Kamino positions, skipping');
+        return;
+      }
+
+      console.log(`[KAMINO-SYNC] Got ${deposits.length} deposits, ${borrows.length} borrows`);
+
+      // Build price map from existing assets
+      const currentAssets = get().assets;
+      const prices: Record<string, number> = { USDC: 1, USDT: 1 };
+      for (const a of currentAssets) {
+        const meta = a.metadata as any;
+        if (meta?.symbol && meta?.priceUSD > 0) {
+          prices[meta.symbol.toUpperCase()] = meta.priceUSD;
+        }
+      }
+
+      // Index existing Kamino assets for merging
+      const existingKaminoMap = new Map<string, typeof currentAssets[0]>();
+      for (const a of currentAssets) {
+        const meta = a.metadata as any;
+        if (meta?.protocol?.toLowerCase() === 'kamino' && meta.symbol) {
+          existingKaminoMap.set(meta.symbol.toUpperCase(), a);
+        }
+        if (a.id.startsWith('kamino_')) {
+          const sym = a.id.replace('kamino_', '').replace('_deposit', '').replace('_borrow', '').toUpperCase();
+          if (!existingKaminoMap.has(sym)) existingKaminoMap.set(sym, a);
+        }
+      }
+
+      const kaminoAssetIds = new Set<string>();
+      const newKaminoAssets: any[] = [];
+
+      // Process deposits
+      for (const dep of deposits) {
+        const sym = dep.symbol || dep.token || '';
+        if (!sym) continue;
+        const balance = dep.amount || dep.balance || dep.depositedAmount || 0;
+        if (balance <= 0.001) continue;
+
+        const mint = dep.mint || '';
+        const price = dep.price || prices[sym.toUpperCase()] || 0;
+        const value = dep.valueUsd || dep.value || balance * price;
+        const assetId = `kamino_${sym}_deposit`;
+        kaminoAssetIds.add(assetId);
+
+        const existing = existingKaminoMap.get(sym.toUpperCase());
+        const existingMeta = (existing?.metadata || {}) as any;
+
+        // APY: prefer live Kamino rate
+        const liveApy = kaminoRates[sym]?.supplyApr || kaminoRates[sym.toUpperCase()]?.supplyApr || 0;
+        const preservedApy = liveApy > 0 ? liveApy : (existingMeta.apy || 0);
+        const preservedName = existing?.name || `${sym} (Kamino Lend)`;
+        const preservedAnnualIncome = preservedApy > 0 ? (value * preservedApy) / 100 : (existing?.annualIncome || 0);
+
+        const tokenInfo = lookupToken(sym);
+
+        console.log(`[KAMINO-SYNC] Deposit: ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} APY=${preservedApy.toFixed(2)}%`);
+
+        newKaminoAssets.push({
+          id: existing?.id || assetId,
+          type: existing?.type || 'defi' as const,
+          name: preservedName,
+          value,
+          annualIncome: preservedAnnualIncome,
+          isLiquid: true,
+          isAutoSynced: true,
+          lastSynced: new Date().toISOString(),
+          metadata: {
+            ...(existing ? existingMeta : {}),
+            type: existingMeta.type || ('crypto' as const),
+            symbol: sym,
+            mint: mint || existingMeta.mint,
+            balance,
+            quantity: balance,
+            priceUSD: price,
+            protocol: 'Kamino',
+            positionType: 'deposit',
+            apy: preservedApy,
+            isStaked: true,
+            logoURI: existingMeta.logoURI || tokenInfo?.logoURI || '',
+            description: existingMeta.description || `${sym} supplied on Kamino Lend`,
+          },
+        });
+      }
+
+      // Process borrows (tracked as negative/debt or separate)
+      for (const bor of borrows) {
+        const sym = bor.symbol || bor.token || '';
+        if (!sym) continue;
+        const balance = bor.amount || bor.balance || bor.borrowedAmount || 0;
+        if (balance <= 0.001) continue;
+
+        const mint = bor.mint || '';
+        const price = bor.price || prices[sym.toUpperCase()] || 0;
+        const value = bor.valueUsd || bor.value || balance * price;
+        const assetId = `kamino_${sym}_borrow`;
+        kaminoAssetIds.add(assetId);
+
+        const borrowApr = kaminoRates[sym]?.borrowApr || kaminoRates[sym.toUpperCase()]?.borrowApr || 0;
+
+        console.log(`[KAMINO-SYNC] Borrow: ${sym}: ${balance.toFixed(4)} = $${value.toFixed(2)} cost=${borrowApr.toFixed(2)}%`);
+
+        // Store as defi asset with negative annual income (cost of borrow)
+        const existingBorrow = currentAssets.find(a => a.id === assetId);
+        newKaminoAssets.push({
+          id: existingBorrow?.id || assetId,
+          type: 'defi' as const,
+          name: `${sym} Borrow (Kamino)`,
+          value: -value, // negative = liability
+          annualIncome: borrowApr > 0 ? -(value * borrowApr) / 100 : 0,
+          isLiquid: false,
+          isAutoSynced: true,
+          lastSynced: new Date().toISOString(),
+          metadata: {
+            type: 'crypto' as const,
+            symbol: sym,
+            mint: mint,
+            balance,
+            quantity: balance,
+            priceUSD: price,
+            protocol: 'Kamino',
+            positionType: 'borrow',
+            apy: -borrowApr,
+            description: `${sym} borrowed on Kamino Lend`,
+          },
+        });
+      }
+
+      // Merge: replace Kamino assets, keep everything else
+      const nonKaminoAssets = currentAssets.filter(a => {
+        if (a.id.startsWith('auto_')) return true;
+        if (a.id.startsWith('kamino_') && kaminoAssetIds.has(a.id)) return false;
+        const meta = a.metadata as any;
+        const sym = (meta?.symbol || '').toUpperCase();
+        if (meta?.protocol?.toLowerCase() === 'kamino' && !a.id.startsWith('auto_') && (kaminoAssetIds.has(`kamino_${sym}_deposit`) || kaminoAssetIds.has(`kamino_${sym}_borrow`))) {
+          console.log(`[KAMINO-SYNC] Replacing manual "${a.name}" with auto-synced`);
+          return false;
+        }
+        return true;
+      });
+
+      const mergedAssets = [...nonKaminoAssets, ...newKaminoAssets];
+      set({ assets: mergedAssets });
+
+      console.log(`[KAMINO-SYNC] Complete: ${newKaminoAssets.length} Kamino positions synced`);
+      await get().saveProfile();
+
+    } catch (error: any) {
+      console.error('[KAMINO-SYNC] Error:', error.message);
     }
   },
 
