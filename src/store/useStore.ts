@@ -12,6 +12,7 @@ import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services
 import { exportProfile, importProfile } from '../services/backup';
 import { generateSmartScenarios } from '../utils/scenarioGenerator';
 import { BankTransaction, CustomCategoryDef } from '@/types/bankTransactionTypes';
+import { autoCategorize } from '@/utils/csvBankImport';
 import { getISODate, getISOWeek } from '../services/badgeEngine';
 import {
   generateWindfallPlan,
@@ -1383,6 +1384,23 @@ export const useStore = create<AppState>((set, get) => ({
             merged.customCategories = restCats;
           }
           console.log('[MIGRATE] Recategorized custom_hoes → personal_companion');
+        }
+
+        // One-time migration: re-run autoCategorize on 'other' transactions
+        if (!merged._migratedAutoCategV2 && merged.bankTransactions?.length) {
+          let changed = 0;
+          merged.bankTransactions = merged.bankTransactions.map((t: any) => {
+            if (t.category === 'other' && t.type !== 'income') {
+              const better = autoCategorize(t.description);
+              if (better !== 'other') {
+                changed++;
+                return { ...t, category: better };
+              }
+            }
+            return t;
+          });
+          merged._migratedAutoCategV2 = true;
+          if (changed > 0) console.log(`[MIGRATE] Re-categorized ${changed} transactions from 'other'`);
         }
 
         set(merged);

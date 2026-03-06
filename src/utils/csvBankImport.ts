@@ -27,7 +27,7 @@ const AUTO_CATEGORY_RULES: Array<{
     { keywords: ['t-mobile', 'tmobile', 'at&t', 'verizon wireless', 'phone bill', 'sprint', 'mint mobile', 'cricket', 'postpaid'], category: 'utilities_phone' },
 
     // Food
-    { keywords: ['walmart', 'target', 'costco', 'kroger', 'safeway', 'publix', 'whole foods', 'trader joe', 'aldi', 'grocery', 'heb ', 'piggly'], category: 'food_grocery' },
+    { keywords: ['walmart', 'target', 'costco', 'kroger', 'safeway', 'publix', 'whole foods', 'trader joe', 'aldi', 'grocery', 'grocer', 'heb ', 'piggly', 'food city', 'fry\'s food', 'frys food', 'winco'], category: 'food_grocery' },
     { keywords: ['uber eats', 'doordash', 'grubhub', 'instacart', 'postmates', 'delivery'], category: 'food_delivery' },
     { keywords: ['starbucks', 'dunkin', 'coffee', 'peets', 'dutch bros'], category: 'food_coffee' },
     { keywords: ['restaurant', 'dine', 'dining', 'pizza', 'burger', 'taco', 'sushi', 'bar ', 'grill', 'bbq', 'mcdonald', 'wendy', 'chick-fil', 'chipotle', 'panera', 'olive garden', 'applebee', 'ihop', 'waffle'], category: 'food_restaurant' },
@@ -40,15 +40,15 @@ const AUTO_CATEGORY_RULES: Array<{
     { keywords: ['autozone', 'jiffy', 'meineke', 'mechanic', 'tire', 'oil change', 'car wash'], category: 'transport_maintenance' },
 
     // Insurance
-    { keywords: ['geico', 'progressive', 'allstate', 'state farm', 'auto insurance', 'car insurance'], category: 'insurance_auto' },
+    { keywords: ['geico', 'progressive', 'allstate', 'state farm', 'auto insurance', 'car insurance', 'insuran'], category: 'insurance_auto' },
     { keywords: ['health insurance', 'medical insurance', 'anthem', 'blue cross', 'cigna', 'aetna', 'united health', 'kaiser'], category: 'insurance_health' },
     { keywords: ['life insurance', 'term life', 'whole life'], category: 'insurance_life' },
     { keywords: ['home insurance', 'homeowner', 'renter insurance', 'renters ins'], category: 'insurance_home' },
 
     // Medical
-    { keywords: ['cvs', 'walgreens', 'pharmacy', 'rite aid', 'prescription'], category: 'medical_pharmacy' },
-    { keywords: ['doctor', 'clinic', 'hospital', 'medical', 'urgent care', 'health center'], category: 'medical_doctor' },
-    { keywords: ['dentist', 'dental', 'orthodont'], category: 'medical_dental' },
+    { keywords: ['cvs', 'walgreens', 'pharmacy', 'pharm', 'rite aid', 'prescription'], category: 'medical_pharmacy' },
+    { keywords: ['doctor', 'clinic', 'hospital', 'medical', 'urgent care', 'health center', 'pediatr', 'therap', 'chiropr', 'optom', 'ophthal', 'dermat', 'surgeo', 'surgeon'], category: 'medical_doctor' },
+    { keywords: ['dentist', 'dental', 'denti', 'orthodont'], category: 'medical_dental' },
 
     // Subscriptions
     { keywords: ['netflix', 'hulu', 'disney+', 'hbo', 'paramount', 'peacock', 'apple tv', 'youtube premium', 'spotify', 'apple music', 'amazon prime', 'prime pmts'], category: 'subscription_streaming' },
@@ -58,7 +58,7 @@ const AUTO_CATEGORY_RULES: Array<{
     // Personal
     { keywords: ['amazon', 'amzn'], category: 'other' }, // Amazon is ambiguous - user can recategorize
     { keywords: ['clothing', 'apparel', 'shoes', 'nike', 'nike.com', 'adidas', 'gap ', 'old navy', 'h&m', 'zara', 'nordstrom'], category: 'personal_clothing' },
-    { keywords: ['haircut', 'salon', 'barber', 'spa', 'nail'], category: 'personal_grooming' },
+    { keywords: ['haircut', 'salon', 'barber', 'spa', 'nail', 'beauty', 'cosmet'], category: 'personal_grooming' },
 
     // Entertainment
     { keywords: ['ticketmaster', 'stubhub', 'concert', 'movie', 'amc', 'regal', 'cinema'], category: 'entertainment_events' },
@@ -85,8 +85,10 @@ const AUTO_CATEGORY_RULES: Array<{
  */
 export function autoCategorize(description: string): BankTransactionCategory {
   const lower = description.toLowerCase();
+  // Strip common bank prefixes (e.g., "WF *", "SQ *", "TST*") for better matching
+  const stripped = lower.replace(/^(wf|sq|tst|sp|pp)\s*\*\s*/, '');
   for (const rule of AUTO_CATEGORY_RULES) {
-    if (rule.keywords.some(kw => lower.includes(kw))) {
+    if (rule.keywords.some(kw => lower.includes(kw) || stripped.includes(kw))) {
       return rule.category;
     }
   }
