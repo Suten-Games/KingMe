@@ -42,7 +42,7 @@ export function calculateAssetIncome(assets: Asset[]): number {
 
       case 'business': {
         const bizMetadata = asset.metadata as BusinessAsset;
-        return total + bizMetadata.annualDistributions;
+        return total + (bizMetadata.annualDistributions || 0);
       }
 
       default:
