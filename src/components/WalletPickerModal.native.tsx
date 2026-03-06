@@ -7,7 +7,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Image } from 'react-native';
 
-export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave';
+export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave' | 'mwa';
 
 interface Props {
   visible?: boolean;
@@ -25,7 +25,8 @@ function WalletIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   return <Text style={{ fontSize: size }}>{icon}</Text>;
 }
 
-const WALLET_OPTIONS: { id: WalletOption; name: string; icon: string; section: 'wallet' | 'social' }[] = [
+const WALLET_OPTIONS: { id: WalletOption; name: string; icon: string; section: 'wallet' | 'social' | 'mwa' }[] = [
+  { id: 'mwa',       name: 'Mobile Wallet',  icon: 'https://solanamobile.com/favicon.ico', section: 'mwa' },
   { id: 'phantom',   name: 'Phantom',   icon: 'https://phantom.app/img/logo_v2.svg', section: 'wallet' },
   { id: 'jupiter',   name: 'Jupiter',   icon: 'https://jup.ag/favicon.ico', section: 'wallet' },
   { id: 'solflare',  name: 'Solflare',  icon: 'https://solflare.com/favicon.ico', section: 'wallet' },
@@ -41,6 +42,7 @@ export default function WalletPickerModal({
   connectingWallet = null,
   externalWalletsAvailable = true,
 }: Props) {
+  const mwaOptions = WALLET_OPTIONS.filter(o => o.section === 'mwa');
   const walletApps = WALLET_OPTIONS.filter(o => o.section === 'wallet');
   const socialLogins = WALLET_OPTIONS.filter(o => o.section === 'social');
 
@@ -51,10 +53,34 @@ export default function WalletPickerModal({
           <Text style={s.title}>Connect Wallet</Text>
           <Text style={s.subtitle}>Choose how to connect</Text>
 
+          {/* MWA — Solana Mobile standard */}
+          <Text style={s.sectionLabel}>SOLANA MOBILE</Text>
+          <View style={s.walletList}>
+            {mwaOptions.map((option) => {
+              const isConnecting = connecting && connectingWallet === option.id;
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[s.walletRow, { borderColor: '#9945FF' }]}
+                  onPress={() => onSelect(option.id)}
+                  disabled={connecting}
+                >
+                  <WalletIcon icon={option.icon} />
+                  <Text style={s.walletName}>{option.name}</Text>
+                  {isConnecting ? (
+                    <ActivityIndicator size="small" color="#9945FF" />
+                  ) : (
+                    <Text style={s.walletArrow}>→</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
           {/* External wallet apps */}
           {externalWalletsAvailable && (
             <>
-              <Text style={s.sectionLabel}>WALLET APPS</Text>
+              <Text style={[s.sectionLabel, { marginTop: 16 }]}>DEEP LINK</Text>
               <View style={s.walletList}>
                 {walletApps.map((option) => {
                   const isConnecting = connecting && connectingWallet === option.id;

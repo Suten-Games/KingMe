@@ -5,6 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import * as Linking from 'expo-linking';
 import { usePrivy, useEmbeddedSolanaWallet, useLoginWithOAuth } from '@privy-io/expo';
 import * as PhantomDeepLink from '../services/phantomDeepLink';
+import * as MWA from '../services/mwaWallet';
 import WalletPickerModal from '../components/WalletPickerModal';
 import type { WalletOption } from '../components/WalletPickerModal';
 
@@ -19,7 +20,8 @@ interface WalletContextType {
   disconnect: () => void;
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   signTransaction: (transaction: any) => Promise<any>;
-  walletType: 'privy-embedded' | 'privy-external' | 'phantom-extension' | null;
+  signAndSendTransaction: (transaction: any) => Promise<{ signature: string }>;
+  walletType: 'privy-embedded' | 'privy-external' | 'phantom-extension' | 'mwa' | null;
   isPrivyReady?: boolean;
 }
 
@@ -41,6 +43,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Phantom deep link state
   const [phantomConnected, setPhantomConnected] = useState(false);
   const [phantomPubKey, setPhantomPubKey] = useState<PublicKey | null>(null);
+
+  // MWA state
+  const [mwaConnected, setMwaConnected] = useState(false);
+  const [mwaPubKey, setMwaPubKey] = useState<PublicKey | null>(null);
 
   // Picker state
   const [showPicker, setShowPicker] = useState(false);
@@ -75,24 +81,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Wallet type
   const walletType = useMemo((): WalletContextType['walletType'] => {
+    if (mwaConnected) return 'mwa';
     if (phantomConnected) return 'privy-external';
     if (embeddedWallet?.status === 'connected') return 'privy-embedded';
     return null;
-  }, [phantomConnected, embeddedWallet?.status]);
+  }, [mwaConnected, phantomConnected, embeddedWallet?.status]);
 
   // Public key
   const publicKey = useMemo(() => {
+    if (mwaConnected && mwaPubKey) return mwaPubKey;
     if (phantomConnected && phantomPubKey) return phantomPubKey;
     if (embeddedWallet?.status === 'connected' && embeddedWallet?.publicKey) {
       return new PublicKey(embeddedWallet.publicKey);
     }
     return null;
-  }, [phantomConnected, phantomPubKey, embeddedWallet?.status, embeddedWallet?.publicKey]);
+  }, [mwaConnected, mwaPubKey, phantomConnected, phantomPubKey, embeddedWallet?.status, embeddedWallet?.publicKey]);
 
   const connected = !!publicKey;
 
   // Derive display name
-  const walletName = walletType === 'privy-embedded' ? 'Privy Wallet'
+  const walletName = walletType === 'mwa' ? 'Mobile Wallet'
+    : walletType === 'privy-embedded' ? 'Privy Wallet'
     : phantomConnected ? 'Phantom' : null;
 
   // Open picker
@@ -108,6 +117,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       switch (option) {
+        case 'mwa': {
+          const result = await MWA.connect();
+          setMwaConnected(true);
+          setMwaPubKey(result.publicKey);
+          break;
+        }
         case 'phantom':
         case 'jupiter': {
           // Jupiter and Phantom both support Phantom's deep link protocol
@@ -137,6 +152,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [startOAuth]);
 
   const disconnect = useCallback(() => {
+    if (mwaConnected) {
+      MWA.disconnect();
+      setMwaConnected(false);
+      setMwaPubKey(null);
+    }
     if (phantomConnected) {
       PhantomDeepLink.disconnect();
       setPhantomConnected(false);
@@ -145,10 +165,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (user && embeddedWallet?.status === 'connected') {
       privyLogout();
     }
-  }, [phantomConnected, user, embeddedWallet?.status, privyLogout]);
+  }, [mwaConnected, phantomConnected, user, embeddedWallet?.status, privyLogout]);
 
   const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
     if (!connected) throw new Error('Wallet not connected');
+
+    // MWA
+    if (mwaConnected) {
+      return await MWA.signMessage(message);
+    }
 
     // Phantom deep link
     if (phantomConnected) {
@@ -167,10 +192,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     throw new Error('No wallet available for signing');
-  }, [connected, phantomConnected, embeddedWallet]);
+  }, [connected, mwaConnected, phantomConnected, embeddedWallet]);
 
   const signTransaction = useCallback(async (transaction: any): Promise<any> => {
     if (!connected || !publicKey) throw new Error('Wallet not connected');
+
+    // MWA
+    if (mwaConnected) {
+      return await MWA.signTransaction(transaction);
+    }
 
     // Phantom deep link
     if (phantomConnected) {
@@ -194,7 +224,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     throw new Error('No wallet available for signing');
-  }, [connected, publicKey, phantomConnected, embeddedWallet]);
+  }, [connected, publicKey, mwaConnected, phantomConnected, embeddedWallet]);
+
+  const signAndSendTransaction = useCallback(async (transaction: any): Promise<{ signature: string }> => {
+    if (!connected || !publicKey) throw new Error('Wallet not connected');
+
+    // MWA
+    if (mwaConnected) {
+      const sig = await MWA.signAndSendTransaction(transaction);
+      return { signature: sig };
+    }
+
+    // Phantom deep link
+    if (phantomConnected) {
+      const serialized = transaction.serialize({ requireAllSignatures: false });
+      const sig = await PhantomDeepLink.signAndSendTransaction(serialized);
+      return { signature: typeof sig === 'string' ? sig : sig?.toString?.() || '' };
+    }
+
+    // Privy embedded — sign only, no send support
+    throw new Error('signAndSendTransaction not supported for this wallet type');
+  }, [connected, publicKey, mwaConnected, phantomConnected]);
 
   return (
     <WalletContext.Provider value={{
@@ -206,6 +256,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       disconnect,
       signMessage,
       signTransaction,
+      signAndSendTransaction,
       walletType,
       isPrivyReady: isReady,
     }}>
