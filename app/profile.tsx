@@ -33,15 +33,6 @@ function crossConfirm(title: string, message: string, onConfirm: () => void) {
   }
 }
 
-/** Cross-platform alert — works on both web and native */
-function crossAlert(title: string, message?: string) {
-  if (Platform.OS === 'web') {
-    window.alert(message ? `${title}\n\n${message}` : title);
-  } else {
-    Alert.alert(title, message);
-  }
-}
-
 export default function ProfileScreen() {
   const [fontsLoaded] = useFonts({ Cinzel_700Bold });
   const insets = useSafeAreaInsets();
@@ -71,6 +62,10 @@ export default function ProfileScreen() {
   // Arweave sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+
+  // Styled alert modal (replaces window.alert / Alert.alert)
+  const [alertModal, setAlertModal] = useState<{ title: string; message?: string } | null>(null);
+  const crossAlert = (title: string, message?: string) => setAlertModal({ title, message });
 
   // ── Confirmation state (for delete) ──────────────────────────────────────
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0);
@@ -639,6 +634,25 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      {/* ═══════════════ STYLED ALERT MODAL ═══════════════ */}
+      <Modal visible={alertModal !== null} transparent animationType="fade" onRequestClose={() => setAlertModal(null)}>
+        <View style={styles.alertOverlay}>
+          <LinearGradient
+            colors={['#1a2240', '#121830', '#0c1020']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.alertBox}
+          >
+            <Text style={styles.alertTitle}>{alertModal?.title}</Text>
+            {alertModal?.message ? (
+              <Text style={styles.alertMessage}>{alertModal.message}</Text>
+            ) : null}
+            <TouchableOpacity style={styles.alertButton} onPress={() => setAlertModal(null)}>
+              <Text style={styles.alertButtonText}>OK</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
     </ScrollView>
     </View>
   );
@@ -754,4 +768,12 @@ const styles = StyleSheet.create({
   businessTitle: { fontSize: 16, fontWeight: '700', color: '#f4c430' },
   businessSub: { fontSize: 12, color: '#888', marginTop: 2 },
   businessArrow: { fontSize: 18, color: '#555', fontWeight: '700' },
+
+  // Alert modal
+  alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  alertBox: { borderRadius: 16, borderWidth: 1.5, borderColor: '#f4c43040', padding: 24, width: '100%', maxWidth: 400, alignItems: 'center' },
+  alertTitle: { fontSize: 20, fontWeight: '800', color: '#f4c430', textAlign: 'center', marginBottom: 12 },
+  alertMessage: { fontSize: 14, color: '#c0b890', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  alertButton: { backgroundColor: '#f4c430', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
+  alertButtonText: { fontSize: 16, fontWeight: '800', color: '#0a0e1a' },
 });
