@@ -47,9 +47,12 @@ export default function WatchlistAlerts() {
   // Auto-add held coins to watchlist
   const autoTrackHeldCoins = useCallback(async (currentWatchlist: WatchlistToken[]) => {
     const watchedMints = new Set(currentWatchlist.map(t => t.mint));
-    const cryptoAssets = assets.filter(a =>
-      (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi') && a.value > 0.5
-    );
+    // Include any asset that has a Solana mint address
+    const cryptoAssets = assets.filter(a => {
+      if (a.value <= 0.5) return false;
+      const meta = a.metadata as any;
+      return !!(meta?.tokenMint || meta?.mint);
+    });
 
     let added = 0;
     for (const asset of cryptoAssets) {

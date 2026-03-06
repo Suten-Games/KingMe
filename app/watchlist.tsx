@@ -152,7 +152,8 @@ function findFundingOptions(
   const options: FundingOption[] = [];
 
   for (const asset of assets) {
-    if (asset.type !== 'crypto' && (asset.type as string) !== 'commodities' && asset.type !== 'defi') continue;
+    // Include any asset with a mint address (covers crypto, defi, brokerage-mapped commodity tokens)
+    if (!(asset.metadata as any)?.tokenMint && !(asset.metadata as any)?.mint) continue;
     const meta = asset.metadata as any;
     const mint = meta?.tokenMint || meta?.mint || '';
     if (!mint || mint === excludeMint) continue;
@@ -236,9 +237,13 @@ export default function WatchlistScreen() {
   // Auto-add all held crypto tokens to watchlist
   const autoTrackHeldCoins = useCallback(async (currentWatchlist: WatchlistToken[]) => {
     const watchedMints = new Set(currentWatchlist.map(t => t.mint));
-    const cryptoAssets = assets.filter(a =>
-      (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi') && a.value > 0.5
-    );
+    // Include any asset that has a Solana mint address (crypto, defi, brokerage/commodity tokens)
+    const cryptoAssets = assets.filter(a => {
+      if (a.value <= 0.5) return false;
+      const meta = a.metadata as any;
+      const hasMint = !!(meta?.tokenMint || meta?.mint);
+      return hasMint;
+    });
 
     let added = 0;
     for (const asset of cryptoAssets) {
@@ -296,7 +301,7 @@ export default function WatchlistScreen() {
 
         // Also get prices for all wallet tokens (for funding options)
         const walletMints = assets
-          .filter(a => (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi'))
+          .filter(a => !!(a.metadata as any)?.tokenMint || !!(a.metadata as any)?.mint)
           .map(a => {
             const m = a.metadata as any;
             return m?.tokenMint || m?.mint || '';
