@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
+import TargetIcon from './icons/TargetIcon';
 import {
   loadGoals, saveGoals, refreshGoalProgress,
   calcGoalProgress, sortByReachability, autoPopulateGoals,
@@ -79,7 +80,7 @@ export default function GoalsStrip() {
         activeOpacity={0.8}
       >
         <View style={st.emptyRow}>
-          <Text style={st.emptyEmoji}>🎯</Text>
+          <TargetIcon size={28} color="#f4c430" />
           <View style={{ flex: 1 }}>
             <Text style={st.emptyTitle}>Set Financial Goals</Text>
             <Text style={st.emptyBody}>Pay off debt, build a trading buffer, accumulate tokens — track it all here.</Text>
@@ -94,7 +95,10 @@ export default function GoalsStrip() {
   return (
     <View style={st.container}>
       <TouchableOpacity style={st.headerRow} onPress={() => router.push('/goals' as any)} activeOpacity={0.7}>
-        <Text style={st.header}>🎯 Goals</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TargetIcon size={16} color="#f4c430" />
+          <Text style={st.header}>Goals</Text>
+        </View>
         <Text style={st.seeAll}>See all →</Text>
       </TouchableOpacity>
 

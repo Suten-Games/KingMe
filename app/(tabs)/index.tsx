@@ -25,6 +25,7 @@ import PortfolioTrendCard from '@/components/PortfolioTrendCard';
 import WindfallAlertCard from '@/components/WindfallAlertCard';
 import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 import TradeInsightCards from '@/components/TradeInsightCards';
+import TargetIcon from '@/components/icons/TargetIcon';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -426,7 +427,10 @@ export default function HomeScreen() {
       {scenarios.length > 0 && (
         <View style={styles.scenariosSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🎯 Ways to Increase Your Freedom</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TargetIcon size={18} color="#f4c430" />
+              <Text style={styles.sectionTitle}>Ways to Increase Your Freedom</Text>
+            </View>
             <Text style={styles.sectionSubtitle}>Personalized moves based on your portfolio</Text>
           </View>
           {scenarios.slice(0, 3).map(sc => (

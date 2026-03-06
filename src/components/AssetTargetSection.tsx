@@ -20,6 +20,7 @@ import {
 import {
   addGoal, loadGoals, makeTokenGoal, formatNum,
 } from '@/services/goals';
+import TargetIcon from './icons/TargetIcon';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -181,7 +182,10 @@ export default function AssetTargetSection({ asset }: Props) {
 
   return (
     <View style={st.container}>
-      <Text style={st.sectionTitle}>🎯 Accumulation Target</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <TargetIcon size={18} color="#4ade80" />
+        <Text style={[st.sectionTitle, { marginBottom: 0 }]}>Accumulation Target</Text>
+      </View>
 
       {/* Progress card */}
       <View style={st.progressCard}>

@@ -18,6 +18,7 @@ import {
 } from '../services/accumulationPlan';
 import { fetchPrices } from '../services/priceTracker';
 import ConfirmModal from './ConfirmModal';
+import TargetIcon from './icons/TargetIcon';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -374,7 +375,10 @@ export default function AccumulationPlanCard({
           {/* Header row */}
           <View style={st.headerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={st.headerTitle}>🎯 {symbol} Accumulation</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TargetIcon size={16} color="#4ade80" />
+                <Text style={st.headerTitle}>{symbol} Accumulation</Text>
+              </View>
               <Text style={st.headerSubtitle}>
                 {formatNum(walletHolding ?? stats.currentHolding)} / {formatNum(plan.targetAmount)} tokens
                 {stats.progressPct >= 100 ? ' ✅' : ` · ${((walletHolding ?? stats.currentHolding) / plan.targetAmount * 100).toFixed(0)}%`}

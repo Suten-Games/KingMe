@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../src/store/useStore';
 import ConfirmModal from '../src/components/ConfirmModal';
 import { SwapEvents } from '../src/utils/swapEvents';
+import TargetIcon from '../src/components/icons/TargetIcon';
 import {
   loadGoals, saveGoals, addGoal, updateGoal, removeGoal,
   refreshGoalProgress, calcGoalProgress, sortByReachability,
@@ -291,7 +292,10 @@ export default function GoalsScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor="#f4c430" />}
     >
       {/* Header */}
-      <Text style={st.title}>🎯 Goals</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <TargetIcon size={22} color="#f4c430" />
+        <Text style={st.title}>Goals</Text>
+      </View>
       <Text style={st.subtitle}>Most reachable first</Text>
 
       {/* Summary strip */}
@@ -329,7 +333,7 @@ export default function GoalsScreen() {
       {/* Goal cards */}
       {goals.length === 0 && (
         <View style={st.emptyCard}>
-          <Text style={st.emptyEmoji}>🎯</Text>
+          <TargetIcon size={40} color="#f4c430" />
           <Text style={st.emptyTitle}>No goals yet</Text>
           <Text style={st.emptyBody}>
             Set targets for anything: accumulate 1M WHALE, pay off your CC, build a $23K trading buffer, or save $10K in your emergency fund.

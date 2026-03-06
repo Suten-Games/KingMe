@@ -10,6 +10,7 @@ import {
 } from '@/services/accumulationPlan';
 import { getTokenPriceData } from '../services/priceTracker';
 import AccumulationPlanCard from './AccumulationPlanCard';
+import TargetIcon from './icons/TargetIcon';
 import { SwapEvents } from '@/utils/swapEvents';
 import { useStore } from '@/store/useStore';
 import type { CryptoAsset } from '@/types';
@@ -103,7 +104,10 @@ export default function AccumulationAlerts() {
 
   return (
     <View style={st.container}>
-      <Text style={st.header}>🎯 Accumulation Signals</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <TargetIcon size={18} color="#f4c430" />
+        <Text style={[st.header, { marginBottom: 0 }]}>Accumulation Signals</Text>
+      </View>
       {planAlerts.map(({ plan, price, atl, assetId, walletBalance }) => (
         <AccumulationPlanCard
           key={plan.mint}
