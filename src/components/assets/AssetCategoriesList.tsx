@@ -19,7 +19,7 @@ interface ProtocolGroup {
 }
 
 const PROTOCOL_LOGOS: Record<string, string> = {
-  'kamino': 'https://hubbleprotocol.io/icons/kamino.png',
+  'kamino': 'https://pbs.twimg.com/profile_images/1999411256155938818/lAOSJHuf.jpg',
   'drift': 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png',
   'crypto.com': 'https://assets.coingecko.com/coins/images/7310/small/cro_token_logo.png',
   'diversifi': 'https://s2.coinmarketcap.com/static/img/coins/64x64/28658.png',
