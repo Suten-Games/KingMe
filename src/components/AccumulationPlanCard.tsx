@@ -17,12 +17,10 @@ import {
   type AccumulationPlan, type PlanStats, type AccSignal, type AccEntry,
 } from '../services/accumulationPlan';
 import { fetchPrices } from '../services/priceTracker';
+import ConfirmModal from './ConfirmModal';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
-}
-function xConfirm(t: string, m: string, fn: () => void) {
-  Platform.OS === 'web' ? window.confirm(`${t}\n\n${m}`) && fn() : RNAlert.alert(t, m, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', onPress: fn }]);
 }
 
 interface Props {
@@ -45,6 +43,7 @@ export default function AccumulationPlanCard({
   const [currentPrice, setCurrentPrice] = useState(propPrice || 0);
   const [loading, setLoading] = useState(true);
   const [showSetup, setShowSetup] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showAddEntry, setShowAddEntry] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [expanded, setExpanded] = useState(!compact);
@@ -222,11 +221,12 @@ export default function AccumulationPlanCard({
   };
 
   // Delete entry
-  const handleDeleteEntry = (entryId: string) => {
-    xConfirm('Delete entry?', 'Remove this trade from your history?', async () => {
-      await removeEntry(mint, entryId);
-      await loadPlan();
-    });
+  const handleDeleteEntry = (entryId: string) => setConfirmDeleteId(entryId);
+  const confirmDeleteEntry = async () => {
+    if (!confirmDeleteId) return;
+    await removeEntry(mint, confirmDeleteId);
+    setConfirmDeleteId(null);
+    await loadPlan();
   };
 
   // Update target
@@ -750,6 +750,17 @@ export default function AccumulationPlanCard({
           </View>
         </View>
       </Modal>
+
+      <ConfirmModal
+        visible={!!confirmDeleteId}
+        title="Delete entry?"
+        message="Remove this trade from your history?"
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={confirmDeleteEntry}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </View>
   );
 }

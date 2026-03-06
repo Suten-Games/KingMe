@@ -15,18 +15,7 @@ import { loadAllPlans, computePlanStats } from '@/services/accumulationPlan';
 import { useSwapToast } from './SwapToast';
 import { postSwapUpdate } from '@/utils/postSwapUpdate';
 import { playAlertSound } from '@/services/alertSound';
-
-// Platform-safe confirm — Alert.alert is silent on web
-function xConfirm(title: string, message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
-  } else {
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Swap to USDC', onPress: onConfirm },
-    ]);
-  }
-}
+import ConfirmModal from './ConfirmModal';
 
 // Platform-safe alert for errors
 function xAlert(title: string, message?: string) {
@@ -48,6 +37,15 @@ export default function PositionAlertCards() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(0);
+  const [pendingSwap, setPendingSwap] = useState<{
+    alert: PositionAlert;
+    asset: Asset;
+    fromMint: string;
+    toMint: string;
+    fromSymbol: string;
+    percentage: number;
+    dollarValue: number;
+  } | null>(null);
   const { showToast, ToastComponent } = useSwapToast();
 
   // Get crypto assets with their mints
@@ -250,68 +248,8 @@ export default function PositionAlertCards() {
         return;
       }
 
-      // Confirm — xConfirm works on both web and native
-      xConfirm(
-        `Trim ${fromSymbol}`,
-        `Swap ${percentage}% (~$${dollarValue}) of ${fromSymbol} → USDC?`,
-        async () => {
-              const meta = asset.metadata as CryptoAsset;
-              const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
-              const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
-
-              console.log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
-
-              // Show loading toast immediately
-              showToast({ type: 'loading', symbol: fromSymbol, percentage });
-
-              try {
-                const result = await executeSwap(
-                  {
-                    inputMint: fromMint,
-                    outputMint: toMint,
-                    amount: quantity,
-                    userPublicKey: publicKey.toBase58(),
-                    inputDecimals: decimals,
-                  },
-                  signTransaction
-                );
-
-                if (result.success) {
-                  // Estimate price per token from dollar value + quantity
-                  const pricePerToken = quantity > 0 ? dollarValue / quantity : 0;
-
-                  // Update plan, store, emit event
-                  await postSwapUpdate({
-                    fromMint,
-                    fromSymbol,
-                    tokenAmountSold: quantity,
-                    pricePerToken,
-                    usdReceived: dollarValue,
-                    signature: result.signature || '',
-                  });
-
-                  // Show success toast (replaces Alert.alert)
-                  showToast({
-                    type: 'success',
-                    symbol: fromSymbol,
-                    usdReceived: dollarValue,
-                    signature: result.signature || '',
-                  });
-
-                  // Dismiss the alert card
-                  handleDismiss(alert.id);
-                } else if (result.error !== 'Transaction cancelled by user') {
-                  showToast({ type: 'error', message: result.error || 'Something went wrong' });
-                } else {
-                  // User cancelled — just hide the loading toast
-                  // hideToast is called automatically after 5s, or user taps X
-                  showToast({ type: 'error', message: 'Transaction cancelled.' });
-                }
-              } catch (e: any) {
-                showToast({ type: 'error', message: e.message });
-              }
-        }
-      );
+      // Show styled confirm modal
+      setPendingSwap({ alert, asset, fromMint, toMint, fromSymbol, percentage, dollarValue });
     } else if (alert.actionParams?.type === 'deposit') {
       router.push('/(tabs)/desires');
     } else {
@@ -329,7 +267,52 @@ export default function PositionAlertCards() {
     return null;
   }
 
-  if (visibleAlerts.length === 0) return null;
+  const confirmSwap = useCallback(async () => {
+    if (!pendingSwap || !publicKey) return;
+    const { alert, asset, fromMint, toMint, fromSymbol, percentage, dollarValue } = pendingSwap;
+    setPendingSwap(null);
+
+    const meta = asset.metadata as CryptoAsset;
+    const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
+    const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
+
+    console.log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
+    showToast({ type: 'loading', symbol: fromSymbol, percentage });
+
+    try {
+      const result = await executeSwap(
+        {
+          inputMint: fromMint,
+          outputMint: toMint,
+          amount: quantity,
+          userPublicKey: publicKey.toBase58(),
+          inputDecimals: decimals,
+        },
+        signTransaction
+      );
+
+      if (result.success) {
+        const pricePerToken = quantity > 0 ? dollarValue / quantity : 0;
+        await postSwapUpdate({
+          fromMint, fromSymbol,
+          tokenAmountSold: quantity,
+          pricePerToken,
+          usdReceived: dollarValue,
+          signature: result.signature || '',
+        });
+        showToast({ type: 'success', symbol: fromSymbol, usdReceived: dollarValue, signature: result.signature || '' });
+        handleDismiss(alert.id);
+      } else if (result.error !== 'Transaction cancelled by user') {
+        showToast({ type: 'error', message: result.error || 'Something went wrong' });
+      } else {
+        showToast({ type: 'error', message: 'Transaction cancelled.' });
+      }
+    } catch (e: any) {
+      showToast({ type: 'error', message: e.message });
+    }
+  }, [pendingSwap, publicKey, signTransaction, showToast, handleDismiss]);
+
+  if (visibleAlerts.length === 0 && !pendingSwap) return null;
 
   return (
     <View style={s.container}>
@@ -402,6 +385,17 @@ export default function PositionAlertCards() {
 
       {/* Toast renders here, floats above everything */}
       <ToastComponent />
+
+      <ConfirmModal
+        visible={!!pendingSwap}
+        title={pendingSwap ? `Trim ${pendingSwap.fromSymbol}` : ''}
+        message={pendingSwap ? `Swap ${pendingSwap.percentage}% (~$${pendingSwap.dollarValue}) of ${pendingSwap.fromSymbol} → USDC?` : ''}
+        confirmLabel="Swap"
+        cancelLabel="Cancel"
+        destructive={false}
+        onConfirm={confirmSwap}
+        onCancel={() => setPendingSwap(null)}
+      />
     </View>
   );
 }

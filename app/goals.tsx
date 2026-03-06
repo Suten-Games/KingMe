@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../src/store/useStore';
+import ConfirmModal from '../src/components/ConfirmModal';
 import { SwapEvents } from '../src/utils/swapEvents';
 import {
   loadGoals, saveGoals, addGoal, updateGoal, removeGoal,
@@ -25,9 +26,6 @@ import {
 // ── Cross-platform helpers ───────────────────────────────────────
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
-}
-function xConfirm(t: string, m: string, fn: () => void) {
-  Platform.OS === 'web' ? window.confirm(`${t}\n\n${m}`) && fn() : RNAlert.alert(t, m, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', style: 'destructive', onPress: fn }]);
 }
 
 // ── Color palette for goal progress ──────────────────────────────
@@ -63,6 +61,7 @@ export default function GoalsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<GoalWithProgress | null>(null);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   // Add form state
@@ -216,11 +215,12 @@ export default function GoalsScreen() {
     refresh();
   };
 
-  const handleDelete = (goal: GoalWithProgress) => {
-    xConfirm('Delete goal?', `Remove "${goal.name}"?`, async () => {
-      await removeGoal(goal.id);
-      refresh();
-    });
+  const handleDelete = (goal: GoalWithProgress) => setConfirmDelete(goal);
+  const confirmDeleteGoal = async () => {
+    if (!confirmDelete) return;
+    await removeGoal(confirmDelete.id);
+    setConfirmDelete(null);
+    refresh();
   };
 
   const handleEdit = (goal: GoalWithProgress) => {
@@ -284,6 +284,7 @@ export default function GoalsScreen() {
 
   // ══════════════════════════════════════════════════════════════
   return (
+    <>
     <ScrollView
       style={st.container}
       contentContainerStyle={st.content}
@@ -776,6 +777,18 @@ export default function GoalsScreen() {
         </View>
       </Modal>
     </ScrollView>
+
+    <ConfirmModal
+      visible={!!confirmDelete}
+      title="Delete goal?"
+      message={confirmDelete ? `Remove "${confirmDelete.name}"? This cannot be undone.` : ''}
+      confirmLabel="Delete"
+      cancelLabel="Keep"
+      destructive
+      onConfirm={confirmDeleteGoal}
+      onCancel={() => setConfirmDelete(null)}
+    />
+    </>
   );
 }
 
