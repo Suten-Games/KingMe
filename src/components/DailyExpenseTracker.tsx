@@ -355,9 +355,11 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                   Updated {new Date(cryptoCardBalance.lastUpdated).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                 </Text>
               )}
-              <TouchableOpacity style={styles.depositButton} onPress={() => setShowDepositModal(true)}>
-                <Text style={styles.depositButtonText}>+ Top Up</Text>
-              </TouchableOpacity>
+              {!linkedAccount && !linkedCreditCard && (
+                <TouchableOpacity style={styles.depositButton} onPress={() => setShowDepositModal(true)}>
+                  <Text style={styles.depositButtonText}>+ Top Up</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
