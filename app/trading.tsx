@@ -47,6 +47,7 @@ export default function TradingScreen() {
 
   const driftPositions = useStore((s) => s.driftPositions);
   const syncDriftPositions = useStore((s) => s.syncDriftPositions);
+  const syncDriftAssets = useStore((s) => s.syncDriftAssets);
   const wallets = useStore((s) => s.wallets);
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -103,7 +104,11 @@ export default function TradingScreen() {
   useEffect(() => {
     if (isDrift && walletAddr) {
       setIsSyncingPositions(true);
-      syncDriftPositions(walletAddr).finally(() => setIsSyncingPositions(false));
+      // syncDriftAssets populates positions via the balances endpoint fallback
+      Promise.all([
+        syncDriftPositions(walletAddr),
+        syncDriftAssets(walletAddr),
+      ]).finally(() => setIsSyncingPositions(false));
     }
   }, [isDrift, walletAddr]);
 
