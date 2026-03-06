@@ -372,7 +372,7 @@ export function useSwapScenario() {
     // ── Execute the swap ────────────────────────────────────
     setSwapState((prev) => ({ ...prev, state: 'signing' }));
 
-    const result = await executeSwap(swapParams, signTransaction);
+    const result = await executeSwap(swapParams, signTransaction, signAndSendTransaction);
 
     if (!result.success) {
       setSwapState((prev) => ({

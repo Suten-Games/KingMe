@@ -34,7 +34,7 @@ const OUTPUT_OPTIONS = [
 ] as const;
 
 export default function SwapSection({ asset }: Props) {
-  const { connected, publicKey, signTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, signAndSendTransaction } = useWallet();
   const { showToast, ToastComponent } = useSwapToast();
 
   const meta = asset.metadata as any;
@@ -112,6 +112,7 @@ export default function SwapSection({ asset }: Props) {
           userPublicKey: publicKey.toBase58(),
         },
         signTransaction,
+        signAndSendTransaction,
       );
 
       if (result.success) {

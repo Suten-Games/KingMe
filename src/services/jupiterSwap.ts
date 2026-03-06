@@ -16,12 +16,8 @@ import { decode as atob } from 'base-64';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
-
-// On web, proxy RPC through our API to avoid public RPC rate limits / 403s.
-// On native, use the direct RPC (no CORS / rate-limit issues).
-const RPC_URL = Platform.OS === 'web'
-  ? 'https://kingme.money/api/rpc/send'
-  : (process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com');
+const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const isWeb = Platform.OS === 'web';
 
 // ── Validate API_BASE at module load ─────────────────────────
 function getApiBase(): string {
@@ -46,7 +42,7 @@ export const MINTS = {
   USDC:   'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   USDT:   'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
   PYUSD:  '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
-  'USD*': 'BenJy1n3WTx9mTjEvy63e8Q1j4RqUc6E4VBMz3ir4Wo6', // Perena yield-bearing stablecoin
+  'USD*': 'star9agSpjiFe3M49B3RniVU4CMBBEK3Qnaqn3RGiFM', // Perena USD* yield-bearing stablecoin
 } as const;
 
 // ── Types ────────────────────────────────────────────────────
@@ -228,6 +224,7 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
 export async function executeSwap(
   params: SwapParams,
   signTransaction: (transaction: any) => Promise<any>,
+  signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
 ): Promise<SwapResult> {
   const {
     inputMint,
@@ -301,41 +298,46 @@ export async function executeSwap(
 
     console.log('[JUPITER] Transaction deserialized, requesting signature...');
 
-    // ── 3. Sign with wallet (MWA or Phantom) ─────────────────
-    const signedTransaction = await signTransaction(transaction);
+    // ── 3. Sign + submit ─────────────────────────────────────
+    let signature: string;
 
-    console.log('[JUPITER] Transaction signed, submitting...');
+    if (isWeb && signAndSendTransaction) {
+      // Web: Phantom handles RPC submission via signAndSendTransaction
+      console.log('[JUPITER] Using signAndSendTransaction (web/Phantom)...');
+      const result = await signAndSendTransaction(transaction);
+      signature = result.signature;
+      console.log(`[JUPITER] Phantom submitted: ${signature}`);
+    } else {
+      // Mobile (MWA): sign locally, then submit to RPC ourselves
+      console.log('[JUPITER] Using signTransaction + manual submit (mobile)...');
+      const signedTransaction = await signTransaction(transaction);
 
-    // ── 4. Submit to Solana RPC ──────────────────────────────
-    const connection = new Connection(RPC_URL, 'confirmed');
+      const connection = new Connection(RPC_URL, 'confirmed');
+      const rawTransaction = signedTransaction.serialize
+        ? signedTransaction.serialize()
+        : signedTransaction;
 
-    // Get the raw signed transaction bytes
-    const rawTransaction = signedTransaction.serialize
-      ? signedTransaction.serialize()
-      : signedTransaction;
+      signature = await connection.sendRawTransaction(rawTransaction, {
+        skipPreflight: false,
+        maxRetries: 3,
+        preflightCommitment: 'confirmed',
+      });
 
-    const signature = await connection.sendRawTransaction(rawTransaction, {
-      skipPreflight: false,
-      maxRetries: 3,
-      preflightCommitment: 'confirmed',
-    });
+      console.log(`[JUPITER] Submitted: ${signature}`);
 
-    console.log(`[JUPITER] Submitted: ${signature}`);
+      // Confirm transaction (mobile only — Phantom confirms internally on web)
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+      const confirmStrategy: TransactionConfirmationStrategy = {
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
+      };
 
-    // ── 5. Confirm transaction ───────────────────────────────
-    const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-
-    const confirmStrategy: TransactionConfirmationStrategy = {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
-    };
-
-    const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
-
-    if (confirmation.value.err) {
-      console.error('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
-      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
+      if (confirmation.value.err) {
+        console.error('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      }
     }
 
     console.log(`[JUPITER] ✅ Confirmed: ${signature}`);

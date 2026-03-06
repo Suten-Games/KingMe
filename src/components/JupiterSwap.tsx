@@ -38,7 +38,7 @@ const OUTPUT_TOKENS = [
 const SLIPPAGE_OPTIONS = [50, 100, 200] as const; // bps: 0.5%, 1%, 2%
 
 export default function JupiterSwap({ asset }: Props) {
-  const { connected, publicKey, signTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, signAndSendTransaction } = useWallet();
   const { showToast, ToastComponent } = useSwapToast();
 
   const meta = asset.metadata as any;
@@ -157,6 +157,7 @@ export default function JupiterSwap({ asset }: Props) {
           slippageBps,
         },
         signTransaction,
+        signAndSendTransaction,
       );
 
       if (result.success) {

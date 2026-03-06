@@ -32,7 +32,7 @@ const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 export default function PositionAlertCards() {
   const router = useRouter();
   const assets = useStore((state) => state.assets);
-  const { publicKey, signTransaction, connected } = useWallet();
+  const { publicKey, signTransaction, signAndSendTransaction, connected } = useWallet();
   const [alerts, setAlerts] = useState<PositionAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -278,7 +278,8 @@ export default function PositionAlertCards() {
           userPublicKey: publicKey.toBase58(),
           inputDecimals: decimals,
         },
-        signTransaction
+        signTransaction,
+        signAndSendTransaction,
       );
 
       if (result.success) {

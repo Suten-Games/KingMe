@@ -28,7 +28,7 @@ export default function AssetDetailScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
 
-  const { publicKey, signTransaction, connected } = useWallet();
+  const { publicKey, signTransaction, signAndSendTransaction, connected } = useWallet();
   const { showToast, ToastComponent } = useSwapToast();
 
   const asset = useStore((s) => s.assets.find(a => a.id === id));
@@ -119,7 +119,8 @@ export default function AssetDetailScreen() {
           userPublicKey: publicKey.toBase58(),
           inputDecimals: decimals,
         },
-        signTransaction
+        signTransaction,
+        signAndSendTransaction,
       );
 
       if (result.success) {
