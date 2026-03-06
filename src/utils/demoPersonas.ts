@@ -21,7 +21,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'other', name: 'Part-Time Barista', amount: 690, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_1', source: 'salary', name: 'Part-Time Barista', amount: 690, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
         ],
       },
       bankAccounts: [
