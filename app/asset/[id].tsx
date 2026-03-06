@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
 import ThesisModal from '../../src/components/ThesisModal';
+import ConfirmModal from '../../src/components/ConfirmModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import AssetTargetSection from '@/components/AssetTargetSection';
 import JupiterSwap from '../../src/components/JupiterSwap';
@@ -28,10 +29,13 @@ export default function AssetDetailScreen() {
   const updateThesis = useStore((s) => s.updateThesis);
   const updateAsset = useStore((s) => s.updateAsset);
   const markThesisReviewed = useStore((s) => s.markThesisReviewed);
+  const removeThesis = useStore((s) => s.removeThesis);
   const removeAsset = useStore((s) => s.removeAsset);
 
   const [showThesisModal, setShowThesisModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [stillBelieve, setStillBelieve] = useState(false);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
 
   // Crypto-specific state
   const [sparklineData, setSparklineData] = useState<PriceSnapshot[]>([]);
@@ -519,150 +523,163 @@ export default function AssetDetailScreen() {
                       <Text style={styles.thesisBullCase}>{thesis.bullCase}</Text>
                     </View>
 
-                    {/* Entry/Current/Target row moved to Key Levels — skip here */}
-
-                    {thesis.invalidators.length > 0 && (
-                      <View style={styles.invalidatorsSection}>
-                        <Text style={styles.invalidatorsTitle}>Exit Triggers</Text>
-                        {thesis.invalidators.map((inv) => (
-                          <View key={inv.id} style={[styles.invalidatorCard, inv.isTriggered && styles.invalidatorTriggered]}>
-                            <Text style={styles.invalidatorIcon}>{inv.isTriggered ? '❌' : '⚠️'}</Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.invalidatorText}>{inv.description}</Text>
-                              {inv.isTriggered && (
-                                <Text style={styles.triggeredText}>Triggered on {new Date(inv.triggeredAt!).toLocaleDateString()}</Text>
-                              )}
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {/* Profit/Loss Calculator */}
-                    {thesis.targetPrice && thesis.entryPrice && currentPrice > 0 && (
-                      <View style={styles.profitLossSection}>
-                        <Text style={styles.sectionTitle}>Profit/Loss Potential</Text>
-                        {(() => {
-                          const qty = quantity || 1;
-                          const entryPrice = thesis.entryPrice;
-                          const targetPrice = thesis.targetPrice;
-                          const currentValue = asset.value;
-                          const entryValue = entryPrice * qty;
-                          const targetValue = targetPrice * qty;
-                          const potentialProfit = targetValue - currentValue;
-                          const profitPercent = ((targetPrice / currentPrice) - 1) * 100;
-
-                          const stopLoss = stopLossPrice;
-                          const stopLossValue = stopLoss ? stopLoss * qty : null;
-                          const potentialLoss = stopLossValue ? currentValue - stopLossValue : null;
-                          const lossPercent = stopLoss ? ((currentPrice / stopLoss) - 1) * 100 : null;
-                          const riskReward = (potentialLoss && potentialLoss > 0) ? potentialProfit / potentialLoss : null;
-                          const currentPnL = currentValue - entryValue;
-                          const currentPnLPercent = ((currentPrice / entryPrice) - 1) * 100;
-
-                          return (
-                            <>
-                              <View style={styles.plCard}>
-                                <Text style={styles.plCardTitle}>Current Position</Text>
-                                <View style={styles.plRow}>
-                                  <View style={styles.plCol}>
-                                    <Text style={styles.plLabel}>Entry Cost</Text>
-                                    <Text style={styles.plValue}>${entryValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-                                    <Text style={styles.plSubtext}>{qty.toLocaleString()} @ ${entryPrice.toFixed(4)}</Text>
-                                  </View>
-                                  <View style={styles.plCol}>
-                                    <Text style={styles.plLabel}>Current Value</Text>
-                                    <Text style={styles.plValue}>${currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-                                    <Text style={[styles.plChange, currentPnL >= 0 ? styles.green : styles.red]}>
-                                      {currentPnL >= 0 ? '+' : ''}${Math.abs(currentPnL).toLocaleString(undefined, { maximumFractionDigits: 2 })} ({currentPnLPercent >= 0 ? '+' : ''}{currentPnLPercent.toFixed(1)}%)
-                                    </Text>
-                                  </View>
-                                </View>
-                              </View>
-
-                              <View style={[styles.plCard, styles.profitCard]}>
-                                <View style={styles.plCardHeader}>
-                                  <Text style={styles.plCardTitle}>If Target Hit</Text>
-                                  <Text style={styles.plTargetPrice}>${targetPrice.toFixed(4)}</Text>
-                                </View>
-                                <View style={styles.plRow}>
-                                  <View style={styles.plCol}>
-                                    <Text style={styles.plLabel}>Profit</Text>
-                                    <Text style={[styles.plBigValue, styles.green]}>+${potentialProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-                                  </View>
-                                  <View style={styles.plCol}>
-                                    <Text style={styles.plLabel}>Gain</Text>
-                                    <Text style={[styles.plBigValue, styles.green]}>+{profitPercent.toFixed(0)}%</Text>
-                                  </View>
-                                </View>
-                              </View>
-
-                              {stopLoss && potentialLoss && (
-                                <View style={[styles.plCard, styles.lossCard]}>
-                                  <View style={styles.plCardHeader}>
-                                    <Text style={styles.plCardTitle}>If Stop-Loss Hit</Text>
-                                    <Text style={styles.plStopPrice}>${stopLoss.toFixed(4)}</Text>
-                                  </View>
-                                  <View style={styles.plRow}>
-                                    <View style={styles.plCol}>
-                                      <Text style={styles.plLabel}>Loss</Text>
-                                      <Text style={[styles.plBigValue, styles.red]}>-${potentialLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-                                    </View>
-                                    <View style={styles.plCol}>
-                                      <Text style={styles.plLabel}>Drop</Text>
-                                      <Text style={[styles.plBigValue, styles.red]}>-{lossPercent!.toFixed(0)}%</Text>
-                                    </View>
-                                  </View>
-                                </View>
-                              )}
-
-                              {riskReward && (
-                                <View style={styles.rrCard}>
-                                  <Text style={styles.rrLabel}>Risk/Reward Ratio</Text>
-                                  <Text style={[styles.rrValue, riskReward >= 2 ? styles.green : riskReward >= 1 ? styles.yellow : styles.red]}>
-                                    {riskReward.toFixed(2)}:1
-                                  </Text>
-                                  <Text style={styles.rrExplain}>
-                                    {riskReward >= 3 ? 'Excellent trade setup' : riskReward >= 2 ? 'Good risk/reward' : riskReward >= 1 ? 'Acceptable ratio' : 'Poor risk/reward'}
-                                  </Text>
-                                </View>
-                              )}
-
-                              <View style={styles.decisionCard}>
-                                <Text style={styles.decisionTitle}>What To Do</Text>
-                                <Text style={styles.decisionText}>
-                                  {currentPrice >= targetPrice
-                                    ? 'TARGET HIT! Consider selling to lock in profits'
-                                    : stopLoss && currentPrice <= stopLoss
-                                      ? 'STOP-LOSS HIT! Exit to prevent further losses'
-                                      : `HOLD - ${((currentPrice / targetPrice) * 100).toFixed(0)}% to target`
-                                  }
-                                </Text>
-                              </View>
-                            </>
-                          );
-                        })()}
-                      </View>
-                    )}
-
-                    <View style={styles.metaRow}>
-                      <View style={styles.metaItem}>
-                        <Text style={styles.metaLabel}>Time Horizon</Text>
-                        <Text style={styles.metaValue}>{thesis.timeHorizon}</Text>
-                      </View>
-                      <View style={styles.metaItem}>
-                        <Text style={styles.metaLabel}>Last Reviewed</Text>
-                        <Text style={styles.metaValue}>
-                          {thesis.lastReviewed ? new Date(thesis.lastReviewed).toLocaleDateString() : 'Never'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.thesisActions}>
-                      <TouchableOpacity style={styles.reviewButton} onPress={() => markThesisReviewed(thesis.id)}>
-                        <Text style={styles.reviewButtonText}>Mark Reviewed</Text>
+                    {/* Conviction buttons */}
+                    <View style={tb.buttonRow}>
+                      <TouchableOpacity
+                        style={[tb.btn, stillBelieve && tb.btnActive]}
+                        onPress={() => { setStillBelieve(true); markThesisReviewed(thesis.id); }}
+                      >
+                        <Text style={[tb.btnText, stillBelieve && tb.btnTextActive]}>Still Believe</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[tb.btn, tb.btnAbandon]}
+                        onPress={() => setConfirmAbandon(true)}
+                      >
+                        <Text style={tb.btnAbandonText}>No Longer Believe</Text>
                       </TouchableOpacity>
                     </View>
+
+                    {/* Only show P/L details if user still believes */}
+                    {stillBelieve && (
+                      <>
+                        {thesis.invalidators.length > 0 && (
+                          <View style={styles.invalidatorsSection}>
+                            <Text style={styles.invalidatorsTitle}>Exit Triggers</Text>
+                            {thesis.invalidators.map((inv) => (
+                              <View key={inv.id} style={[styles.invalidatorCard, inv.isTriggered && styles.invalidatorTriggered]}>
+                                <Text style={styles.invalidatorIcon}>{inv.isTriggered ? '❌' : '⚠️'}</Text>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.invalidatorText}>{inv.description}</Text>
+                                  {inv.isTriggered && (
+                                    <Text style={styles.triggeredText}>Triggered on {new Date(inv.triggeredAt!).toLocaleDateString()}</Text>
+                                  )}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* Profit/Loss Calculator */}
+                        {thesis.targetPrice && thesis.entryPrice && currentPrice > 0 && (
+                          <View style={styles.profitLossSection}>
+                            <Text style={styles.sectionTitle}>Profit/Loss Potential</Text>
+                            {(() => {
+                              const qty = quantity || 1;
+                              const entryPrice = thesis.entryPrice;
+                              const targetPrice = thesis.targetPrice;
+                              const currentValue = asset.value;
+                              const entryValue = entryPrice * qty;
+                              const targetValue = targetPrice * qty;
+                              const potentialProfit = targetValue - currentValue;
+                              const profitPercent = ((targetPrice / currentPrice) - 1) * 100;
+
+                              const stopLoss = stopLossPrice;
+                              const stopLossValue = stopLoss ? stopLoss * qty : null;
+                              const potentialLoss = stopLossValue ? currentValue - stopLossValue : null;
+                              const lossPercent = stopLoss ? ((currentPrice / stopLoss) - 1) * 100 : null;
+                              const riskReward = (potentialLoss && potentialLoss > 0) ? potentialProfit / potentialLoss : null;
+                              const currentPnL = currentValue - entryValue;
+                              const currentPnLPercent = ((currentPrice / entryPrice) - 1) * 100;
+
+                              return (
+                                <>
+                                  <View style={styles.plCard}>
+                                    <Text style={styles.plCardTitle}>Current Position</Text>
+                                    <View style={styles.plRow}>
+                                      <View style={styles.plCol}>
+                                        <Text style={styles.plLabel}>Entry Cost</Text>
+                                        <Text style={styles.plValue}>${entryValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                                        <Text style={styles.plSubtext}>{qty.toLocaleString()} @ ${entryPrice.toFixed(4)}</Text>
+                                      </View>
+                                      <View style={styles.plCol}>
+                                        <Text style={styles.plLabel}>Current Value</Text>
+                                        <Text style={styles.plValue}>${currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                                        <Text style={[styles.plChange, currentPnL >= 0 ? styles.green : styles.red]}>
+                                          {currentPnL >= 0 ? '+' : ''}${Math.abs(currentPnL).toLocaleString(undefined, { maximumFractionDigits: 2 })} ({currentPnLPercent >= 0 ? '+' : ''}{currentPnLPercent.toFixed(1)}%)
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  </View>
+
+                                  <View style={[styles.plCard, styles.profitCard]}>
+                                    <View style={styles.plCardHeader}>
+                                      <Text style={styles.plCardTitle}>If Target Hit</Text>
+                                      <Text style={styles.plTargetPrice}>${targetPrice.toFixed(4)}</Text>
+                                    </View>
+                                    <View style={styles.plRow}>
+                                      <View style={styles.plCol}>
+                                        <Text style={styles.plLabel}>Profit</Text>
+                                        <Text style={[styles.plBigValue, styles.green]}>+${potentialProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                                      </View>
+                                      <View style={styles.plCol}>
+                                        <Text style={styles.plLabel}>Gain</Text>
+                                        <Text style={[styles.plBigValue, styles.green]}>+{profitPercent.toFixed(0)}%</Text>
+                                      </View>
+                                    </View>
+                                  </View>
+
+                                  {stopLoss && potentialLoss && (
+                                    <View style={[styles.plCard, styles.lossCard]}>
+                                      <View style={styles.plCardHeader}>
+                                        <Text style={styles.plCardTitle}>If Stop-Loss Hit</Text>
+                                        <Text style={styles.plStopPrice}>${stopLoss.toFixed(4)}</Text>
+                                      </View>
+                                      <View style={styles.plRow}>
+                                        <View style={styles.plCol}>
+                                          <Text style={styles.plLabel}>Loss</Text>
+                                          <Text style={[styles.plBigValue, styles.red]}>-${potentialLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                                        </View>
+                                        <View style={styles.plCol}>
+                                          <Text style={styles.plLabel}>Drop</Text>
+                                          <Text style={[styles.plBigValue, styles.red]}>-{lossPercent!.toFixed(0)}%</Text>
+                                        </View>
+                                      </View>
+                                    </View>
+                                  )}
+
+                                  {riskReward && (
+                                    <View style={styles.rrCard}>
+                                      <Text style={styles.rrLabel}>Risk/Reward Ratio</Text>
+                                      <Text style={[styles.rrValue, riskReward >= 2 ? styles.green : riskReward >= 1 ? styles.yellow : styles.red]}>
+                                        {riskReward.toFixed(2)}:1
+                                      </Text>
+                                      <Text style={styles.rrExplain}>
+                                        {riskReward >= 3 ? 'Excellent trade setup' : riskReward >= 2 ? 'Good risk/reward' : riskReward >= 1 ? 'Acceptable ratio' : 'Poor risk/reward'}
+                                      </Text>
+                                    </View>
+                                  )}
+
+                                  <View style={styles.decisionCard}>
+                                    <Text style={styles.decisionTitle}>What To Do</Text>
+                                    <Text style={styles.decisionText}>
+                                      {currentPrice >= targetPrice
+                                        ? 'TARGET HIT! Consider selling to lock in profits'
+                                        : stopLoss && currentPrice <= stopLoss
+                                          ? 'STOP-LOSS HIT! Exit to prevent further losses'
+                                          : `HOLD - ${((currentPrice / targetPrice) * 100).toFixed(0)}% to target`
+                                      }
+                                    </Text>
+                                  </View>
+                                </>
+                              );
+                            })()}
+                          </View>
+                        )}
+
+                        <View style={styles.metaRow}>
+                          <View style={styles.metaItem}>
+                            <Text style={styles.metaLabel}>Time Horizon</Text>
+                            <Text style={styles.metaValue}>{thesis.timeHorizon}</Text>
+                          </View>
+                          <View style={styles.metaItem}>
+                            <Text style={styles.metaLabel}>Last Reviewed</Text>
+                            <Text style={styles.metaValue}>
+                              {thesis.lastReviewed ? new Date(thesis.lastReviewed).toLocaleDateString() : 'Never'}
+                            </Text>
+                          </View>
+                        </View>
+                      </>
+                    )}
                   </>
                 ) : (
                   <TouchableOpacity style={styles.addThesisButton} onPress={() => setShowThesisModal(true)}>
@@ -989,11 +1006,6 @@ export default function AssetDetailScreen() {
                       </View>
                     </View>
 
-                    <View style={styles.thesisActions}>
-                      <TouchableOpacity style={styles.reviewButton} onPress={() => markThesisReviewed(thesis.id)}>
-                        <Text style={styles.reviewButtonText}>Mark Reviewed</Text>
-                      </TouchableOpacity>
-                    </View>
                   </>
                 ) : (
                   <TouchableOpacity style={styles.addThesisButton} onPress={() => setShowThesisModal(true)}>
@@ -1024,6 +1036,20 @@ export default function AssetDetailScreen() {
           />
         )}
       </ScrollView>
+
+      {/* Abandon Thesis Confirm */}
+      {thesis && (
+        <ConfirmModal
+          visible={confirmAbandon}
+          title="Abandon Thesis"
+          message={`Remove your investment thesis for ${asset.name}? This will also clear any accumulation goals and alerts tied to this thesis.`}
+          confirmLabel="Remove Thesis"
+          cancelLabel="Keep It"
+          destructive
+          onConfirm={() => { removeThesis(thesis.id); setConfirmAbandon(false); }}
+          onCancel={() => setConfirmAbandon(false)}
+        />
+      )}
 
       {/* Edit Asset Modal */}
       <AddAssetModal
@@ -1266,10 +1292,21 @@ const styles = StyleSheet.create({
   metaItem: { flex: 1, backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2a2f3e', alignItems: 'center' },
   metaLabel: { fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   metaValue: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
-  thesisActions: { gap: 10 },
-  reviewButton: { backgroundColor: '#4ade80', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  reviewButtonText: { fontSize: 16, fontWeight: 'bold', color: '#0a0e1a' },
+  thesisActions: { gap: 10 },  // kept for compat
   addThesisButton: { backgroundColor: '#1a1f2e', borderRadius: 12, padding: 24, alignItems: 'center', borderWidth: 2, borderColor: '#4ade80', borderStyle: 'dashed' },
   addThesisText: { fontSize: 18, fontWeight: 'bold', color: '#4ade80', marginBottom: 8 },
   addThesisSubtext: { fontSize: 14, color: '#666', textAlign: 'center' },
+});
+
+const tb = StyleSheet.create({
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  btn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: '#2a2f3e', backgroundColor: '#1a1f2e',
+  },
+  btnActive: { backgroundColor: '#4ade8020', borderColor: '#4ade80' },
+  btnText: { fontSize: 15, fontWeight: '600', color: '#a0a0a0' },
+  btnTextActive: { color: '#4ade80' },
+  btnAbandon: { backgroundColor: '#ff444415', borderColor: '#ff444440' },
+  btnAbandonText: { fontSize: 15, fontWeight: '600', color: '#ff6666' },
 });
