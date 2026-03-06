@@ -192,7 +192,8 @@ function detectColumns(headers: string[]): ColumnMap {
   );
 
   const amountCol = lower.findIndex(h =>
-    h === 'amount' || h === 'transaction amount' || h === 'total'
+    h === 'amount' || h === 'transaction amount' || h === 'total' ||
+    h.startsWith('amount (') || h === 'amount (usd)'
   );
 
   const debitCol = lower.findIndex(h =>
@@ -233,7 +234,8 @@ function typeFromBankType(bankType: string, amount: number): 'income' | 'expense
 
   // Income types
   if (upper === 'DEPOSIT' || upper === 'DIRECT_DEPOSIT' || upper === 'ACH_CREDIT' ||
-    upper === 'INTEREST' || upper === 'REFUND' || upper === 'CREDIT') {
+    upper === 'INTEREST' || upper === 'REFUND' || upper === 'CREDIT' ||
+    upper === 'PAYMENT') {
     return 'income';
   }
 
@@ -509,6 +511,7 @@ export function parseCSVTransactions(
           if (bankType === 'INTEREST') category = 'income_other';
           if (bankType === 'FEE') category = 'financial_fees';
           if (bankType === 'ATM') category = 'other';
+          if (bankType === 'PAYMENT') category = 'income_transfer_in';
         }
       }
 
