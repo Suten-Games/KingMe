@@ -1,6 +1,6 @@
 // app/(tabs)/profile.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform, Switch, Image } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -74,11 +74,31 @@ export default function ProfileScreen() {
   const [activePersona, setActivePersona] = useState<string | null>(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
 
+  // Restore demo state on mount (survives navigation)
+  useEffect(() => {
+    (async () => {
+      try {
+        const [demoFlag, personaId, realProfile] = await Promise.all([
+          AsyncStorage.getItem('_demo_active'),
+          AsyncStorage.getItem('_demo_persona_id'),
+          AsyncStorage.getItem('_demo_saved_profile'),
+        ]);
+        if (demoFlag === 'true' && realProfile) {
+          setIsDemoMode(true);
+          setActivePersona(personaId);
+          setSavedRealProfile(realProfile);
+        }
+      } catch {}
+    })();
+  }, []);
+
   const handleLoadPersona = async (persona: DemoPersona) => {
     // Save real profile first (only on first demo load)
     if (!savedRealProfile) {
       const backup = exportBackup();
       setSavedRealProfile(backup);
+      // Persist real profile and demo state so it survives navigation
+      await AsyncStorage.setItem('_demo_saved_profile', backup);
       // Also stash goals & accumulation plans so they don't bleed into demo
       try {
         const [goals, plans] = await Promise.all([
@@ -93,6 +113,8 @@ export default function ProfileScreen() {
     await Promise.all([
       AsyncStorage.setItem('kingme_goals', '[]'),
       AsyncStorage.setItem('accumulation_plans', '{}'),
+      AsyncStorage.setItem('_demo_active', 'true'),
+      AsyncStorage.setItem('_demo_persona_id', persona.id),
     ]);
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     setActivePersona(persona.id);
@@ -115,6 +137,9 @@ export default function ProfileScreen() {
           AsyncStorage.setItem('accumulation_plans', plans || '{}'),
           AsyncStorage.removeItem('_demo_saved_goals'),
           AsyncStorage.removeItem('_demo_saved_plans'),
+          AsyncStorage.removeItem('_demo_saved_profile'),
+          AsyncStorage.removeItem('_demo_active'),
+          AsyncStorage.removeItem('_demo_persona_id'),
         ]);
       } catch {}
     }
