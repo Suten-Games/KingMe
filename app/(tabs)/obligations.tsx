@@ -114,6 +114,19 @@ export default function ObligationsScreen() {
   // Auto-match on page load
   useEffect(() => { reconcilePayments(); }, []);
 
+  // ── Kudos when obligations are reduced ──
+  const [kudos, setKudos] = useState<{ saved: number; newTotal: number } | null>(null);
+  const prevTotalRef = useRef<number | null>(null);
+  const totalObligations = useMemo(() => obligations.reduce((s, o) => s + o.amount, 0), [obligations]);
+  const totalDebts = useMemo(() => debts.reduce((s, d) => s + (d.monthlyPayment || 0), 0), [debts]);
+  useEffect(() => {
+    if (prevTotalRef.current !== null && totalObligations < prevTotalRef.current) {
+      const saved = prevTotalRef.current - totalObligations;
+      setKudos({ saved, newTotal: totalObligations + totalDebts });
+    }
+    prevTotalRef.current = totalObligations;
+  }, [totalObligations]);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);
   const [name, setName] = useState('');
@@ -552,6 +565,29 @@ export default function ObligationsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Kudos Modal ── */}
+      <Modal visible={!!kudos} transparent animationType="fade" onRequestClose={() => setKudos(null)}>
+        <View style={s.kudosOverlay}>
+          <LinearGradient colors={['#0f1322', '#1a1f2e']} style={s.kudosCard}>
+            <Text style={s.kudosEmoji}>🎉</Text>
+            <Text style={s.kudosTitle}>Nice Cut!</Text>
+            <Text style={s.kudosSaved}>
+              -${kudos?.saved.toFixed(0)}/mo
+            </Text>
+            <Text style={s.kudosBody}>
+              You just freed up ${kudos?.saved.toFixed(0)} per month.{'\n'}
+              That's ${((kudos?.saved || 0) * 12).toLocaleString()}/year back in your pocket.
+            </Text>
+            <Text style={s.kudosNewTotal}>
+              New monthly obligations: ${kudos?.newTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </Text>
+            <TouchableOpacity style={s.kudosBtn} onPress={() => setKudos(null)}>
+              <Text style={s.kudosBtnText}>Keep Going</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -701,4 +737,15 @@ const s = StyleSheet.create({
   catOptionText: { fontSize: 15, color: T.textSecondary, fontFamily: T.fontMedium },
   catOptionTextActive: { color: T.textPrimary, fontFamily: T.fontBold },
   catOptionCheck: { fontSize: 16, fontFamily: T.fontBold },
+
+  // Kudos modal
+  kudosOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+  kudosCard: { borderRadius: 20, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: '#f4c43040', width: '100%', maxWidth: 360 },
+  kudosEmoji: { fontSize: 48, marginBottom: 8 },
+  kudosTitle: { fontSize: 26, fontFamily: T.fontExtraBold, color: '#f4c430', marginBottom: 4 },
+  kudosSaved: { fontSize: 32, fontFamily: T.fontExtraBold, color: '#22c55e', marginBottom: 12 },
+  kudosBody: { fontSize: 15, color: T.textSecondary, fontFamily: T.fontRegular, textAlign: 'center', lineHeight: 22, marginBottom: 12 },
+  kudosNewTotal: { fontSize: 13, color: T.textMuted, fontFamily: T.fontMedium, marginBottom: 20 },
+  kudosBtn: { backgroundColor: '#f4c430', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
+  kudosBtnText: { fontSize: 16, fontFamily: T.fontBold, color: '#0a0e1a' },
 });

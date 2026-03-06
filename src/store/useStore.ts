@@ -753,9 +753,20 @@ export const useStore = create<AppState>((set, get) => ({
     })),
 
   removeObligation: (obligationId) =>
-    set((state) => ({
-      obligations: state.obligations.filter((o) => o.id !== obligationId),
-    })),
+    set((state) => {
+      const newState: any = {
+        obligations: state.obligations.filter((o) => o.id !== obligationId),
+      };
+      // Award lighter_load badge if not already earned
+      if (!(state.earnedBadges || []).some(b => b.badgeId === 'lighter_load')) {
+        newState.earnedBadges = [...(state.earnedBadges || []), {
+          badgeId: 'lighter_load',
+          earnedAt: new Date().toISOString(),
+          seen: false,
+        }];
+      }
+      return newState;
+    }),
 
   updateObligation: (obligationId, obligationUpdate) =>
     set((state) => ({
