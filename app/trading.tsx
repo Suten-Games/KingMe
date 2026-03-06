@@ -1,8 +1,12 @@
 // app/(tabs)/trading.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Platform, Alert, ActivityIndicator, Linking, Image } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
@@ -22,6 +26,9 @@ function formatCurrency(amt: number): string {
 
 // ─── component ────────────────────────────────────────────────────────────────
 export default function TradingScreen() {
+  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const driftTrades = useStore((s) => s.driftTrades || []);
   const addDriftTrade = useStore((s) => s.addDriftTrade);
   const updateDriftTrade = useStore((s) => s.updateDriftTrade);
@@ -40,6 +47,7 @@ export default function TradingScreen() {
   const wallets = useStore((s) => s.wallets);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingPositions, setIsSyncingPositions] = useState(false);
   const [otherPlatformName, setOtherPlatformName] = useState('');
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [interestSent, setInterestSent] = useState(false);
@@ -81,7 +89,6 @@ export default function TradingScreen() {
   const [allocLeftInDrift, setAllocLeftInDrift] = useState('');
 
   // ── goal allocations ─────────────────────────────────────────────────────
-  const router = useRouter();
   const assets = useStore((s) => s.assets);
   const [goals, setGoals] = useState<GoalWithProgress[]>([]);
   const [goalAmounts, setGoalAmounts] = useState<Record<string, string>>({});  // goalId → amount string
@@ -91,7 +98,8 @@ export default function TradingScreen() {
   // Fetch active Drift positions on mount
   useEffect(() => {
     if (isDrift && wallets?.[0]) {
-      syncDriftPositions(wallets[0]);
+      setIsSyncingPositions(true);
+      syncDriftPositions(wallets[0]).finally(() => setIsSyncingPositions(false));
     }
   }, [isDrift]);
 
@@ -382,6 +390,58 @@ export default function TradingScreen() {
 
   return (
     <View style={styles.container}>
+      {/* KingMe branded header */}
+      <LinearGradient
+        colors={['#10162a', '#0c1020', '#080c18']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}
+      >
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>←</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerBrand}
+            activeOpacity={0.7}
+            onPress={() => router.replace('/')}
+          >
+            <Image
+              source={require('../src/assets/images/kingmelogo.jpg')}
+              style={styles.headerLogo}
+              resizeMode="cover"
+            />
+            <MaskedView
+              maskElement={
+                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>
+                  KingMe
+                </Text>
+              }
+            >
+              <LinearGradient
+                colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}>
+                  KingMe
+                </Text>
+              </LinearGradient>
+            </MaskedView>
+          </TouchableOpacity>
+
+          <Text style={styles.headerPageTitle}>Trading</Text>
+        </View>
+
+        <LinearGradient
+          colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.headerAccent}
+        />
+      </LinearGradient>
+
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Month Navigation */}
         <View style={styles.monthNav}>
@@ -425,9 +485,21 @@ export default function TradingScreen() {
         </View>
 
         {/* Active Drift Positions */}
-        {isDrift && (driftPositions.perpPositions.length > 0 || driftPositions.openOrders.length > 0) && (
+        {isDrift && (
           <View style={styles.positionsSection}>
             <Text style={styles.sectionTitle}>Active Positions</Text>
+            {isSyncingPositions && (
+              <View style={styles.emptyCard}>
+                <ActivityIndicator size="small" color="#60a5fa" />
+                <Text style={[styles.emptySubtext, { marginTop: 8 }]}>Loading positions from Drift...</Text>
+              </View>
+            )}
+            {!isSyncingPositions && driftPositions.perpPositions.length === 0 && driftPositions.openOrders.length === 0 && (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No active positions</Text>
+                <Text style={styles.emptySubtext}>Open a trade on Drift to see it here</Text>
+              </View>
+            )}
             {driftPositions.perpPositions.map((pos) => (
               <View key={`perp-${pos.marketIndex}`} style={styles.positionCard}>
                 <View style={styles.positionHeader}>
@@ -1049,6 +1121,15 @@ export default function TradingScreen() {
 // ─── styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
+  header: { paddingHorizontal: 16, paddingBottom: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backButton: { padding: 8, marginRight: 2 },
+  backText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
+  headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28 },
+  headerPageTitle: { fontSize: 16, color: '#8892b0', fontWeight: '600', marginLeft: 'auto' },
+  headerAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
   scroll: { flex: 1, padding: 20 },
   monthNav: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 12, gap: 16 },
   monthArrow: { paddingHorizontal: 14, paddingVertical: 6 },
