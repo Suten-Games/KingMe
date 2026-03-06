@@ -12,15 +12,24 @@ import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import AssetTargetSection from '@/components/AssetTargetSection';
 import JupiterSwap from '../../src/components/JupiterSwap';
 import SparklineChart from '../../src/components/SparklineChart';
-import { loadSnapshotsForMint, fetchTokenInfo, getTokenPriceData } from '../../src/services/priceTracker';
+import { loadSnapshotsForMint, fetchTokenInfo, getTokenPriceData, addToWatchlist } from '../../src/services/priceTracker';
 import type { TokenProjectInfo, TokenPriceData, PriceSnapshot } from '../../src/services/priceTracker';
 import { lookupToken } from '../../src/utils/tokenRegistry';
-import type { Asset, RealEstateAsset, StockAsset } from '../../src/types';
+import { deletePlan } from '../../src/services/accumulationPlan';
+import { loadGoals, removeGoal } from '../../src/services/goals';
+import { useWallet } from '../../src/providers/wallet-provider';
+import { executeSwap, fetchMintDecimals, isSwapConfigured, MINTS } from '../../src/services/jupiterSwap';
+import { useSwapToast } from '../../src/components/SwapToast';
+import { postSwapUpdate } from '../../src/utils/postSwapUpdate';
+import type { Asset, RealEstateAsset, StockAsset, CryptoAsset } from '../../src/types';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+
+  const { publicKey, signTransaction, connected } = useWallet();
+  const { showToast, ToastComponent } = useSwapToast();
 
   const asset = useStore((s) => s.assets.find(a => a.id === id));
   const thesis = useStore((s) => s.investmentTheses.find(t => t.assetId === id));
@@ -36,6 +45,7 @@ export default function AssetDetailScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [stillBelieve, setStillBelieve] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
+  const [showExitSwap, setShowExitSwap] = useState(false);
 
   // Crypto-specific state
   const [sparklineData, setSparklineData] = useState<PriceSnapshot[]>([]);
@@ -46,6 +56,92 @@ export default function AssetDetailScreen() {
   // Key levels inline editing
   const [editingLevel, setEditingLevel] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  // ── Abandon thesis: clean up plan, goals, add to watchlist ──
+  const handleAbandonThesis = async () => {
+    if (!thesis) return;
+    const assetMint = (asset?.metadata as any)?.tokenMint || (asset?.metadata as any)?.mint || '';
+    const assetSymbol = (asset?.metadata as any)?.symbol || asset?.name || '';
+
+    // 1. Remove thesis + thesis alerts
+    removeThesis(thesis.id);
+
+    // 2. Delete accumulation plan
+    if (assetMint) {
+      try { await deletePlan(assetMint); } catch {}
+    }
+
+    // 3. Remove goals linked to this mint
+    if (assetMint) {
+      try {
+        const goals = await loadGoals();
+        const linked = goals.filter(g => g.mint === assetMint);
+        for (const g of linked) await removeGoal(g.id);
+        if (linked.length > 0) console.log(`[THESIS] Removed ${linked.length} goals for ${assetSymbol}`);
+      } catch {}
+    }
+
+    // 4. Add to watchlist
+    if (assetMint) {
+      try { await addToWatchlist(assetMint, assetSymbol, 'Abandoned thesis'); } catch {}
+    }
+
+    setConfirmAbandon(false);
+    setStillBelieve(false);
+
+    // 5. If holding tokens, offer to exit position
+    if (asset && asset.value > 1) {
+      setShowExitSwap(true);
+    }
+  };
+
+  // ── Execute exit swap: token → USD* ──
+  const handleExitSwap = async () => {
+    if (!asset || !publicKey) return;
+    const meta = asset.metadata as CryptoAsset;
+    const fromMint = meta?.tokenMint || meta?.mint || '';
+    const fromSymbol = meta?.symbol || '';
+    const qty = meta?.quantity || (meta as any)?.balance || 0;
+
+    if (!fromMint || qty <= 0) { setShowExitSwap(false); return; }
+    if (!isSwapConfigured() || !connected) { setShowExitSwap(false); return; }
+
+    const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
+    setShowExitSwap(false);
+    showToast({ type: 'loading', symbol: fromSymbol, percentage: 100 });
+
+    try {
+      const result = await executeSwap(
+        {
+          inputMint: fromMint,
+          outputMint: MINTS['USD*'],
+          amount: qty,
+          userPublicKey: publicKey.toBase58(),
+          inputDecimals: decimals,
+        },
+        signTransaction
+      );
+
+      if (result.success) {
+        const dollarValue = asset.value;
+        const pricePerToken = qty > 0 ? dollarValue / qty : 0;
+        await postSwapUpdate({
+          fromMint, fromSymbol,
+          tokenAmountSold: qty,
+          pricePerToken,
+          usdReceived: dollarValue,
+          signature: result.signature || '',
+        });
+        showToast({ type: 'success', symbol: fromSymbol, usdReceived: dollarValue, signature: result.signature || '' });
+      } else if (result.error !== 'Transaction cancelled by user') {
+        showToast({ type: 'error', message: result.error || 'Something went wrong' });
+      } else {
+        showToast({ type: 'error', message: 'Transaction cancelled.' });
+      }
+    } catch (e: any) {
+      showToast({ type: 'error', message: e.message });
+    }
+  };
 
   if (!asset) {
     return (
@@ -1038,18 +1134,28 @@ export default function AssetDetailScreen() {
       </ScrollView>
 
       {/* Abandon Thesis Confirm */}
-      {thesis && (
-        <ConfirmModal
-          visible={confirmAbandon}
-          title="Abandon Thesis"
-          message={`Remove your investment thesis for ${asset.name}? This will also clear any accumulation goals and alerts tied to this thesis.`}
-          confirmLabel="Remove Thesis"
-          cancelLabel="Keep It"
-          destructive
-          onConfirm={() => { removeThesis(thesis.id); setConfirmAbandon(false); }}
-          onCancel={() => setConfirmAbandon(false)}
-        />
-      )}
+      <ConfirmModal
+        visible={confirmAbandon}
+        title="Abandon Thesis"
+        message={`Remove your investment thesis for ${asset.name}? This will clear the accumulation plan, goals, and add ${symbol || asset.name} to your watchlist.`}
+        confirmLabel="Remove Thesis"
+        cancelLabel="Keep It"
+        destructive
+        onConfirm={handleAbandonThesis}
+        onCancel={() => setConfirmAbandon(false)}
+      />
+
+      {/* Exit Position — offer swap to USD* after abandoning thesis */}
+      <ConfirmModal
+        visible={showExitSwap}
+        title="Exit Position?"
+        message={`You still hold ${quantity.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${symbol} (~$${Math.round(asset.value).toLocaleString()}). Swap to USD* to earn 9.34% yield?`}
+        confirmLabel="Swap to USD*"
+        cancelLabel="Keep Tokens"
+        destructive={false}
+        onConfirm={handleExitSwap}
+        onCancel={() => setShowExitSwap(false)}
+      />
 
       {/* Edit Asset Modal */}
       <AddAssetModal
@@ -1065,6 +1171,9 @@ export default function AssetDetailScreen() {
         }}
         editingAsset={asset}
       />
+
+      {/* Swap toast overlay */}
+      <ToastComponent />
     </View>
   );
 }
