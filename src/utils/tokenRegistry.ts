@@ -110,13 +110,13 @@ export const TOKEN_REGISTRY: Record<string, TokenInfo> = {
   DSOL: {
     symbol: 'dSOL',
     name: 'Drift Staked SOL',
-    logoURI: 'https://drift-public.s3.eu-central-1.amazonaws.com/dSOL.svg',
+    logoURI: 'https://s2.coinmarketcap.com/static/img/coins/64x64/24208.png',
     mint: 'Dso1bDeDjCQxTrWHqUUi63oBvV7Mdm6WaobLbQ7gnPQ',
   },
   INF: {
     symbol: 'INF',
     name: 'Infinity (Sanctum)',
-    logoURI: 'https://arweave.net/MpKl7nMkjS4m2WjLJOZbWF3_qc79o7jXMhAdm8sBvfU',
+    logoURI: 'https://s2.coinmarketcap.com/static/img/coins/64x64/28476.png',
     mint: '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm',
   },
 

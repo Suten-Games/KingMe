@@ -12,29 +12,50 @@ interface ProtocolGroup {
   protocol: string;
   label: string;
   icon: string;
+  logoURI?: string;
   assets: Asset[];
   totalValue: number;
   totalIncome: number;
 }
 
-const PROTOCOL_ICONS: Record<string, string> = {
+const PROTOCOL_LOGOS: Record<string, string> = {
+  'kamino': 'https://hubbleprotocol.io/icons/kamino.png',
+  'drift': 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png',
+  'crypto.com': 'https://assets.coingecko.com/coins/images/7310/small/cro_token_logo.png',
+  'diversifi': 'https://s2.coinmarketcap.com/static/img/coins/64x64/28658.png',
+  'marginfi': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+  'marinade': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTGPsHuuPA5ey/logo.png',
+  'jito': 'https://storage.googleapis.com/token-metadata/JitoSOL-256.png',
+  'sanctum': 'https://s2.coinmarketcap.com/static/img/coins/64x64/28476.png',
+  'raydium': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png',
+  'orca': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE/logo.png',
+  'jupiter': 'https://static.jup.ag/jup/icon.png',
+  'perena': 'https://s2.coinmarketcap.com/static/img/coins/64x64/33498.png',
+};
+
+const PROTOCOL_FALLBACK_ICONS: Record<string, string> = {
   'kamino': '🔵',
-  'marginfi': '🟣',
   'drift': '🟡',
+  'crypto.com': '💎',
+  'diversifi': '🔷',
+  'marginfi': '🟣',
   'marinade': '🔴',
   'jito': '🟢',
   'sanctum': '🟠',
   'raydium': '💜',
   'orca': '🐋',
   'meteora': '☄️',
-  'diversifi': '🔷',
   'perena': '💛',
   'solend': '🔵',
   'jupiter': '🪐',
 };
 
+function getProtocolLogo(protocol: string): string | undefined {
+  return PROTOCOL_LOGOS[protocol.toLowerCase()];
+}
+
 function getProtocolIcon(protocol: string): string {
-  return PROTOCOL_ICONS[protocol.toLowerCase()] || '🔗';
+  return PROTOCOL_FALLBACK_ICONS[protocol.toLowerCase()] || '🔗';
 }
 
 function groupByProtocol(assets: Asset[]): ProtocolGroup[] {
@@ -65,6 +86,7 @@ function groupByProtocol(assets: Asset[]): ProtocolGroup[] {
       protocol: key,
       label: key,
       icon: getProtocolIcon(key),
+      logoURI: getProtocolLogo(key),
       assets: groupAssets,
       totalValue: groupAssets.reduce((s, a) => s + a.value, 0),
       totalIncome: groupAssets.reduce((s, a) => s + a.annualIncome, 0),
@@ -116,7 +138,11 @@ function ProtocolSubSection({
     <View style={ps.container}>
       <TouchableOpacity style={ps.header} onPress={() => setExpanded(!expanded)}>
         <View style={ps.headerLeft}>
-          <Text style={ps.icon}>{group.icon}</Text>
+          {group.logoURI ? (
+            <Image source={{ uri: group.logoURI }} style={ps.headerLogo} />
+          ) : (
+            <Text style={ps.icon}>{group.icon}</Text>
+          )}
           <Text style={ps.label}>{group.label}</Text>
           <View style={ps.countBubble}>
             <Text style={ps.countText}>{group.assets.length}</Text>
@@ -410,6 +436,7 @@ const ps = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   icon: { fontSize: 16 },
+  headerLogo: { width: 22, height: 22, borderRadius: 11 },
   label: { fontSize: 15, fontWeight: '700', color: '#e0e0e0' },
   countBubble: {
     backgroundColor: '#0a0e18', borderRadius: 10,
