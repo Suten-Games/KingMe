@@ -2112,18 +2112,23 @@ export const useStore = create<AppState>((set, get) => ({
       if (rpcUrl) headers['X-RPC-URL'] = rpcUrl;
 
       const url = `${DRIFT_API_BASE}/positions?wallet=${walletAddress}&subAccount=1`;
-      console.log('[DRIFT-POS] Fetching active positions...');
+      console.log(`[DRIFT-POS] Fetching active positions for ${walletAddress.slice(0, 8)}...`);
+      console.log(`[DRIFT-POS] URL: ${url}`);
       const resp = await fetch(url, { headers });
+      console.log(`[DRIFT-POS] Response status: ${resp.status}`);
 
       if (!resp.ok) {
+        const errBody = await resp.text();
+        console.error(`[DRIFT-POS] Error body: ${errBody}`);
         if (resp.status === 404) {
-          console.log('[DRIFT-POS] No Drift account, skipping');
+          console.log('[DRIFT-POS] No Drift account found, skipping');
           return;
         }
-        throw new Error(`Drift positions API error: ${resp.status}`);
+        throw new Error(`Drift positions API error: ${resp.status} — ${errBody}`);
       }
 
       const data = await resp.json();
+      console.log(`[DRIFT-POS] Raw response:`, JSON.stringify(data).slice(0, 500));
       set({
         driftPositions: {
           perpPositions: data.perpPositions || [],
