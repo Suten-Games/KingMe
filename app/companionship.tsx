@@ -274,7 +274,7 @@ export default function CompanionshipTracker() {
     if (loading) return;
     const alreadyImported = new Set(data.importedTxIds || []);
     const newTxs = bankTransactions.filter(
-      t => t.category === 'personal_companion' && t.type === 'expense' && t.amount > 0 && !alreadyImported.has(t.id)
+      t => t.category === 'personal_companion' && t.type !== 'income' && t.amount > 0 && !alreadyImported.has(t.id)
     );
     if (newTxs.length === 0) return;
 
