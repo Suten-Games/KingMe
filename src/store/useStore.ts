@@ -92,6 +92,7 @@ interface AppState extends UserProfile {
   toggleObligationPaid: (id: string) => void;
   toggleDebtPaid: (id: string) => void;
   resetMonthlyPayments: () => void;
+  reconcilePayments: () => void;
 
   // Windfall Alerts
   windfallAlerts: WindfallAlert[];
@@ -598,6 +599,71 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
+  // Auto-match obligations/debts with bank transactions for current month
+  reconcilePayments: () => {
+    const state = get();
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const allTx = state.bankTransactions || [];
+    const monthTx = allTx.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth));
+    if (monthTx.length === 0) return;
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    let oblMatched = 0;
+    const updatedObligations = state.obligations.map(o => {
+      if (o.isPaidThisMonth) return o;
+      const oName = normalize(o.name);
+      const oPayee = normalize(o.payee || '');
+      const match = monthTx.find(t => {
+        const desc = normalize(t.description);
+        const nameMatch = (oName.length > 2 && desc.includes(oName))
+          || (oPayee.length > 2 && desc.includes(oPayee));
+        const catMatch = o.transactionCategory && t.category === o.transactionCategory;
+        const amtClose = o.amount > 0 && Math.abs(t.amount - o.amount) / o.amount < 0.2;
+        return (nameMatch || catMatch) && amtClose;
+      });
+      if (match) {
+        oblMatched++;
+        return { ...o, isPaidThisMonth: true, lastPaidDate: match.date };
+      }
+      return o;
+    });
+
+    let debtMatched = 0;
+    const updatedDebts = state.debts.map(d => {
+      if (d.isPaidThisMonth) return d;
+      const dName = normalize(d.name);
+      const dPayee = normalize(d.payee || '');
+      const match = monthTx.find(t => {
+        const desc = normalize(t.description);
+        const nameMatch = (dName.length > 2 && desc.includes(dName))
+          || (dPayee.length > 2 && desc.includes(dPayee));
+        const catMatch = d.transactionCategory && t.category === d.transactionCategory;
+        const amtClose = d.monthlyPayment > 0 && Math.abs(t.amount - d.monthlyPayment) / d.monthlyPayment < 0.2;
+        return (nameMatch || catMatch) && amtClose;
+      });
+      if (match) {
+        debtMatched++;
+        const currentBalance = d.balance ?? d.principal;
+        return {
+          ...d,
+          isPaidThisMonth: true,
+          lastPaidDate: match.date,
+          balance: Math.max(0, currentBalance - d.monthlyPayment),
+        };
+      }
+      return d;
+    });
+
+    if (oblMatched > 0 || debtMatched > 0) {
+      console.log(`[RECONCILE] Matched ${oblMatched} obligations, ${debtMatched} debts`);
+      set({ obligations: updatedObligations, debts: updatedDebts });
+    } else {
+      console.log('[RECONCILE] No new matches found');
+    }
+  },
+
   setIncome: (income) =>
     set((state) => ({
       income: { ...state.income, ...income },
@@ -1094,7 +1160,7 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     })),
 
-  importBankTransactions: (transactions) =>
+  importBankTransactions: (transactions) => {
     set((state) => {
       // Deduplicate: skip transactions with same date + amount + description
       const existing = state.bankTransactions || [];
@@ -1119,7 +1185,74 @@ export const useStore = create<AppState>((set, get) => ({
         bankTransactions: [...existing, ...newOnly],
         importWeeks: updatedWeeks,
       };
-    }),
+    });
+
+    // Auto-match obligations and debts with imported transactions
+    const state = get();
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const allTx = state.bankTransactions || [];
+    // Only consider expense transactions from this month
+    const monthTx = allTx.filter(t => t.type === 'expense' && t.date.startsWith(currentMonth));
+    if (monthTx.length === 0) return;
+
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Match obligations
+    let oblMatched = 0;
+    const updatedObligations = state.obligations.map(o => {
+      if (o.isPaidThisMonth) return o;
+      const oName = normalize(o.name);
+      const oPayee = normalize(o.payee || '');
+      const match = monthTx.find(t => {
+        const desc = normalize(t.description);
+        // Match by name/payee in description, or by matching transaction category
+        const nameMatch = (oName.length > 2 && desc.includes(oName))
+          || (oPayee.length > 2 && desc.includes(oPayee));
+        const catMatch = o.transactionCategory && t.category === o.transactionCategory;
+        // Amount within 20% tolerance (bills can vary slightly)
+        const amtClose = o.amount > 0 && Math.abs(t.amount - o.amount) / o.amount < 0.2;
+        return (nameMatch || catMatch) && amtClose;
+      });
+      if (match) {
+        oblMatched++;
+        return { ...o, isPaidThisMonth: true, lastPaidDate: match.date };
+      }
+      return o;
+    });
+
+    // Match debts
+    let debtMatched = 0;
+    const updatedDebts = state.debts.map(d => {
+      if (d.isPaidThisMonth) return d;
+      const dName = normalize(d.name);
+      const dPayee = normalize(d.payee || '');
+      const match = monthTx.find(t => {
+        const desc = normalize(t.description);
+        const nameMatch = (dName.length > 2 && desc.includes(dName))
+          || (dPayee.length > 2 && desc.includes(dPayee));
+        const catMatch = d.transactionCategory && t.category === d.transactionCategory;
+        const amtClose = d.monthlyPayment > 0 && Math.abs(t.amount - d.monthlyPayment) / d.monthlyPayment < 0.2;
+        return (nameMatch || catMatch) && amtClose;
+      });
+      if (match) {
+        debtMatched++;
+        const currentBalance = d.balance ?? d.principal;
+        return {
+          ...d,
+          isPaidThisMonth: true,
+          lastPaidDate: match.date,
+          balance: Math.max(0, currentBalance - d.monthlyPayment),
+        };
+      }
+      return d;
+    });
+
+    if (oblMatched > 0 || debtMatched > 0) {
+      console.log(`[AUTO-MATCH] Matched ${oblMatched} obligations, ${debtMatched} debts from bank transactions`);
+      set({ obligations: updatedObligations, debts: updatedDebts });
+    }
+  },
 
   clearBankTransactions: (bankAccountId) =>
     set((state) => ({

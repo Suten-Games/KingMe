@@ -1,6 +1,6 @@
 // app/(tabs)/obligations.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Animated } from 'react-native';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import type { Obligation } from '../../src/types';
@@ -109,6 +109,10 @@ export default function ObligationsScreen() {
   const updateObligation = useStore((state) => state.updateObligation);
   const toggleObligationPaid = useStore((state) => state.toggleObligationPaid);
   const toggleDebtPaid = useStore((state) => state.toggleDebtPaid);
+  const reconcilePayments = useStore((state) => state.reconcilePayments);
+
+  // Auto-match on page load
+  useEffect(() => { reconcilePayments(); }, []);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingObligation, setEditingObligation] = useState<Obligation | null>(null);

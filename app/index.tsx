@@ -26,7 +26,10 @@ export default function Index() {
         useStore.getState().resetMonthlyPayments();
         await AsyncStorage.setItem('lastPaymentReset', currentMonth);
       }
-      
+
+      // Auto-match obligations/debts with bank transactions
+      useStore.getState().reconcilePayments();
+
       setIsLoading(false);
     };
     
