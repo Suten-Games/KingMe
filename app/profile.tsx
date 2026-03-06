@@ -20,6 +20,7 @@ const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
 import KingMeFooter from '../src/components/KingMeFooter';
+import { DEMO_PERSONAS, type DemoPersona } from '../src/utils/demoPersonas';
 
 /** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
 function crossConfirm(title: string, message: string, onConfirm: () => void) {
@@ -66,6 +67,33 @@ export default function ProfileScreen() {
   // Styled alert modal (replaces window.alert / Alert.alert)
   const [alertModal, setAlertModal] = useState<{ title: string; message?: string } | null>(null);
   const crossAlert = (title: string, message?: string) => setAlertModal({ title, message });
+
+  // ── Demo / Sandbox mode ─────────────────────────────────────────────────
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [savedRealProfile, setSavedRealProfile] = useState<string | null>(null);
+  const [activePersona, setActivePersona] = useState<string | null>(null);
+  const [showDemoModal, setShowDemoModal] = useState(false);
+
+  const handleLoadPersona = (persona: DemoPersona) => {
+    // Save real profile first (only on first demo load)
+    if (!savedRealProfile) {
+      const backup = exportBackup();
+      setSavedRealProfile(backup);
+    }
+    importBackup(JSON.stringify(persona.profile));
+    setActivePersona(persona.id);
+    setIsDemoMode(true);
+    setShowDemoModal(false);
+  };
+
+  const handleExitDemo = () => {
+    if (savedRealProfile) {
+      importBackup(savedRealProfile);
+      setSavedRealProfile(null);
+    }
+    setIsDemoMode(false);
+    setActivePersona(null);
+  };
 
   // ── Confirmation state (for delete) ──────────────────────────────────────
   const totalBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0);
@@ -551,6 +579,43 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* ── Demo Mode ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Demo Mode</Text>
+          {isDemoMode ? (
+            <View>
+              <View style={styles.demoBanner}>
+                <Text style={styles.demoBannerEmoji}>
+                  {DEMO_PERSONAS.find(p => p.id === activePersona)?.emoji || '\u{1F3AD}'}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.demoBannerTitle}>
+                    Sandbox: {DEMO_PERSONAS.find(p => p.id === activePersona)?.name}
+                  </Text>
+                  <Text style={styles.demoBannerSub}>Your real profile is saved and will restore when you exit</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity style={styles.demoSwitchBtn} onPress={() => setShowDemoModal(true)}>
+                  <Text style={styles.demoSwitchBtnText}>Switch Persona</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.demoExitBtn} onPress={handleExitDemo}>
+                  <Text style={styles.demoExitBtnText}>Exit Demo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.demoEnterBtn} onPress={() => setShowDemoModal(true)}>
+              <Text style={styles.demoEnterEmoji}>{'\u{1F3AD}'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.demoEnterTitle}>Enter Sandbox Mode</Text>
+                <Text style={styles.demoEnterSub}>Load preset financial profiles to demo different situations</Text>
+              </View>
+              <Text style={styles.demoEnterArrow}>{'\u203A'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* ── Danger Zone ── */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Danger Zone</Text>
@@ -649,6 +714,47 @@ export default function ProfileScreen() {
             ) : null}
             <TouchableOpacity style={styles.alertButton} onPress={() => setAlertModal(null)}>
               <Text style={styles.alertButtonText}>OK</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
+      {/* ═══════════════ DEMO PERSONA PICKER ═══════════════ */}
+      <Modal visible={showDemoModal} transparent animationType="slide" onRequestClose={() => setShowDemoModal(false)}>
+        <View style={styles.alertOverlay}>
+          <LinearGradient
+            colors={['#1a2240', '#121830', '#0c1020']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.demoModalBox}
+          >
+            <Text style={styles.alertTitle}>Choose a Persona</Text>
+            <Text style={[styles.alertMessage, { marginBottom: 16 }]}>
+              Your real profile will be saved and restored when you exit demo mode.
+            </Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {DEMO_PERSONAS.map(persona => (
+                <TouchableOpacity
+                  key={persona.id}
+                  style={[
+                    styles.demoPersonaCard,
+                    activePersona === persona.id && { borderColor: persona.color, backgroundColor: persona.color + '15' },
+                  ]}
+                  onPress={() => handleLoadPersona(persona)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.demoPersonaEmoji}>{persona.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.demoPersonaName, { color: persona.color }]}>{persona.name}</Text>
+                    <Text style={styles.demoPersonaDesc}>{persona.description}</Text>
+                  </View>
+                  {activePersona === persona.id && (
+                    <Text style={{ color: persona.color, fontWeight: '800', fontSize: 16 }}>{'\u2713'}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={[styles.alertButton, { marginTop: 16 }]} onPress={() => setShowDemoModal(false)}>
+              <Text style={styles.alertButtonText}>Cancel</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
@@ -776,4 +882,45 @@ const styles = StyleSheet.create({
   alertMessage: { fontSize: 14, color: '#c0b890', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
   alertButton: { backgroundColor: '#f4c430', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 10 },
   alertButtonText: { fontSize: 16, fontWeight: '800', color: '#0a0e1a' },
+
+  // Demo mode
+  demoBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#f4c43015', borderRadius: 12, padding: 14,
+    borderWidth: 1.5, borderColor: '#f4c43040',
+  },
+  demoBannerEmoji: { fontSize: 28 },
+  demoBannerTitle: { fontSize: 15, fontWeight: '700', color: '#f4c430' },
+  demoBannerSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  demoSwitchBtn: {
+    flex: 1, backgroundColor: '#1a1f2e', borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', borderWidth: 1, borderColor: '#f4c43040',
+  },
+  demoSwitchBtnText: { fontSize: 14, fontWeight: '700', color: '#f4c430' },
+  demoExitBtn: {
+    flex: 1, backgroundColor: '#f8717115', borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', borderWidth: 1, borderColor: '#f8717140',
+  },
+  demoExitBtnText: { fontSize: 14, fontWeight: '700', color: '#f87171' },
+  demoEnterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#1a1f2e', borderRadius: 12, padding: 16,
+    borderWidth: 1.5, borderColor: '#2a3050',
+  },
+  demoEnterEmoji: { fontSize: 24 },
+  demoEnterTitle: { fontSize: 15, fontWeight: '700', color: '#e8e0d0' },
+  demoEnterSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  demoEnterArrow: { fontSize: 22, fontWeight: '300', color: '#f4c430' },
+  demoModalBox: {
+    borderRadius: 20, padding: 24, borderWidth: 2, borderColor: '#f4c43030',
+    width: '90%', maxWidth: 420,
+  },
+  demoPersonaCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#0c1020', borderRadius: 12, padding: 14, marginBottom: 8,
+    borderWidth: 1.5, borderColor: '#2a3050',
+  },
+  demoPersonaEmoji: { fontSize: 28 },
+  demoPersonaName: { fontSize: 15, fontWeight: '700' },
+  demoPersonaDesc: { fontSize: 12, color: '#888', marginTop: 2 },
 });
