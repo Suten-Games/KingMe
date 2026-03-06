@@ -179,7 +179,6 @@ export default function SpendingPage() {
     // 1) Bank transactions — skip transfers & categories that duplicate Debt/Obligation objects
     const EXCLUDED_CATS = new Set([
       'transfer_between_accounts', 'transfer_to_other',   // account movements, not spending
-      'financial_debt_payment',                            // duplicates Debt objects below
       'financial_investment', 'financial_savings_transfer', // account movements, not spending
     ]);
 
@@ -200,8 +199,26 @@ export default function SpendingPage() {
       });
     }
 
-    // 2) Obligations — monthly costs, always included
+    // Helper: check if an obligation/debt name has a matching bank transaction this month
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const monthTxns = selectedMonth !== 'all'
+      ? bankTransactions.filter(t => t.type !== 'income' && t.date.startsWith(selectedMonth))
+      : [];
+    const hasMatchingBankTx = (name: string, payee: string | undefined, amount: number) => {
+      const nameNorm = normalize(name);
+      const payeeNorm = payee ? normalize(payee) : '';
+      return monthTxns.some(t => {
+        const descNorm = normalize(t.description);
+        const nameMatch = nameNorm.length >= 4 && descNorm.includes(nameNorm);
+        const payeeMatch = payeeNorm.length >= 4 && descNorm.includes(payeeNorm);
+        const amtClose = amount > 0 && Math.abs(t.amount - amount) / amount < 0.3;
+        return nameMatch || payeeMatch || amtClose;
+      });
+    };
+
+    // 2) Obligations — monthly costs, only if no matching bank transaction found
     for (const ob of obligations) {
+      if (selectedMonth !== 'all' && hasMatchingBankTx(ob.name, ob.payee, ob.amount)) continue;
       // Try to place 'other' obligations in a better group using autoCategorize
       let grp: BankTransactionGroup = OBLIGATION_GROUP_MAP[ob.category] || 'other';
       let obCatKey = ob.category as string;
@@ -227,9 +244,10 @@ export default function SpendingPage() {
       });
     }
 
-    // 3) Debts — monthly payments → financial group
+    // 3) Debts — monthly payments, only if no matching bank transaction found
     for (const d of debts) {
       if (!d.monthlyPayment) continue;
+      if (selectedMonth !== 'all' && hasMatchingBankTx(d.name, d.payee, d.monthlyPayment)) continue;
       const grp: BankTransactionGroup = 'financial';
       const syntheticCat = '_debt_payment';
       ensureCat(grp, syntheticCat);
@@ -306,7 +324,7 @@ export default function SpendingPage() {
       .sort((a, b) => b!.total - a!.total) as GroupBreakdown[];
 
     return result;
-  }, [filtered, customCategories, obligations, debts, selectedMonth, monthCount]);
+  }, [filtered, bankTransactions, customCategories, obligations, debts, selectedMonth, monthCount]);
 
   const grandTotal = useMemo(
     () => groupBreakdowns.reduce((s, g) => s + g.total, 0),
