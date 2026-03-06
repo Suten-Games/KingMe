@@ -1165,14 +1165,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   importBankTransactions: (transactions) => {
     set((state) => {
-      // Deduplicate: skip transactions with same date + amount + description
+      // Deduplicate: skip transactions with same account + date + amount + description
       const existing = state.bankTransactions || [];
       const existingKeys = new Set(
-        existing.map(t => `${t.date}|${t.amount}|${t.description}`)
+        existing.map(t => `${t.bankAccountId}|${t.date}|${t.amount}|${t.description}`)
       );
 
       const newOnly = transactions.filter(
-        t => !existingKeys.has(`${t.date}|${t.amount}|${t.description}`)
+        t => !existingKeys.has(`${t.bankAccountId}|${t.date}|${t.amount}|${t.description}`)
       );
 
       console.log(`[IMPORT] ${transactions.length} parsed, ${newOnly.length} new (${transactions.length - newOnly.length} duplicates skipped)`);

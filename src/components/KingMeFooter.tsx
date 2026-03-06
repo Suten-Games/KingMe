@@ -30,8 +30,8 @@ export default function KingMeFooter() {
             <Text style={s.link}>kingme.money</Text>
           </TouchableOpacity>
           <Text style={s.dot}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://x.com/KingMeApp')}>
-            <Text style={s.link}>@KingMeApp</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://x.com/KingMeMoney')}>
+            <Text style={s.link}>@KingMeMoney</Text>
           </TouchableOpacity>
         </View>
 

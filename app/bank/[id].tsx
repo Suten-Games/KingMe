@@ -45,13 +45,13 @@ function tokenize(str: string): string[] {
   return normalize(str).split(' ').filter(w => w.length >= 3);
 }
 
-// Check if two strings share significant word tokens
+// Check if two strings share significant word tokens (exact match only, skip generic words)
+const GENERIC_TOKENS = new Set(['the', 'and', 'for', 'from', 'with', 'payment', 'pay', 'card', 'bill', 'loan', 'auto', 'online', 'transfer', 'ach', 'debit', 'credit']);
 function hasTokenOverlap(a: string, b: string): boolean {
   const tokensA = tokenize(a);
-  const tokensB = tokenize(b);
+  const tokensB = tokenize(b).filter(t => !GENERIC_TOKENS.has(t));
   if (tokensA.length === 0 || tokensB.length === 0) return false;
-  const overlap = tokensA.filter(t => tokensB.some(tb => tb.includes(t) || t.includes(tb)));
-  return overlap.length > 0;
+  return tokensA.some(t => tokensB.includes(t));
 }
 
 function groupByDate(transactions: BankTransaction[]): Record<string, BankTransaction[]> {
@@ -264,12 +264,12 @@ export default function BankAccountDetailScreen() {
 
         // ── Match strategies (any one is sufficient) ──
 
-        // 1. Direct normalized substring match (name or payee in description)
+        // 1. Direct normalized substring match (name or payee in description, min 4 chars)
         const directNameMatch =
-          descNorm.includes(obNameNorm) ||
-          obNameNorm.includes(descNorm.substring(0, 15)) ||
-          (obPayeeNorm && descNorm.includes(obPayeeNorm)) ||
-          (obPayeeNorm && obPayeeNorm.includes(descNorm.substring(0, 15)));
+          (obNameNorm.length >= 4 && descNorm.includes(obNameNorm)) ||
+          (obNameNorm.length >= 4 && obNameNorm.includes(descNorm.substring(0, 15))) ||
+          (obPayeeNorm.length >= 4 && descNorm.includes(obPayeeNorm)) ||
+          (obPayeeNorm.length >= 4 && obPayeeNorm.includes(descNorm.substring(0, 15)));
 
         // 2. Token overlap match (handles "apple.com bill" vs "APPLE.COM/BILL")
         const tokenMatch =
@@ -361,17 +361,18 @@ export default function BankAccountDetailScreen() {
         if (t.type === 'income') return false;
         const descNorm = normalize(t.description);
 
-        // Name match (debt name or payee)
+        // Name match — require the FULL debt name to appear in the description
         const descStripped = descNorm.replace(/\s/g, '');
         const debtNameStripped = debtNameNorm.replace(/\s/g, '');
         const debtPayeeStripped = debtPayeeNorm.replace(/\s/g, '');
-        const directNameMatch =
-          descNorm.includes(debtNameNorm) ||
-          debtNameNorm.includes(descNorm.substring(0, 15)) ||
-          descStripped.includes(debtNameStripped) ||
-          (debtPayeeNorm && descNorm.includes(debtPayeeNorm)) ||
-          (debtPayeeNorm && debtPayeeNorm.includes(descNorm.substring(0, 15))) ||
-          (debtPayeeStripped && descStripped.includes(debtPayeeStripped));
+        // Strong: full debt name appears in description (e.g. "Apple Card" in "APPLE CARD PAYMENT")
+        const fullNameMatch =
+          (debtNameNorm.length >= 4 && descNorm.includes(debtNameNorm)) ||
+          (debtNameStripped.length >= 4 && descStripped.includes(debtNameStripped));
+        // Weaker: payee appears in description (e.g. "Apple" in "APPLE.COM/BILL") — needs amount evidence
+        const payeeMatch =
+          (debtPayeeNorm.length >= 4 && descNorm.includes(debtPayeeNorm)) ||
+          (debtPayeeStripped.length >= 4 && descStripped.includes(debtPayeeStripped));
 
         const tokenMatch =
           hasTokenOverlap(t.description, debt.name) ||
@@ -380,16 +381,12 @@ export default function BankAccountDetailScreen() {
         const amountClose = debtAmount > 0 && Math.abs(t.amount - debtAmount) / debtAmount < 0.15;
         const amountExact = Math.abs(t.amount - debtAmount) < 0.02;
 
-        // Standard: name/payee signal + amount match
-        if ((directNameMatch || tokenMatch) && (amountClose || amountExact)) return true;
-        if (amountExact && tokenMatch) return true;
-        if (directNameMatch && t.amount === debtAmount) return true;
-
-        // Strong name match alone — credit card payments vary in amount (min pay vs payoff)
-        if (directNameMatch) return true;
+        // Full name match alone is strong enough (credit card payments vary in amount)
+        if (fullNameMatch) return true;
+        // Payee match or token match requires amount evidence
+        if ((payeeMatch || tokenMatch) && (amountClose || amountExact)) return true;
 
         // Debt-specific: exact amount + same bank account + categorized as debt payment
-        // (handles "Truck Loan" debt vs "Bridgecrest" transaction)
         if (amountExact && t.category === 'financial_debt_payment' && debt.bankAccountId === t.bankAccountId) return true;
 
         return false;

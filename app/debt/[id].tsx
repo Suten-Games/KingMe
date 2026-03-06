@@ -34,11 +34,12 @@ function normalize(str: string): string {
 function tokenize(str: string): string[] {
   return normalize(str).split(' ').filter(w => w.length >= 3);
 }
+const GENERIC_TOKENS = new Set(['the', 'and', 'for', 'from', 'with', 'payment', 'pay', 'card', 'bill', 'loan', 'auto', 'online', 'transfer', 'ach', 'debit', 'credit']);
 function hasTokenOverlap(a: string, b: string): boolean {
   const tokensA = tokenize(a);
-  const tokensB = tokenize(b);
+  const tokensB = tokenize(b).filter(t => !GENERIC_TOKENS.has(t));
   if (tokensA.length === 0 || tokensB.length === 0) return false;
-  return tokensA.some(t => tokensB.some(tb => tb.includes(t) || t.includes(tb)));
+  return tokensA.some(t => tokensB.includes(t));
 }
 function groupByDate(transactions: BankTransaction[]): Record<string, BankTransaction[]> {
   const sorted = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -148,8 +149,8 @@ export default function DebtDetailScreen() {
       const matches = filteredTransactions.filter(t => {
         if (t.type === 'income') return false;
         const descNorm = normalize(t.description);
-        const directMatch = descNorm.includes(obNameNorm) || obNameNorm.includes(descNorm.substring(0, 15)) ||
-          (obPayeeNorm && descNorm.includes(obPayeeNorm)) || (obPayeeNorm && obPayeeNorm.includes(descNorm.substring(0, 15)));
+        const directMatch = (obNameNorm.length >= 4 && descNorm.includes(obNameNorm)) || (obNameNorm.length >= 4 && obNameNorm.includes(descNorm.substring(0, 15))) ||
+          (obPayeeNorm.length >= 4 && descNorm.includes(obPayeeNorm)) || (obPayeeNorm.length >= 4 && obPayeeNorm.includes(descNorm.substring(0, 15)));
         const tokenMatch = hasTokenOverlap(t.description, ob.name) || hasTokenOverlap(t.description, ob.payee || '');
         const amountClose = obAmount > 0 && Math.abs(t.amount - obAmount) / obAmount < 0.1;
         const amountExact = Math.abs(t.amount - obAmount) < 0.02;
