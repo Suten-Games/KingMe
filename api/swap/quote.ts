@@ -51,6 +51,8 @@ export default async function handler(request: Request) {
       amount,
       userPublicKey,
       slippageBps = 100,
+      autoSlippage = false,
+      maxAutoSlippageBps = 1000,
       action = 'quote',
     } = body;
 
@@ -80,6 +82,7 @@ export default async function handler(request: Request) {
         outputMint: resolvedOutput,
         amount: amount.toString(),
         slippageBps: slippageBps.toString(),
+        ...(autoSlippage ? { autoSlippage: 'true', maxAutoSlippageBps: maxAutoSlippageBps.toString() } : {}),
         ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
           ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
           : {}),
@@ -132,6 +135,7 @@ export default async function handler(request: Request) {
       outputMint: resolvedOutput,
       amount: amount.toString(),
       slippageBps: slippageBps.toString(),
+      ...(autoSlippage ? { autoSlippage: 'true', maxAutoSlippageBps: maxAutoSlippageBps.toString() } : {}),
       ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
         ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
         : {}),

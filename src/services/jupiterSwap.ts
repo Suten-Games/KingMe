@@ -75,6 +75,7 @@ export interface SwapParams {
   inputDecimals: number;
   userPublicKey: string;
   slippageBps?: number;   // Default 100 (1%)
+  autoSlippage?: boolean; // Let Jupiter pick optimal slippage
 }
 
 // ── Token decimal lookup ─────────────────────────────────────
@@ -235,7 +236,7 @@ export async function fetchLiveBalances(
  * Use this to show the user what they'll get before they confirm.
  */
 export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
-  const { inputMint, outputMint, amount, inputDecimals, userPublicKey, slippageBps = 100 } = params;
+  const { inputMint, outputMint, amount, inputDecimals, userPublicKey, slippageBps = 100, autoSlippage = false } = params;
 
   const apiBase = getApiBase(); // throws if not configured
   const decimals = resolveDecimals(inputMint, inputDecimals);
@@ -243,7 +244,6 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
   const url = `${apiBase}/api/swap/quote`;
 
   console.log(`[JUPITER] Getting quote: ${amount} ${inputMint} → ${outputMint} (${amountSmallest} smallest units)`);
-  console.log(`[JUPITER] API URL: ${url}`);
 
   let response: Response;
   try {
@@ -256,6 +256,8 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
         amount: amountSmallest,
         userPublicKey,
         slippageBps,
+        autoSlippage,
+        maxAutoSlippageBps: 1000,
         action: 'quote',
       }),
     });
@@ -309,6 +311,7 @@ export async function executeSwap(
     inputDecimals,
     userPublicKey,
     slippageBps = 100,
+    autoSlippage = false,
   } = params;
 
   let apiBase: string;
@@ -322,7 +325,7 @@ export async function executeSwap(
   const amountSmallest = toSmallestUnits(amount, decimals);
   const url = `${apiBase}/api/swap/quote`;
 
-  console.log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint}`);
+  console.log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint} slippage=${slippageBps}bps auto=${autoSlippage}`);
   console.log(`[JUPITER] API URL: ${url}, amount: ${amountSmallest} (${decimals} decimals)`);
 
   try {
@@ -338,6 +341,8 @@ export async function executeSwap(
           amount: amountSmallest,
           userPublicKey,
           slippageBps,
+          autoSlippage,
+          maxAutoSlippageBps: 1000,
           action: 'swap',
         }),
       });

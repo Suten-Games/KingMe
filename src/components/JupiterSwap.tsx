@@ -38,7 +38,7 @@ const OUTPUT_TOKENS = [
   { label: 'USD*', mint: MINTS['USD*'], decimals: 6 },
 ] as const;
 
-const SLIPPAGE_OPTIONS = [50, 100, 300, 500] as const; // bps: 0.5%, 1%, 3%, 5%
+const SLIPPAGE_OPTIONS = [100, 300, 500, 1000] as const; // bps: 1%, 3%, 5%, 10%
 
 export default function JupiterSwap({ asset }: Props) {
   const { connected, publicKey, signTransaction, signAndSendTransaction } = useWallet();
@@ -53,13 +53,13 @@ export default function JupiterSwap({ asset }: Props) {
   const logoURI = tokenInfo?.logoURI || meta?.logoURI || '';
 
   // Auto-set higher slippage for low-price/volatile tokens
-  const defaultSlippage = pricePerToken < 0.01 ? 300 : 100;
+  const isVolatile = pricePerToken > 0 && pricePerToken < 0.01;
 
   // State
   const [flipped, setFlipped] = useState(false); // false = sell asset, true = buy asset
   const [outputIdx, setOutputIdx] = useState(1); // default USDC
   const [amount, setAmount] = useState('');
-  const [slippageBps, setSlippageBps] = useState(defaultSlippage);
+  const [slippageBps, setSlippageBps] = useState(isVolatile ? 500 : 100);
   const [customSlippage, setCustomSlippage] = useState('');
   const [showSlippage, setShowSlippage] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -105,6 +105,7 @@ export default function JupiterSwap({ asset }: Props) {
           inputDecimals: decimals,
           userPublicKey: publicKey.toBase58(),
           slippageBps,
+          autoSlippage: isVolatile,
         });
 
         const outDecimals = flipped
@@ -190,6 +191,7 @@ export default function JupiterSwap({ asset }: Props) {
           inputDecimals: decimals,
           userPublicKey: walletAddr,
           slippageBps,
+          autoSlippage: isVolatile,
         },
         signTransaction,
         signAndSendTransaction,
