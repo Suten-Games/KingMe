@@ -144,10 +144,19 @@ export async function fetchMintDecimals(mint: string): Promise<number> {
 }
 
 /**
- * Convert UI amount (e.g., 1.5 SOL) to smallest units (lamports)
+ * Convert UI amount (e.g., 1.5 SOL) to smallest units (lamports).
+ * Uses string-based arithmetic to avoid floating-point precision issues
+ * that cause "not enough tokens" errors when selling MAX.
  */
 function toSmallestUnits(amount: number, decimals: number): string {
-  return Math.floor(amount * Math.pow(10, decimals)).toString();
+  // Convert to string to avoid floating-point multiplication errors
+  // e.g., 1234567.89 * 1e9 can overshoot in float arithmetic
+  const str = amount.toFixed(decimals);
+  const [whole, frac = ''] = str.split('.');
+  const paddedFrac = frac.padEnd(decimals, '0').slice(0, decimals);
+  const result = whole + paddedFrac;
+  // Strip leading zeros but keep at least "0"
+  return result.replace(/^0+/, '') || '0';
 }
 
 // ══════════════════════════════════════════════════════════════

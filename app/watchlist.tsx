@@ -1,8 +1,8 @@
 // app/watchlist.tsx
 // ══════════════════════════════════════════════════════════════════
-// Coin Watchlist — track coins you don't hold, get entry signals
-// when they dip, position sizing suggestions, and exit plans.
-// Hooks into existing priceTracker infrastructure.
+// Coin Watchlist — track all coins you hold + coins you're watching.
+// Shows price performance, and for movers suggests swapping from
+// underperforming coins or buying with available funds.
 // ══════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -19,7 +19,6 @@ import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
   type TokenPriceData, type WatchlistToken,
 } from '../src/services/priceTracker';
-import AccumulationPlanCard from '../src/components/AccumulationPlanCard';
 
 // ── Cross-platform alert ──────────────────────────────────────────
 function alert(title: string, msg?: string) {
@@ -29,6 +28,20 @@ function alert(title: string, msg?: string) {
 function confirm(title: string, msg: string, onYes: () => void) {
   if (Platform.OS === 'web') { if (window.confirm(`${title}\n\n${msg}`)) onYes(); }
   else RNAlert.alert(title, msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Confirm', style: 'destructive', onPress: onYes }]);
+}
+
+// ── Price formatting — no scientific notation ─────────────────────
+function formatPrice(p: number): string {
+  if (p <= 0) return '$0.00';
+  if (p < 0.000001) {
+    const sig = p.toPrecision(2);
+    return '$' + parseFloat(sig).toFixed(10).replace(/0+$/, '').replace(/\.$/, '');
+  }
+  if (p < 0.0001) return '$' + p.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+  if (p < 0.01) return '$' + p.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (p < 1) return '$' + p.toFixed(4);
+  if (p < 1000) return '$' + p.toFixed(2);
+  return '$' + p.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
 // ── Extended watchlist item with entry/exit plan ──────────────────
@@ -71,6 +84,10 @@ const POPULAR_TOKENS = [
   { symbol: 'TRUMP',   name: 'OFFICIAL TRUMP', mint: 'HaP8r3ksG76PhQLTqR8FYBeNiQpejcFbQmiHbg787Ut' },
   { symbol: 'FARTCOIN', name: 'Fartcoin',    mint: '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump' },
 ];
+
+// ── Stablecoins — for identifying "available to buy with" ────────
+const STABLECOIN_SYMBOLS = new Set(['USDC', 'USDT', 'PYUSD', 'USD*', 'USDS', 'DAI']);
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 // ── Entry signal logic ───────────────────────────────────────────
 
@@ -115,12 +132,82 @@ function getEntrySignal(ext: WatchlistExt, currentPrice: number): EntrySignal {
   };
 }
 
-function getExitSignal(ext: WatchlistExt, currentPrice: number, entryPrice: number): string | null {
-  if (entryPrice <= 0) return null;
-  const gainPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-  if (gainPct >= ext.takeProfitPct) return `🎯 Take profit target hit (+${gainPct.toFixed(0)}%)`;
-  if (gainPct <= ext.stopLossPct) return `🛑 Stop loss triggered (${gainPct.toFixed(0)}%)`;
-  return null;
+// ── Identify underperforming coins and available funds ────────────
+
+interface FundingOption {
+  assetId: string;
+  symbol: string;
+  mint: string;
+  value: number;
+  change24h: number | null;
+  type: 'stablecoin' | 'underperformer' | 'sol';
+  label: string;
+}
+
+function findFundingOptions(
+  assets: any[],
+  priceData: Record<string, TokenPriceData>,
+  excludeMint: string,
+): FundingOption[] {
+  const options: FundingOption[] = [];
+
+  for (const asset of assets) {
+    if (asset.type !== 'crypto' && (asset.type as string) !== 'commodities' && asset.type !== 'defi') continue;
+    const meta = asset.metadata as any;
+    const mint = meta?.tokenMint || meta?.mint || '';
+    if (!mint || mint === excludeMint) continue;
+    if (asset.value < 1) continue; // skip dust
+
+    const symbol = (meta?.symbol || asset.name || '').toUpperCase();
+    const pd = priceData[mint];
+
+    if (STABLECOIN_SYMBOLS.has(symbol)) {
+      options.push({
+        assetId: asset.id,
+        symbol,
+        mint,
+        value: asset.value,
+        change24h: 0,
+        type: 'stablecoin',
+        label: `${formatUSD(asset.value)} ${symbol} available`,
+      });
+    } else if (mint === SOL_MINT) {
+      options.push({
+        assetId: asset.id,
+        symbol: 'SOL',
+        mint,
+        value: asset.value,
+        change24h: pd?.change24h ?? null,
+        type: 'sol',
+        label: `${formatUSD(asset.value)} SOL`,
+      });
+    } else if (pd && pd.change24h != null && pd.change24h < -5) {
+      options.push({
+        assetId: asset.id,
+        symbol: meta?.symbol || asset.name,
+        mint,
+        value: asset.value,
+        change24h: pd.change24h,
+        type: 'underperformer',
+        label: `${meta?.symbol || asset.name} ${formatUSD(asset.value)} (${pd.change24h.toFixed(1)}% 24h)`,
+      });
+    }
+  }
+
+  // Sort: stablecoins first, then SOL, then worst performers
+  options.sort((a, b) => {
+    const rank = { stablecoin: 0, sol: 1, underperformer: 2 };
+    if (rank[a.type] !== rank[b.type]) return rank[a.type] - rank[b.type];
+    return (a.change24h ?? 0) - (b.change24h ?? 0); // worst first for underperformers
+  });
+
+  return options.slice(0, 5);
+}
+
+function formatUSD(v: number): string {
+  if (v >= 1000) return '$' + v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (v >= 1) return '$' + v.toFixed(2);
+  return '$' + v.toFixed(4);
 }
 
 // ── Main Component ───────────────────────────────────────────────
@@ -144,11 +231,60 @@ export default function WatchlistScreen() {
   const [manualSymbol, setManualSymbol] = useState('');
   const [showManual, setShowManual] = useState(false);
   const [editingMint, setEditingMint] = useState<string | null>(null);
+  const [expandedMint, setExpandedMint] = useState<string | null>(null);
+
+  // Auto-add all held crypto tokens to watchlist
+  const autoTrackHeldCoins = useCallback(async (currentWatchlist: WatchlistToken[]) => {
+    const watchedMints = new Set(currentWatchlist.map(t => t.mint));
+    const cryptoAssets = assets.filter(a =>
+      (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi') && a.value > 0.5
+    );
+
+    let added = 0;
+    for (const asset of cryptoAssets) {
+      const meta = asset.metadata as any;
+      const mint = meta?.tokenMint || meta?.mint || '';
+      const symbol = meta?.symbol || asset.name || '';
+      if (!mint || mint.length < 10 || watchedMints.has(mint)) continue;
+      // Skip stablecoins
+      if (STABLECOIN_SYMBOLS.has(symbol.toUpperCase())) continue;
+
+      await addToWatchlist(mint, symbol);
+
+      // Create ext data with current price as the added price
+      const prices = await fetchPrices([mint]);
+      const currentPrice = prices[mint] || (meta?.priceUSD || 0);
+      if (currentPrice > 0) {
+        const ext = await loadExtData();
+        if (!ext[mint]) {
+          ext[mint] = {
+            mint,
+            addedPrice: currentPrice,
+            entryTarget1: currentPrice * 0.8,
+            entryTarget2: currentPrice * 0.6,
+            maxAllocationPct: 5,
+            takeProfitPct: 100,
+            stopLossPct: -25,
+            notes: '',
+          };
+          await saveExtData(ext);
+        }
+      }
+      added++;
+    }
+    if (added > 0) console.log(`[WATCHLIST] Auto-added ${added} held coins to watchlist`);
+    return added;
+  }, [assets]);
 
   // Load watchlist and prices
   const loadData = useCallback(async () => {
     try {
-      const wl = await getWatchlist();
+      let wl = await getWatchlist();
+
+      // Auto-add held coins that aren't tracked yet
+      const addedCount = await autoTrackHeldCoins(wl);
+      if (addedCount > 0) wl = await getWatchlist();
+
       const ext = await loadExtData();
       setWatchlist(wl);
       setExtData(ext);
@@ -158,8 +294,24 @@ export default function WatchlistScreen() {
         const symbolMap: Record<string, string> = {};
         wl.forEach(t => { symbolMap[t.mint] = t.symbol; });
 
-        await recordPriceSnapshot(mints, symbolMap);
-        const pd = await getTokenPriceData(mints, symbolMap);
+        // Also get prices for all wallet tokens (for funding options)
+        const walletMints = assets
+          .filter(a => (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi'))
+          .map(a => {
+            const m = a.metadata as any;
+            return m?.tokenMint || m?.mint || '';
+          })
+          .filter(m => m && m.length > 10);
+
+        const allMints = [...new Set([...mints, ...walletMints])];
+        const allSymbolMap = { ...symbolMap };
+        for (const asset of assets) {
+          const m = (asset.metadata as any)?.tokenMint || (asset.metadata as any)?.mint;
+          if (m) allSymbolMap[m] = (asset.metadata as any)?.symbol || asset.name;
+        }
+
+        await recordPriceSnapshot(allMints, allSymbolMap);
+        const pd = await getTokenPriceData(allMints, allSymbolMap);
         setPriceData(pd);
       }
     } catch (err) {
@@ -168,7 +320,7 @@ export default function WatchlistScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [autoTrackHeldCoins, assets]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -179,7 +331,6 @@ export default function WatchlistScreen() {
 
   // Add coin
   const handleAddCoin = async (mint: string, symbol: string, name?: string) => {
-    // Fetch current price for entry target calc
     const prices = await fetchPrices([mint]);
     const currentPrice = prices[mint] || 0;
 
@@ -188,10 +339,10 @@ export default function WatchlistScreen() {
     const ext: WatchlistExt = {
       mint,
       addedPrice: currentPrice,
-      entryTarget1: currentPrice * 0.8,  // -20%
-      entryTarget2: currentPrice * 0.6,  // -40%
+      entryTarget1: currentPrice * 0.8,
+      entryTarget2: currentPrice * 0.6,
       maxAllocationPct: 5,
-      takeProfitPct: 100,   // 2x
+      takeProfitPct: 100,
       stopLossPct: -25,
       notes: '',
     };
@@ -247,6 +398,14 @@ export default function WatchlistScreen() {
         t.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
   }, [searchQuery, watchlist, assets]);
+
+  // Check if the user holds this coin
+  const getHeldAsset = useCallback((mint: string) => {
+    return assets.find(a => {
+      const m = (a.metadata as any)?.tokenMint || (a.metadata as any)?.mint;
+      return m === mint && a.value > 0;
+    });
+  }, [assets]);
 
   // Sort: signal items first
   const sortedWatchlist = useMemo(() => {
@@ -305,16 +464,6 @@ export default function WatchlistScreen() {
           <View style={st.legendItem}><Text style={[st.legendDot, { color: '#f4c430' }]}>👀</Text><Text style={st.legendLabel}>-10% watching</Text></View>
         </View>
 
-        {/* Position sizing info */}
-        {totalPortfolio > 0 && (
-          <View style={st.sizingInfo}>
-            <Text style={st.sizingText}>
-              💡 5% position = <Text style={st.sizingAmount}>${(totalPortfolio * 0.05).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
-              {' · '}2% = <Text style={st.sizingAmount}>${(totalPortfolio * 0.02).toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
-            </Text>
-          </View>
-        )}
-
         {/* Empty state */}
         {watchlist.length === 0 && (
           <View style={st.emptyState}>
@@ -340,14 +489,20 @@ export default function WatchlistScreen() {
           const dropFromAdd = ext.addedPrice > 0
             ? ((currentPrice - ext.addedPrice) / ext.addedPrice) * 100
             : 0;
-          const maxPosition = totalPortfolio > 0
-            ? (totalPortfolio * ext.maxAllocationPct / 100)
-            : 0;
 
           const isEditing = editingMint === token.mint;
+          const isExpanded = expandedMint === token.mint;
+          const heldAsset = getHeldAsset(token.mint);
+          const fundingOptions = isExpanded ? findFundingOptions(assets, priceData, token.mint) : [];
+          const totalAvailable = fundingOptions.reduce((sum, f) => sum + f.value, 0);
 
           return (
-            <View key={token.mint} style={[st.card, { borderColor: signal.color + '30' }]}>
+            <TouchableOpacity
+              key={token.mint}
+              style={[st.card, { borderColor: signal.color + '30' }]}
+              onPress={() => setExpandedMint(isExpanded ? null : token.mint)}
+              activeOpacity={0.85}
+            >
               <LinearGradient
                 colors={[signal.bgColor, 'transparent']}
                 style={st.cardGradient}
@@ -361,14 +516,21 @@ export default function WatchlistScreen() {
                   </View>
                 )}
 
+                {/* Held badge */}
+                {heldAsset && (
+                  <View style={st.heldBadge}>
+                    <Text style={st.heldBadgeText}>
+                      Holding {formatUSD(heldAsset.value)}
+                    </Text>
+                  </View>
+                )}
+
                 {/* Main info row */}
                 <View style={st.cardRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={st.cardSymbol}>{token.symbol}</Text>
                     <Text style={st.cardPrice}>
-                      {currentPrice > 0
-                        ? `$${currentPrice < 0.01 ? currentPrice.toExponential(2) : currentPrice.toLocaleString(undefined, { maximumFractionDigits: currentPrice < 1 ? 6 : 2 })}`
-                        : 'Loading...'}
+                      {currentPrice > 0 ? formatPrice(currentPrice) : 'Loading...'}
                     </Text>
                   </View>
                   <View style={st.changesCol}>
@@ -395,7 +557,7 @@ export default function WatchlistScreen() {
                   <Text style={st.detailLabel}>Since added</Text>
                   <Text style={[st.detailValue, { color: dropFromAdd >= 0 ? '#4ade80' : '#f87171' }]}>
                     {dropFromAdd >= 0 ? '+' : ''}{dropFromAdd.toFixed(1)}%
-                    {ext.addedPrice > 0 && ` (added at $${ext.addedPrice < 0.01 ? ext.addedPrice.toExponential(2) : ext.addedPrice.toLocaleString(undefined, { maximumFractionDigits: ext.addedPrice < 1 ? 6 : 2 })})`}
+                    {ext.addedPrice > 0 && ` (added at ${formatPrice(ext.addedPrice)})`}
                   </Text>
                 </View>
 
@@ -409,82 +571,126 @@ export default function WatchlistScreen() {
                   </View>
                 )}
 
-                {/* Entry targets */}
-                <View style={st.targetsRow}>
-                  <View style={[st.targetBox, currentPrice <= ext.entryTarget1 && { borderColor: '#4ade80', backgroundColor: '#4ade8015' }]}>
-                    <Text style={st.targetLabel}>Entry 1 (-20%)</Text>
-                    <Text style={[st.targetPrice, currentPrice <= ext.entryTarget1 && { color: '#4ade80' }]}>
-                      ${ext.entryTarget1 < 0.01 ? ext.entryTarget1.toExponential(2) : ext.entryTarget1.toLocaleString(undefined, { maximumFractionDigits: ext.entryTarget1 < 1 ? 6 : 2 })}
-                    </Text>
-                    {currentPrice <= ext.entryTarget1 && <Text style={st.targetHit}>✓ HIT</Text>}
-                  </View>
-                  <View style={[st.targetBox, currentPrice <= ext.entryTarget2 && { borderColor: '#f87171', backgroundColor: '#f8717115' }]}>
-                    <Text style={st.targetLabel}>Entry 2 (-40%)</Text>
-                    <Text style={[st.targetPrice, currentPrice <= ext.entryTarget2 && { color: '#f87171' }]}>
-                      ${ext.entryTarget2 < 0.01 ? ext.entryTarget2.toExponential(2) : ext.entryTarget2.toLocaleString(undefined, { maximumFractionDigits: ext.entryTarget2 < 1 ? 6 : 2 })}
-                    </Text>
-                    {currentPrice <= ext.entryTarget2 && <Text style={st.targetHit}>✓ HIT</Text>}
-                  </View>
-                </View>
+                {/* ── Expanded: Funding Options ── */}
+                {isExpanded && (
+                  <View style={st.fundingSection}>
+                    {/* If coin is up — suggest buying more or taking profit */}
+                    {dropFromAdd >= 10 && heldAsset && (
+                      <View style={st.insightBox}>
+                        <Text style={st.insightText}>
+                          📈 Up {dropFromAdd.toFixed(0)}% since added — you hold {formatUSD(heldAsset.value)}
+                        </Text>
+                      </View>
+                    )}
 
-                {/* Position sizing */}
-                {maxPosition > 0 && (
-                  <View style={st.detailRow}>
-                    <Text style={st.detailLabel}>Max position ({ext.maxAllocationPct}%)</Text>
-                    <Text style={st.detailValue}>${maxPosition.toLocaleString(undefined, { maximumFractionDigits: 0 })}</Text>
+                    {/* Available funds to buy */}
+                    {fundingOptions.length > 0 && (
+                      <>
+                        <Text style={st.fundingTitle}>
+                          {dropFromAdd < 0 ? '💰 Fund a buy' : '💰 Add to position'}
+                        </Text>
+
+                        {/* Available stables / SOL */}
+                        {fundingOptions.filter(f => f.type === 'stablecoin' || f.type === 'sol').length > 0 && (
+                          <View style={st.fundingGroup}>
+                            <Text style={st.fundingGroupLabel}>Available funds</Text>
+                            {fundingOptions.filter(f => f.type === 'stablecoin' || f.type === 'sol').map(f => (
+                              <TouchableOpacity
+                                key={f.assetId}
+                                style={st.fundingRow}
+                                onPress={() => router.push(`/asset/${f.assetId}` as any)}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={st.fundingSymbol}>{f.symbol}</Text>
+                                  <Text style={st.fundingValue}>{formatUSD(f.value)}</Text>
+                                </View>
+                                <Text style={st.fundingAction}>Swap →</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* Underperforming coins to swap from */}
+                        {fundingOptions.filter(f => f.type === 'underperformer').length > 0 && (
+                          <View style={st.fundingGroup}>
+                            <Text style={st.fundingGroupLabel}>Swap from underperformers</Text>
+                            {fundingOptions.filter(f => f.type === 'underperformer').map(f => (
+                              <TouchableOpacity
+                                key={f.assetId}
+                                style={st.fundingRow}
+                                onPress={() => router.push(`/asset/${f.assetId}` as any)}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={st.fundingSymbol}>{f.symbol}</Text>
+                                  <Text style={st.fundingValue}>
+                                    {formatUSD(f.value)}
+                                    <Text style={{ color: '#f87171' }}> ({f.change24h?.toFixed(1)}% 24h)</Text>
+                                  </Text>
+                                </View>
+                                <Text style={st.fundingAction}>Swap →</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+
+                        <Text style={st.fundingTotal}>
+                          Total available: {formatUSD(totalAvailable)}
+                        </Text>
+                      </>
+                    )}
+
+                    {fundingOptions.length === 0 && (
+                      <View style={st.insightBox}>
+                        <Text style={st.insightText}>
+                          No available funds or underperforming coins to swap from right now.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Quick nav to asset if held */}
+                    {heldAsset && (
+                      <TouchableOpacity
+                        style={st.viewAssetButton}
+                        onPress={() => router.push(`/asset/${heldAsset.id}` as any)}
+                      >
+                        <Text style={st.viewAssetText}>View {token.symbol} details & swap</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Notes */}
+                    {ext.notes ? (
+                      <View style={st.notesBox}>
+                        <Text style={st.notesText}>📝 {ext.notes}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Actions */}
+                    <View style={st.actionsRow}>
+                      <TouchableOpacity style={st.editButton} onPress={() => setEditingMint(isEditing ? null : token.mint)}>
+                        <Text style={st.editButtonText}>{isEditing ? '✕ Close' : '⚙️ Settings'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={st.removeButton} onPress={() => handleRemove(token.mint, token.symbol)}>
+                        <Text style={st.removeButtonText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Inline settings editor */}
+                    {isEditing && (
+                      <SettingsEditor
+                        ext={ext}
+                        onSave={(updates) => handleUpdateSettings(token.mint, updates)}
+                        onCancel={() => setEditingMint(null)}
+                      />
+                    )}
                   </View>
                 )}
 
-                {/* Exit plan */}
-                <View style={st.exitRow}>
-                  <View style={st.exitItem}>
-                    <Text style={st.exitLabel}>Take profit</Text>
-                    <Text style={[st.exitValue, { color: '#4ade80' }]}>+{ext.takeProfitPct}%</Text>
-                  </View>
-                  <View style={st.exitDivider} />
-                  <View style={st.exitItem}>
-                    <Text style={st.exitLabel}>Stop loss</Text>
-                    <Text style={[st.exitValue, { color: '#f87171' }]}>{ext.stopLossPct}%</Text>
-                  </View>
-                </View>
-
-                {/* Accumulation Plan */}
-                <View style={{ marginTop: 10 }}>
-                  <AccumulationPlanCard
-                    mint={token.mint}
-                    symbol={token.symbol}
-                    currentPrice={currentPrice}
-                    allTimeLow={null}
-                  />
-                </View>
-
-                {/* Notes */}
-                {ext.notes ? (
-                  <View style={st.notesBox}>
-                    <Text style={st.notesText}>📝 {ext.notes}</Text>
-                  </View>
-                ) : null}
-
-                {/* Actions */}
-                <View style={st.actionsRow}>
-                  <TouchableOpacity style={st.editButton} onPress={() => setEditingMint(isEditing ? null : token.mint)}>
-                    <Text style={st.editButtonText}>{isEditing ? '✕ Close' : '⚙️ Settings'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={st.removeButton} onPress={() => handleRemove(token.mint, token.symbol)}>
-                    <Text style={st.removeButtonText}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Inline settings editor */}
-                {isEditing && (
-                  <SettingsEditor
-                    ext={ext}
-                    onSave={(updates) => handleUpdateSettings(token.mint, updates)}
-                    onCancel={() => setEditingMint(null)}
-                  />
+                {/* Tap hint when collapsed */}
+                {!isExpanded && (
+                  <Text style={st.tapHint}>Tap for options</Text>
                 )}
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
           );
         })}
 
@@ -584,8 +790,6 @@ function SettingsEditor({ ext, onSave, onCancel }: {
   const [tp, setTp] = useState(ext.takeProfitPct.toString());
   const [sl, setSl] = useState(Math.abs(ext.stopLossPct).toString());
   const [notes, setNotes] = useState(ext.notes);
-  const [entry1, setEntry1] = useState(ext.entryTarget1.toString());
-  const [entry2, setEntry2] = useState(ext.entryTarget2.toString());
 
   return (
     <View style={st.settingsBox}>
@@ -606,17 +810,6 @@ function SettingsEditor({ ext, onSave, onCancel }: {
         </View>
       </View>
 
-      <View style={st.settingsRow}>
-        <View style={[st.settingsField, { flex: 1 }]}>
-          <Text style={st.settingsLabel}>Entry target 1 ($)</Text>
-          <TextInput style={st.settingsInput} value={entry1} onChangeText={setEntry1} keyboardType="numeric" />
-        </View>
-        <View style={[st.settingsField, { flex: 1 }]}>
-          <Text style={st.settingsLabel}>Entry target 2 ($)</Text>
-          <TextInput style={st.settingsInput} value={entry2} onChangeText={setEntry2} keyboardType="numeric" />
-        </View>
-      </View>
-
       <Text style={st.settingsLabel}>Notes</Text>
       <TextInput
         style={[st.settingsInput, { minHeight: 60, textAlignVertical: 'top' }]}
@@ -634,8 +827,6 @@ function SettingsEditor({ ext, onSave, onCancel }: {
           takeProfitPct: parseFloat(tp) || 100,
           stopLossPct: -(parseFloat(sl) || 25),
           notes,
-          entryTarget1: parseFloat(entry1) || ext.entryTarget1,
-          entryTarget2: parseFloat(entry2) || ext.entryTarget2,
         })}
       >
         <Text style={st.settingsSaveText}>Save Settings</Text>
@@ -668,11 +859,6 @@ const st = StyleSheet.create({
   legendDot: { fontSize: 12 },
   legendLabel: { fontSize: 11, color: '#888' },
 
-  // Position sizing info
-  sizingInfo: { backgroundColor: '#f4c43010', borderRadius: 10, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: '#f4c43020' },
-  sizingText: { fontSize: 12, color: '#b0b0b8' },
-  sizingAmount: { color: '#f4c430', fontWeight: '700' },
-
   // Empty
   emptyState: { alignItems: 'center', padding: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
@@ -686,8 +872,12 @@ const st = StyleSheet.create({
   cardGradient: { padding: 16 },
 
   // Signal badge
-  signalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginBottom: 10 },
+  signalBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginBottom: 6 },
   signalText: { fontSize: 12, fontWeight: '700' },
+
+  // Held badge
+  heldBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#4ade8015', borderWidth: 1, borderColor: '#4ade8030', marginBottom: 8 },
+  heldBadgeText: { fontSize: 11, fontWeight: '600', color: '#4ade80' },
 
   // Card main row
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
@@ -701,26 +891,34 @@ const st = StyleSheet.create({
   detailLabel: { fontSize: 12, color: '#888' },
   detailValue: { fontSize: 13, fontWeight: '600', color: '#b0b0b8' },
 
-  // Entry targets
-  targetsRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
-  targetBox: { flex: 1, backgroundColor: '#1a204060', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#2a305040', alignItems: 'center' },
-  targetLabel: { fontSize: 10, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  targetPrice: { fontSize: 14, fontWeight: '700', color: '#b0b0b8' },
-  targetHit: { fontSize: 10, fontWeight: '700', color: '#4ade80', marginTop: 4 },
+  // Tap hint
+  tapHint: { fontSize: 11, color: '#555', textAlign: 'center', marginTop: 8 },
 
-  // Exit plan
-  exitRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 6, backgroundColor: '#0c102080', borderRadius: 10, padding: 10 },
-  exitItem: { flex: 1, alignItems: 'center' },
-  exitDivider: { width: 1, height: 24, backgroundColor: '#2a305060' },
-  exitLabel: { fontSize: 10, color: '#888', marginBottom: 2, textTransform: 'uppercase' },
-  exitValue: { fontSize: 15, fontWeight: '700' },
+  // Funding section
+  fundingSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#2a305040' },
+  fundingTitle: { fontSize: 15, fontWeight: '700', color: '#f4c430', marginBottom: 10 },
+  fundingGroup: { marginBottom: 12 },
+  fundingGroupLabel: { fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
+  fundingRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0c102080', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#2a305040' },
+  fundingSymbol: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  fundingValue: { fontSize: 12, color: '#b0b0b8', marginTop: 2 },
+  fundingAction: { fontSize: 13, fontWeight: '700', color: '#f4c430' },
+  fundingTotal: { fontSize: 12, color: '#888', textAlign: 'right', marginBottom: 8 },
+
+  // Insight box
+  insightBox: { backgroundColor: '#f4c43010', borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#f4c43020' },
+  insightText: { fontSize: 12, color: '#b0b0b8', lineHeight: 18 },
+
+  // View asset button
+  viewAssetButton: { backgroundColor: '#4ade8020', borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 8, borderWidth: 1, borderColor: '#4ade8030' },
+  viewAssetText: { fontSize: 14, fontWeight: '700', color: '#4ade80' },
 
   // Notes
-  notesBox: { backgroundColor: '#f4c43010', borderRadius: 8, padding: 8, marginTop: 4 },
+  notesBox: { backgroundColor: '#f4c43010', borderRadius: 8, padding: 8, marginTop: 4, marginBottom: 8 },
   notesText: { fontSize: 12, color: '#b0b0b8', fontStyle: 'italic' },
 
   // Actions
-  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   editButton: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#2a3050', alignItems: 'center' },
   editButtonText: { fontSize: 13, color: '#b0b0b8', fontWeight: '600' },
   removeButton: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1, borderColor: '#f8717130', alignItems: 'center' },

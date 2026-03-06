@@ -2,13 +2,15 @@
 // Shows actionable watchlist alerts on the home dashboard.
 // These are tokens you're watching to buy — alerts surface entry opportunities
 // and warn when tokens are running hot (wait for pullback).
+// Also auto-adds held coins to watchlist for tracking.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getWatchlist, getTokenPriceData } from '../services/priceTracker';
+import { getWatchlist, getTokenPriceData, addToWatchlist, fetchPrices } from '../services/priceTracker';
 import type { WatchlistToken, TokenPriceData } from '../services/priceTracker';
+import { useStore } from '../store/useStore';
 
 const WATCHLIST_EXT_KEY = 'watchlist_extended';
 const DISMISSED_KEY = '@kingme:watchlist_alerts_dismissed';
@@ -34,10 +36,53 @@ interface WatchlistAlert {
   color: string;
 }
 
+const STABLECOIN_SYMBOLS = new Set(['USDC', 'USDT', 'PYUSD', 'USD*', 'USDS', 'DAI']);
+
 export default function WatchlistAlerts() {
   const router = useRouter();
+  const assets = useStore(s => s.assets);
   const [alerts, setAlerts] = useState<WatchlistAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  // Auto-add held coins to watchlist
+  const autoTrackHeldCoins = useCallback(async (currentWatchlist: WatchlistToken[]) => {
+    const watchedMints = new Set(currentWatchlist.map(t => t.mint));
+    const cryptoAssets = assets.filter(a =>
+      (a.type === 'crypto' || (a.type as string) === 'commodities' || a.type === 'defi') && a.value > 0.5
+    );
+
+    let added = 0;
+    for (const asset of cryptoAssets) {
+      const meta = asset.metadata as any;
+      const mint = meta?.tokenMint || meta?.mint || '';
+      const symbol = meta?.symbol || asset.name || '';
+      if (!mint || mint.length < 10 || watchedMints.has(mint)) continue;
+      if (STABLECOIN_SYMBOLS.has(symbol.toUpperCase())) continue;
+
+      await addToWatchlist(mint, symbol);
+      const prices = await fetchPrices([mint]);
+      const currentPrice = prices[mint] || (meta?.priceUSD || 0);
+      if (currentPrice > 0) {
+        const extRaw2 = await AsyncStorage.getItem(WATCHLIST_EXT_KEY);
+        const ext2: Record<string, WatchlistExt> = extRaw2 ? JSON.parse(extRaw2) : {};
+        if (!ext2[mint]) {
+          ext2[mint] = {
+            mint,
+            addedPrice: currentPrice,
+            entryTarget1: currentPrice * 0.8,
+            entryTarget2: currentPrice * 0.6,
+            maxAllocationPct: 5,
+            takeProfitPct: 100,
+            stopLossPct: -25,
+            notes: '',
+          };
+          await AsyncStorage.setItem(WATCHLIST_EXT_KEY, JSON.stringify(ext2));
+        }
+      }
+      added++;
+    }
+    return added;
+  }, [assets]);
 
   const load = useCallback(async () => {
     try {
@@ -45,7 +90,12 @@ export default function WatchlistAlerts() {
       const dismissedSet = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : []);
       setDismissed(dismissedSet);
 
-      const watchlist = await getWatchlist();
+      let watchlist = await getWatchlist();
+
+      // Auto-add held coins
+      const addedCount = await autoTrackHeldCoins(watchlist);
+      if (addedCount > 0) watchlist = await getWatchlist();
+
       if (watchlist.length === 0) return;
 
       const extRaw = await AsyncStorage.getItem(WATCHLIST_EXT_KEY);
@@ -112,7 +162,7 @@ export default function WatchlistAlerts() {
     } catch (err) {
       console.warn('[WATCHLIST-ALERTS]', err);
     }
-  }, []);
+  }, [autoTrackHeldCoins]);
 
   useEffect(() => { load(); }, [load]);
 

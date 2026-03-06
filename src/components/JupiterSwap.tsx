@@ -26,6 +26,9 @@ interface Props {
 }
 
 const PERCENTAGES = [25, 50, 75, 100] as const;
+// When selling MAX, use 99.9% to avoid "not enough tokens" from stale balances
+// or floating-point rounding that overshoots the on-chain balance
+const MAX_SELL_FACTOR = 0.999;
 
 const OUTPUT_TOKENS = [
   { label: 'SOL', mint: MINTS.SOL, decimals: 9 },
@@ -120,7 +123,10 @@ export default function JupiterSwap({ asset }: Props) {
 
   const handlePercentage = (pct: number) => {
     if (!inputBalance) return;
-    const val = inputBalance * (pct / 100);
+    // For MAX: use 99.9% to avoid "not enough tokens" errors from
+    // stale balance data or floating-point precision issues
+    const effectivePct = pct === 100 ? MAX_SELL_FACTOR : (pct / 100);
+    const val = inputBalance * effectivePct;
     setAmount(val.toString());
   };
 
