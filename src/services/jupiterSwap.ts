@@ -159,6 +159,69 @@ function toSmallestUnits(amount: number, decimals: number): string {
   return result.replace(/^0+/, '') || '0';
 }
 
+// ── Live balance check ──────────────────────────────────────
+/**
+ * Fetch actual on-chain SOL balance and SPL token balance for a wallet.
+ * Use before swapping to avoid "not enough tokens" errors from stale data.
+ */
+export async function fetchLiveBalances(
+  walletAddress: string,
+  tokenMint?: string,
+): Promise<{ solBalance: number; tokenBalance: number | null }> {
+  let solBalance = 0;
+  let tokenBalance: number | null = null;
+
+  try {
+    // SOL balance
+    const solRes = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getBalance',
+        params: [walletAddress],
+      }),
+    });
+    const solData = await solRes.json();
+    solBalance = (solData?.result?.value || 0) / 1e9;
+  } catch (e) {
+    console.warn('[JUPITER] Failed to fetch SOL balance:', e);
+  }
+
+  // Token balance (if mint provided and not SOL itself)
+  if (tokenMint && tokenMint !== MINTS.SOL) {
+    try {
+      const tokenRes = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'getTokenAccountsByOwner',
+          params: [
+            walletAddress,
+            { mint: tokenMint },
+            { encoding: 'jsonParsed' },
+          ],
+        }),
+      });
+      const tokenData = await tokenRes.json();
+      const accounts = tokenData?.result?.value || [];
+      if (accounts.length > 0) {
+        const info = accounts[0].account?.data?.parsed?.info;
+        tokenBalance = parseFloat(info?.tokenAmount?.uiAmountString || '0');
+      } else {
+        tokenBalance = 0;
+      }
+    } catch (e) {
+      console.warn('[JUPITER] Failed to fetch token balance:', e);
+    }
+  } else if (tokenMint === MINTS.SOL) {
+    tokenBalance = solBalance;
+  }
+
+  return { solBalance, tokenBalance };
+}
+
 // ══════════════════════════════════════════════════════════════
 // Public API
 // ══════════════════════════════════════════════════════════════

@@ -10,7 +10,7 @@ import {
 import { useWallet } from '../providers/wallet-provider';
 import {
   getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics,
-  fetchMintDecimals, MINTS,
+  fetchMintDecimals, fetchLiveBalances, MINTS,
 } from '../services/jupiterSwap';
 import type { Asset } from '../types';
 import { postSwapUpdate } from '../utils/postSwapUpdate';
@@ -149,6 +149,32 @@ export default function JupiterSwap({ asset }: Props) {
     showToast({ type: 'loading', symbol: inputSymbol, percentage: 0 });
 
     try {
+      // Pre-flight: check live on-chain balances to avoid Phantom rejection
+      const walletAddr = publicKey.toBase58();
+      const { solBalance, tokenBalance } = await fetchLiveBalances(walletAddr, inputMint);
+
+      const MIN_SOL_FOR_FEE = 0.005; // ~0.005 SOL covers tx fee + priority fee + ATA rent
+      if (solBalance < MIN_SOL_FOR_FEE) {
+        setLoading(false);
+        return xAlert(
+          'Not enough SOL for fees',
+          `You need at least ~0.005 SOL for transaction fees. You have ${solBalance.toFixed(6)} SOL.`
+        );
+      }
+
+      // Cap the sell amount at the actual on-chain balance
+      let swapAmount = numAmount;
+      if (tokenBalance !== null && tokenBalance >= 0) {
+        if (numAmount > tokenBalance) {
+          console.log(`[JUPITER] Capping amount from ${numAmount} to on-chain balance ${tokenBalance}`);
+          swapAmount = tokenBalance * MAX_SELL_FACTOR; // leave tiny buffer
+          if (swapAmount <= 0) {
+            setLoading(false);
+            return xAlert('No tokens', `Your on-chain ${inputSymbol} balance is ${tokenBalance}. Sync your wallet to update.`);
+          }
+        }
+      }
+
       const decimals = flipped
         ? output.decimals
         : (meta?.decimals ?? await fetchMintDecimals(mint));
@@ -157,9 +183,9 @@ export default function JupiterSwap({ asset }: Props) {
         {
           inputMint,
           outputMint,
-          amount: numAmount,
+          amount: swapAmount,
           inputDecimals: decimals,
-          userPublicKey: publicKey.toBase58(),
+          userPublicKey: walletAddr,
           slippageBps,
         },
         signTransaction,
