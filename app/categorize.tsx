@@ -4,10 +4,15 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Modal,
-  ScrollView, Animated, PanResponder, Platform, Dimensions,
+  ScrollView, Animated, PanResponder, Platform, Dimensions, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '@/store/useStore';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '@/types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '@/types/bankTransactionTypes';
@@ -53,12 +58,16 @@ type TileLayout = { pageX: number; pageY: number; width: number; height: number;
 // ════════════════════════════════════════════════════════════════════════════
 
 export default function CategorizePage() {
+  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bankTransactions = useStore(s => s.bankTransactions) || [];
   const updateBankTransaction = useStore(s => s.updateBankTransaction);
   const customCategories = useStore(s => s.customCategories) || {};
   const addCustomCategory = useStore(s => s.addCustomCategory);
+
+  // Move category modal state
+  const [movingCategory, setMovingCategory] = useState<{ key: BankTransactionCategory; label: string; emoji: string; currentGroup: BankTransactionGroup } | null>(null);
 
   const [mode, setMode] = useState<'sort' | 'browse'>('sort');
   const [filterGroup, setFilterGroup] = useState<BankTransactionGroup | 'all'>('other');
@@ -150,16 +159,39 @@ export default function CategorizePage() {
     { value: 'financial', label: 'Financial', emoji: '📈' },
   ];
 
+  const handleMoveCategory = (newGroup: BankTransactionGroup) => {
+    if (!movingCategory) return;
+    const { key, label, emoji } = movingCategory;
+    // Store as custom category override (works for both built-in and custom)
+    addCustomCategory(key, { label, emoji, group: newGroup });
+    setMovingCategory(null);
+  };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={styles.backBtn}>{'< Back'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Sort Transactions</Text>
-        <View style={{ width: 50 }} />
-      </View>
+    <View style={styles.container}>
+      {/* KingMe branded header */}
+      <LinearGradient
+        colors={['#10162a', '#0c1020', '#080c18']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ paddingHorizontal: 16, paddingBottom: 8, paddingTop: Math.max(insets.top, 14) }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ padding: 8, marginRight: 2 }}>
+            <Text style={{ fontSize: 20, color: '#60a5fa', fontWeight: '600' }}>←</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} activeOpacity={0.7} onPress={() => router.replace('/')}>
+            <Image source={require('../src/assets/images/kingmelogo.jpg')} style={{ width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' }} resizeMode="cover" />
+            <MaskedView maskElement={<Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>}>
+              <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28, opacity: 0, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>
+              </LinearGradient>
+            </MaskedView>
+          </TouchableOpacity>
+          <View style={{ marginLeft: 'auto' }}><WalletHeaderButton /></View>
+        </View>
+        <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1.5, marginTop: 10, borderRadius: 1 }} />
+      </LinearGradient>
 
       {/* Group filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
@@ -203,9 +235,39 @@ export default function CategorizePage() {
       </View>
 
       {mode === 'sort'
-        ? <SortMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} router={router} customCategories={customCategories} addCustomCategory={addCustomCategory} />
-        : <BrowseMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} customCategories={customCategories} addCustomCategory={addCustomCategory} />
+        ? <SortMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} router={router} customCategories={customCategories} addCustomCategory={addCustomCategory} onMoveCategory={setMovingCategory} />
+        : <BrowseMode transactions={filteredExpenses} updateBankTransaction={updateBankTransaction} customCategories={customCategories} addCustomCategory={addCustomCategory} onMoveCategory={setMovingCategory} />
       }
+
+      {/* Move Category Modal */}
+      <Modal visible={!!movingCategory} transparent animationType="slide" onRequestClose={() => setMovingCategory(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Move "{movingCategory?.emoji} {movingCategory?.label}"</Text>
+            <Text style={styles.modalLabel}>Select new group:</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              {Object.entries(TRANSACTION_GROUP_META).map(([groupKey, meta]) => {
+                const isCurrentGroup = movingCategory?.currentGroup === groupKey;
+                return (
+                  <TouchableOpacity
+                    key={groupKey}
+                    style={[styles.moveGroupRow, isCurrentGroup && styles.moveGroupRowActive]}
+                    onPress={() => !isCurrentGroup && handleMoveCategory(groupKey as BankTransactionGroup)}
+                    disabled={isCurrentGroup}
+                  >
+                    <Text style={styles.moveGroupEmoji}>{meta.emoji}</Text>
+                    <Text style={[styles.moveGroupLabel, isCurrentGroup && { color: '#f4c430' }]}>{meta.label}</Text>
+                    {isCurrentGroup && <Text style={styles.moveGroupCurrent}>current</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setMovingCategory(null)}>
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -220,12 +282,14 @@ function SortMode({
   router,
   customCategories,
   addCustomCategory,
+  onMoveCategory,
 }: {
   transactions: BankTransaction[];
   updateBankTransaction: (id: string, u: Partial<BankTransaction>) => void;
   router: ReturnType<typeof useRouter>;
   customCategories: Record<string, CustomCategoryDef>;
   addCustomCategory: (key: string, def: CustomCategoryDef) => void;
+  onMoveCategory: (info: { key: BankTransactionCategory; label: string; emoji: string; currentGroup: BankTransactionGroup }) => void;
 }) {
   const [sortedPatterns, setSortedPatterns] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState(false);
@@ -511,18 +575,22 @@ function SortMode({
               {meta.emoji} {meta.label}
             </Text>
             <View style={styles.gridTiles}>
-              {optGroup.categories.map(cat => (
-                <CategoryTile
-                  key={cat.value}
-                  category={cat.value}
-                  label={cat.label}
-                  emoji={meta.emoji}
-                  color={meta.color}
-                  isHovered={hoveredCategory === cat.value}
-                  onPress={() => assignCategory(cat.value)}
-                  onLayout={registerTile}
-                />
-              ))}
+              {optGroup.categories.map(cat => {
+                const catMeta = TRANSACTION_CATEGORY_META[cat.value];
+                return (
+                  <CategoryTile
+                    key={cat.value}
+                    category={cat.value}
+                    label={cat.label}
+                    emoji={catMeta?.emoji || meta.emoji}
+                    color={meta.color}
+                    isHovered={hoveredCategory === cat.value}
+                    onPress={() => assignCategory(cat.value)}
+                    onLayout={registerTile}
+                    onLongPress={() => onMoveCategory({ key: cat.value, label: cat.label, emoji: catMeta?.emoji || meta.emoji, currentGroup: optGroup.group })}
+                  />
+                );
+              })}
               {customInGroup.map(c => (
                 <CategoryTile
                   key={c.key}
@@ -533,6 +601,7 @@ function SortMode({
                   isHovered={hoveredCategory === c.key}
                   onPress={() => assignCategory(c.key)}
                   onLayout={registerTile}
+                  onLongPress={() => onMoveCategory({ key: c.key, label: c.label, emoji: c.emoji, currentGroup: optGroup.group })}
                 />
               ))}
             </View>
@@ -631,7 +700,7 @@ function SortMode({
 // ── Category tile with layout measurement ───────────────────────────────────
 
 function CategoryTile({
-  category, label, emoji, color, isHovered, onPress, onLayout,
+  category, label, emoji, color, isHovered, onPress, onLayout, onLongPress,
 }: {
   category: BankTransactionCategory;
   label: string;
@@ -640,6 +709,7 @@ function CategoryTile({
   isHovered: boolean;
   onPress: () => void;
   onLayout: (layout: TileLayout) => void;
+  onLongPress?: () => void;
 }) {
   const ref = useRef<View>(null);
 
@@ -655,6 +725,8 @@ function CategoryTile({
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={500}
     >
       <View
         ref={ref}
@@ -681,11 +753,13 @@ function BrowseMode({
   updateBankTransaction,
   customCategories,
   addCustomCategory,
+  onMoveCategory,
 }: {
   transactions: BankTransaction[];
   updateBankTransaction: (id: string, u: Partial<BankTransaction>) => void;
   customCategories: Record<string, CustomCategoryDef>;
   addCustomCategory: (key: string, def: CustomCategoryDef) => void;
+  onMoveCategory: (info: { key: BankTransactionCategory; label: string; emoji: string; currentGroup: BankTransactionGroup }) => void;
 }) {
   const [editingTx, setEditingTx] = useState<BankTransaction | null>(null);
   const [editDesc, setEditDesc] = useState('');
@@ -774,26 +848,31 @@ function BrowseMode({
                       {meta.emoji} {meta.label}
                     </Text>
                     <View style={styles.modalPillRow}>
-                      {optGroup.categories.map(cat => (
-                        <TouchableOpacity
-                          key={cat.value}
-                          style={[
-                            styles.modalPill,
-                            { borderColor: meta.color + '40' },
-                            editCategory === cat.value && { borderColor: '#f4c430', backgroundColor: '#f4c43020' },
-                          ]}
-                          onPress={() => setEditCategory(cat.value)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[
-                            styles.modalPillText,
-                            { color: meta.color },
-                            editCategory === cat.value && { color: '#f4c430' },
-                          ]}>
-                            {cat.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                      {optGroup.categories.map(cat => {
+                        const catMeta = TRANSACTION_CATEGORY_META[cat.value];
+                        return (
+                          <TouchableOpacity
+                            key={cat.value}
+                            style={[
+                              styles.modalPill,
+                              { borderColor: meta.color + '40' },
+                              editCategory === cat.value && { borderColor: '#f4c430', backgroundColor: '#f4c43020' },
+                            ]}
+                            onPress={() => setEditCategory(cat.value)}
+                            onLongPress={() => { setEditingTx(null); onMoveCategory({ key: cat.value, label: cat.label, emoji: catMeta?.emoji || meta.emoji, currentGroup: optGroup.group }); }}
+                            delayLongPress={500}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.modalPillText,
+                              { color: meta.color },
+                              editCategory === cat.value && { color: '#f4c430' },
+                            ]}>
+                              {cat.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                       {customInGroup.map(c => (
                         <TouchableOpacity
                           key={c.key}
@@ -1336,5 +1415,36 @@ const styles = StyleSheet.create({
   modalCancelBtnText: {
     fontSize: 14,
     color: '#666',
+  },
+
+  // Move category modal
+  moveGroupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a2f3e',
+    marginBottom: 6,
+  },
+  moveGroupRowActive: {
+    borderColor: '#f4c43060',
+    backgroundColor: '#f4c43010',
+  },
+  moveGroupEmoji: {
+    fontSize: 22,
+  },
+  moveGroupLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#e8e0d0',
+    flex: 1,
+  },
+  moveGroupCurrent: {
+    fontSize: 12,
+    color: '#f4c430',
+    fontWeight: '600',
   },
 });
