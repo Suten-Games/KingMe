@@ -150,7 +150,8 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     currentMonthlyIncome,
     currentFreedom,
     currentMonthlyNeeds,
-    profile.goals || []
+    profile.goals || [],
+    profile.settings?.driftMinCollateral
   );
   if (driftWithdrawScenario) scenarios.push(driftWithdrawScenario);
 
@@ -1794,16 +1795,21 @@ function generateDriftWithdrawScenario(
   currentMonthlyIncome: number,
   currentFreedom: number,
   monthlyNeeds: number,
-  goals: Goal[]
+  goals: Goal[],
+  userMinCollateral?: number
 ): WhatIfScenario | null {
-  // Find Drift USDC balance
+  // Use user's configured minimum, fall back to constant default
+  const minCollateral = userMinCollateral ?? DRIFT_MIN_COLLATERAL_USD;
+
+  // Find Drift USDC balance — this is the actual withdrawable token
   const driftUsdc = assets.find(a =>
     (a.type === 'crypto' || a.type === 'defi') &&
     ((a.metadata as any)?.protocol?.toLowerCase() === 'drift') &&
     ((a.metadata as any)?.symbol?.toUpperCase() === 'USDC')
   );
 
-  if (!driftUsdc) return null;
+  // No USDC in Drift or too little to bother
+  if (!driftUsdc || driftUsdc.value < 50) return null;
 
   // Calculate total Drift collateral value (all Drift assets)
   const allDriftAssets = assets.filter(a =>
@@ -1812,10 +1818,13 @@ function generateDriftWithdrawScenario(
   );
   const totalDriftCollateral = allDriftAssets.reduce((sum, a) => sum + a.value, 0);
 
-  // Withdrawable = total collateral minus minimum reserve
-  const withdrawableUsd = totalDriftCollateral - DRIFT_MIN_COLLATERAL_USD;
-  // Cap at actual USDC value (don't withdraw non-USDC collateral)
-  const withdrawUsd = Math.min(withdrawableUsd, driftUsdc.value);
+  // Only suggest withdrawal if total collateral exceeds the user's minimum
+  if (totalDriftCollateral <= minCollateral) return null;
+
+  // Withdrawable = excess above minimum, capped at actual USDC balance
+  // (can't withdraw jitoSOL/other tokens as USDC)
+  const excessCollateral = totalDriftCollateral - minCollateral;
+  const withdrawUsd = Math.min(excessCollateral, driftUsdc.value);
 
   if (withdrawUsd < 50) return null; // not worth suggesting
 
@@ -1851,7 +1860,7 @@ function generateDriftWithdrawScenario(
     emoji = '🏦';
   } else {
     useCase = 'Withdraw excess USDC';
-    description = `You have $${Math.round(totalDriftCollateral).toLocaleString()} in Drift collateral. Withdraw $${withdrawTokens.toLocaleString()} USDC to your wallet while keeping $${DRIFT_MIN_COLLATERAL_USD} minimum for trading.`;
+    description = `You have $${Math.round(totalDriftCollateral).toLocaleString()} in Drift collateral. Withdraw $${withdrawTokens.toLocaleString()} USDC to your wallet while keeping $${minCollateral.toLocaleString()} minimum for trading.`;
     emoji = '💸';
   }
 
@@ -1882,16 +1891,16 @@ function generateDriftWithdrawScenario(
       investmentRequired: 0,
     },
 
-    reasoning: `Your Drift account has $${Math.round(totalDriftCollateral).toLocaleString()} in collateral. Only $${DRIFT_MIN_COLLATERAL_USD} is needed as minimum trading collateral. The excess $${withdrawTokens.toLocaleString()} USDC can be put to better use — ${useCase.toLowerCase()}.`,
+    reasoning: `Your Drift account has $${Math.round(totalDriftCollateral).toLocaleString()} in collateral. You've set $${minCollateral.toLocaleString()} as your minimum trading collateral. The excess $${withdrawTokens.toLocaleString()} USDC can be put to better use — ${useCase.toLowerCase()}.`,
 
     risks: [
-      'Reduces Drift trading collateral (maintains $500 minimum)',
+      `Reduces Drift trading collateral (maintains $${minCollateral.toLocaleString()} minimum)`,
       'Withdrawal requires on-chain transaction + gas fees',
     ],
 
     steps: [
       `Withdraw ${withdrawTokens} USDC from Drift to your Solana wallet`,
-      '$500 minimum collateral preserved for trading',
+      `$${minCollateral.toLocaleString()} minimum collateral preserved for trading`,
       useCase,
     ],
   } as any;

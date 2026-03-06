@@ -498,6 +498,7 @@ export interface UserSettings {
   defaultExpandAssetSections: boolean;
   dailyExpenseAccountId?: string;
   tradingPlatform?: 'drift' | 'manual';  // which trading platform the user uses
+  driftMinCollateral?: number;  // minimum USDC to keep in Drift for trading (default 5000)
 }
 
 export interface UserProfile {

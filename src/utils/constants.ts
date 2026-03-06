@@ -118,8 +118,9 @@ export const OBLIGATION_CATEGORIES = {
   other: 'Other',
 } as const;
 
-// Drift trading: minimum USDC collateral to keep in account
-export const DRIFT_MIN_COLLATERAL_USD = 500;
+// Drift trading: default minimum USDC collateral to keep in account
+// Users can override this in settings.driftMinCollateral
+export const DRIFT_MIN_COLLATERAL_USD = 5000;
 
 // Default APYs for opportunity cost calculations
 export const DEFAULT_APYS = {
