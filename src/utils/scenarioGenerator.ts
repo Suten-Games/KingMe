@@ -1985,11 +1985,20 @@ function generateKaminoLendingScenario(
     additionalAnnual: number;
   }> = [];
 
+  // Stablecoins handled by Perena scenario (higher yield) — exclude from Kamino
+  const STABLECOINS = new Set(['USDC', 'USDT', 'DAI', 'PYUSD', 'USD*', 'USDSTAR']);
+
   for (const asset of assets) {
     const meta = asset.metadata as any;
     const mint = meta?.tokenMint || meta?.mint || '';
     const symbol = (meta?.symbol || asset.name || '').toUpperCase();
     if (!mint || asset.value < 50) continue;
+
+    // Skip stablecoins — Perena scenario handles these at better rates
+    if (STABLECOINS.has(symbol)) continue;
+
+    // Skip SOL if balance is low — need for transaction fees
+    if (symbol === 'SOL' && asset.value < 500) continue;
 
     // Skip if already on Kamino
     if (meta?.protocol?.toLowerCase() === 'kamino') continue;
@@ -2024,6 +2033,9 @@ function generateKaminoLendingScenario(
 
   const totalValue = opportunities.reduce((s, o) => s + o.asset.value, 0);
   const totalAdditionalAnnual = opportunities.reduce((s, o) => s + o.additionalAnnual, 0);
+
+  // Don't show scenario if income impact rounds to $0/mo
+  if (totalAdditionalAnnual < 1) return null;
   const monthlyIncomeDelta = totalAdditionalAnnual / 12;
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? newMonthlyIncome / monthlyNeeds : 0;
