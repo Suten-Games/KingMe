@@ -1241,16 +1241,23 @@ function generatePerenaYieldScenario(
   const newMonthlyIncome = currentMonthlyIncome + monthlyIncomeDelta;
   const newFreedom = monthlyNeeds > 0 ? (newMonthlyIncome / monthlyNeeds) : 0;
 
+  // Check existing USD* balance
+  const existingUsdStar = assets.find(a =>
+    a.type === 'crypto' && (a.metadata as any)?.symbol?.toUpperCase() === 'USD*'
+  );
+  const existingUsdStarValue = existingUsdStar?.value || 0;
+  const newUsdStarValue = existingUsdStarValue + totalToDeposit;
+
   const parts: string[] = [];
   if (totalStablecoins > 0) {
     const stableNames = stablecoinAssets.map(a => `${(a.metadata as any)?.symbol || 'USDC'} ($${Math.round(a.value).toLocaleString()})`).join(', ');
-    parts.push(`${stableNames} from wallet`);
+    parts.push(stableNames);
   }
   if (cashToConvert > 0) {
     const bankNames = cashAccounts.map(a => a.name).join(', ');
     parts.push(`$${cashToConvert.toLocaleString()} from ${bankNames} → buy USDC`);
   }
-  const description = `Deposit ${parts.join(' + ')} into Perena yield vault`;
+  const description = `Swap ${parts.join(' + ')} to USD* via Jupiter${existingUsdStarValue > 0 ? ` (USD* balance: $${Math.round(existingUsdStarValue).toLocaleString()} → $${Math.round(newUsdStarValue).toLocaleString()})` : ''}`;
 
   const bufferNote = cashToConvert > 0
     ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${Math.round(monthlyBurn).toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash in ${cashAccounts.map(a => a.name).join(', ')}.`
@@ -1259,7 +1266,7 @@ function generatePerenaYieldScenario(
   return {
     id: 'perena_yield',
     type: 'perena_yield',
-    title: `Earn ${perenaAPY}% on $${Math.round(totalToDeposit).toLocaleString()} via Perena`,
+    title: `Earn ${perenaAPY}% — Swap $${Math.round(totalToDeposit).toLocaleString()} USDC → USD*`,
     description,
     emoji: '🌊',
     difficulty: cashToConvert > 0 ? 'medium' : 'easy',
@@ -1309,7 +1316,7 @@ function generatePerenaYieldScenario(
       roi: perenaAPY,
     },
 
-    reasoning: `${totalStablecoins > 0 ? `You have ${stablecoinAssets.map(a => `$${Math.round(a.value).toLocaleString()} ${(a.metadata as any)?.symbol || 'USDC'}`).join(' + ')} in your wallet earning below-market yield.` : ''}${bufferNote} Deploying $${Math.round(totalToDeposit).toLocaleString()} into Perena at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
+    reasoning: `${totalStablecoins > 0 ? `You have ${stablecoinAssets.map(a => `$${Math.round(a.value).toLocaleString()} ${(a.metadata as any)?.symbol || 'USDC'}`).join(' + ')} in your wallet earning below-market yield.` : ''}${bufferNote}${existingUsdStarValue > 0 ? ` You already hold $${Math.round(existingUsdStarValue).toLocaleString()} in USD*.` : ''} Swapping $${Math.round(totalToDeposit).toLocaleString()} to USD* at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
 
     risks: [
       'Smart contract risk (Perena protocol)',
@@ -1324,10 +1331,9 @@ function generatePerenaYieldScenario(
         `Buy $${cashToConvert.toLocaleString()} USDC on Coinbase or through an on-ramp`,
         'Transfer USDC to your Solana wallet',
       ] : []),
-      'Go to Perena (perena.org)',
-      'Connect your wallet',
-      'Deposit stablecoins into yield vault',
-      'Monitor yield and rebalance periodically',
+      `Swap $${Math.round(totalToDeposit).toLocaleString()} USDC → USD* via Jupiter`,
+      ...(existingUsdStarValue > 0 ? [`New USD* balance: $${Math.round(newUsdStarValue).toLocaleString()} (currently $${Math.round(existingUsdStarValue).toLocaleString()})`] : []),
+      'USD* earns yield automatically — no staking or deposits needed',
     ],
   };
 }
