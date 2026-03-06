@@ -19,9 +19,10 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#f87171',
     profile: {
       income: {
-        annualGross: 18000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'other', name: 'Part-Time Barista', amount: 690, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Student Checking', type: 'checking', currentBalance: 342, institution: 'Chase', isPrimaryIncome: true },
@@ -55,9 +56,10 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#f97316',
     profile: {
       income: {
-        annualGross: 52000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'salary', name: 'Warehouse Associate', amount: 1730, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Wells Fargo Checking', type: 'checking', currentBalance: 847, institution: 'Wells Fargo', isPrimaryIncome: true },
@@ -96,9 +98,10 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#eab308',
     profile: {
       income: {
-        annualGross: 95000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'salary', name: 'Senior Analyst – TechCorp', amount: 3650, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Chase Checking', type: 'checking', currentBalance: 4200, institution: 'Chase', isPrimaryIncome: true },
@@ -154,9 +157,11 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#60a5fa',
     profile: {
       income: {
-        annualGross: 220000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'salary', name: 'Engineering Manager – BigCo', amount: 7100, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_2', source: 'other', name: 'Annual Bonus (spread)', amount: 2500, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Chase Checking', type: 'checking', currentBalance: 8500, institution: 'Chase', isPrimaryIncome: true },
@@ -219,9 +224,11 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#4ade80',
     profile: {
       income: {
-        annualGross: 165000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'salary', name: 'IT Director – School District', amount: 5200, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_2', source: 'business', name: 'Rental Income (net)', amount: 2000, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Checking', type: 'checking', currentBalance: 12000, institution: 'Fidelity', isPrimaryIncome: true },
@@ -275,9 +282,14 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     color: '#f4c430',
     profile: {
       income: {
-        annualGross: 180000,
-        payFrequency: 'biweekly',
-        sources: [],
+        salary: 0, otherIncome: 0, assetIncome: 0,
+        sources: [
+          { id: 'is_demo_1', source: 'salary', name: 'Consulting (part-time)', amount: 4500, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_2', source: 'business', name: 'Rental Duplex (net)', amount: 3500, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
+          { id: 'is_demo_3', source: 'business', name: 'Rental Condo (net)', amount: 1800, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
+          { id: 'is_demo_4', source: 'business', name: 'SaaS Revenue', amount: 4000, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
+          { id: 'is_demo_5', source: 'other', name: 'Dividend Income', amount: 1500, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
+        ],
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Operating Account', type: 'checking', currentBalance: 25000, institution: 'Chase', isPrimaryIncome: true },
