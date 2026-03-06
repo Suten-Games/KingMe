@@ -1,6 +1,6 @@
 // app/_layout.tsx
 import '../src/polyfills';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import { Stack } from 'expo-router';
 import { WalletProvider } from '@/providers/wallet-provider';
@@ -18,6 +18,7 @@ import { useAutoBackup } from '../src/hooks/useAutoBackup';
 import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import { inject } from '@vercel/analytics';
+import { useStore } from '../src/store/useStore';
 
 /** Runs hooks that depend on WalletProvider context. */
 function WalletHooks() {
@@ -34,13 +35,24 @@ export default function RootLayout() {
     Inter_800ExtraBold,
   });
 
+  // Hydrate store from AsyncStorage on any route (not just index)
+  const isLoaded = useStore((s) => s._isLoaded);
+  const loadProfile = useStore((s) => s.loadProfile);
+  const [hydrating, setHydrating] = useState(false);
+  useEffect(() => {
+    if (!isLoaded && !hydrating) {
+      setHydrating(true);
+      loadProfile('temp').finally(() => setHydrating(false));
+    }
+  }, [isLoaded]);
+
   useBadgeChecker();
 
   // Inject Vercel Analytics on web
   useEffect(() => { inject(); }, []);
 
-  // Show splash while fonts load
-  if (!fontsLoaded) {
+  // Show splash while fonts or store load
+  if (!fontsLoaded || !isLoaded) {
     return (
       <View style={splash.container}>
         <Image
