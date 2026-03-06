@@ -286,7 +286,7 @@ export default function AssetDetailScreen() {
         style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}
       >
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.backButton}>
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
 

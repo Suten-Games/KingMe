@@ -406,7 +406,7 @@ export default function BusinessDashboard() {
     <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Header */}
       <View style={st.headerRow}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}>
           <Text style={st.backBtn}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupEntity(data.entityType); setShowSetupModal(true); }}>

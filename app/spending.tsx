@@ -306,7 +306,7 @@ export default function SpendingPage() {
       style={[styles.kmHeader, { paddingTop: Math.max(insets.top, 14) }]}
     >
       <View style={styles.kmHeaderRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.kmBackButton}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.kmBackButton}>
           <Text style={styles.kmBackText}>←</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.kmBrand} activeOpacity={0.7} onPress={() => router.replace('/')}>

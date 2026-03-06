@@ -120,7 +120,7 @@ export default function DivorceSimulator() {
   return (
     <ScrollView style={s.container}>
       <View style={s.content}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}><Text style={s.back}>← Back</Text></TouchableOpacity>
         <Text style={s.title}>Divorce Simulator</Text>
         <Text style={s.sub}>Estimate the financial impact of separation</Text>
 

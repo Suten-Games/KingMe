@@ -248,7 +248,7 @@ export default function DebtDetailScreen() {
     return (
       <View style={s.container}><View style={s.centered}>
         <Text style={s.errorText}>Debt not found</Text>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.backLink}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}><Text style={s.backLink}>← Back</Text></TouchableOpacity>
       </View></View>
     );
   }
@@ -260,7 +260,7 @@ export default function DebtDetailScreen() {
       <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
 
         {/* ── Back button ── */}
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backButton}>
           <Text style={s.backLink}>← Back</Text>
         </TouchableOpacity>
 

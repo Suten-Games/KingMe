@@ -154,7 +154,7 @@ export default function CategorizePage() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.backBtn}>{'< Back'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Sort Transactions</Text>
@@ -380,7 +380,7 @@ function SortMode({
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyEmoji}>{'\u2705'}</Text>
         <Text style={styles.emptyText}>No uncategorized transactions</Text>
-        <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.doneBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}>
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
       </View>
@@ -394,7 +394,7 @@ function SortMode({
         <Text style={styles.successEmoji}>{'🎉'}</Text>
         <Text style={styles.successTitle}>All sorted!</Text>
         <Text style={styles.successSub}>{totalGroups} transaction group{totalGroups !== 1 ? 's' : ''} categorized</Text>
-        <TouchableOpacity style={styles.doneBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.doneBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}>
           <Text style={styles.doneBtnText}>Done</Text>
         </TouchableOpacity>
       </View>

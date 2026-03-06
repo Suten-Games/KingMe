@@ -49,7 +49,7 @@ export default function BankConsolidation() {
   if (bankAccounts.length === 0) {
     return (
       <View style={[s.container, { paddingTop: insets.top }]}>
-        <Header onBack={() => router.back()} />
+        <Header onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} />
         <View style={s.emptyContainer}>
           <Text style={s.emptyEmoji}>🏦</Text>
           <Text style={s.emptyTitle}>No Bank Accounts</Text>
@@ -70,7 +70,7 @@ export default function BankConsolidation() {
       style={[s.container, { paddingTop: insets.top }]}
       contentContainerStyle={{ paddingBottom: 60 }}
     >
-      <Header onBack={() => router.back()} />
+      <Header onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} />
 
       {/* ── Complexity Score Hero ──────────────────────────────── */}
       <ComplexityHero complexity={result.complexity} accountCount={bankAccounts.length} />

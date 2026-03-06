@@ -620,7 +620,7 @@ export default function BankAccountDetailScreen() {
       <View style={s.container}>
         <View style={s.errorBox}>
           <Text style={s.errorText}>Account not found</Text>
-          <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backButton}>
             <Text style={s.backButtonText}>← Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -638,7 +638,7 @@ export default function BankAccountDetailScreen() {
       <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
 
         {/* ── Back + Account Header ──────────────────────────────── */}
-        <TouchableOpacity onPress={() => router.back()} style={s.backNav}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.backNav}>
           <Text style={s.backNavText}>← Back</Text>
         </TouchableOpacity>
 
