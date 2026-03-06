@@ -106,6 +106,22 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
     : linkedCreditCard ? linkedCreditCard.name
     : 'Crypto.com Card';
 
+  // ── month navigation ──────────────────────────────────────────────────────
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+
+  const goToPrevMonth = () => {
+    if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
+    else setSelectedMonth(m => m - 1);
+  };
+  const goToNextMonth = () => {
+    if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
+    else setSelectedMonth(m => m + 1);
+  };
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth();
+  const monthLabel = new Date(selectedYear, selectedMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
   const [showModal, setShowModal]           = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -127,7 +143,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
 
   // When a bank account or credit card is linked, show its imported transactions
   const linkedId = linkedAccount?.id || linkedCreditCard?.id;
-  const displayExpenses: DailyExpense[] = useMemo(() => {
+  const allExpenses: DailyExpense[] = useMemo(() => {
     if (linkedId) {
       return bankTransactions
         .filter((t) => t.bankAccountId === linkedId)
@@ -143,26 +159,24 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
     return dailyExpenses;
   }, [linkedId, bankTransactions, dailyExpenses]);
 
-  // ── manual tracking stats ──────────────────────────────────────────────────
-  const { todaySpend, weekSpend, monthSpend } = useMemo(() => {
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Filter to selected month
+  const displayExpenses = useMemo(() =>
+    allExpenses.filter((e) => {
+      const d = new Date(e.date + 'T12:00:00');
+      return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+    }),
+    [allExpenses, selectedYear, selectedMonth]
+  );
 
-    const today = displayExpenses
-      .filter((e) => e.date.split('T')[0] === todayStr && e.amount > 0)
+  // ── monthly stats ────────────────────────────────────────────────────────
+  const { monthSpend, monthIncome, txCount } = useMemo(() => {
+    const spend = displayExpenses
+      .filter((e) => e.amount > 0)
       .reduce((sum, e) => sum + e.amount, 0);
-
-    const week = displayExpenses
-      .filter((e) => new Date(e.date) >= weekAgo && e.amount > 0)
-      .reduce((sum, e) => sum + e.amount, 0);
-
-    const month = displayExpenses
-      .filter((e) => new Date(e.date) >= monthStart && e.amount > 0)
-      .reduce((sum, e) => sum + e.amount, 0);
-
-    return { todaySpend: today, weekSpend: week, monthSpend: month };
+    const income = displayExpenses
+      .filter((e) => e.amount < 0)
+      .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+    return { monthSpend: spend, monthIncome: income, txCount: displayExpenses.length };
   }, [displayExpenses]);
 
   const grouped = groupByDate(displayExpenses);
@@ -328,20 +342,33 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
             </View>
           )}
 
+          {/* Month navigation */}
+          <View style={styles.monthNavRow}>
+            <TouchableOpacity onPress={goToPrevMonth} style={styles.monthNavBtn}>
+              <Text style={styles.monthNavArrow}>‹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setSelectedYear(now.getFullYear()); setSelectedMonth(now.getMonth()); }}>
+              <Text style={styles.monthNavLabel}>{monthLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavBtn} disabled={isCurrentMonth}>
+              <Text style={[styles.monthNavArrow, isCurrentMonth && { opacity: 0.3 }]}>›</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Summary */}
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
               <View style={styles.summaryCol}>
-                <Text style={styles.summaryLabel}>Today</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(todaySpend)}</Text>
+                <Text style={styles.summaryLabel}>Spent</Text>
+                <Text style={[styles.summaryValue, { color: '#ff6b6b' }]}>{formatCurrency(monthSpend)}</Text>
               </View>
               <View style={styles.summaryCol}>
-                <Text style={styles.summaryLabel}>This Week</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(weekSpend)}</Text>
+                <Text style={styles.summaryLabel}>Received</Text>
+                <Text style={[styles.summaryValue, { color: '#4ade80' }]}>{formatCurrency(monthIncome)}</Text>
               </View>
               <View style={styles.summaryCol}>
-                <Text style={styles.summaryLabel}>This Month</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(monthSpend)}</Text>
+                <Text style={styles.summaryLabel}>Transactions</Text>
+                <Text style={styles.summaryValue}>{txCount}</Text>
               </View>
             </View>
             {estimatedDailySpend > 0 && (
@@ -667,6 +694,15 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
 // ─── styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { marginBottom: 20 },
+
+  // ── Month navigation ────────────────────────────────────────────────────
+  monthNavRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 16, marginBottom: 12, paddingVertical: 4,
+  },
+  monthNavBtn: { padding: 8 },
+  monthNavArrow: { fontSize: 24, color: '#60a5fa', fontWeight: '700' },
+  monthNavLabel: { fontSize: 16, fontWeight: '700', color: '#e8e0d0', minWidth: 160, textAlign: 'center' },
 
   // ── Mode toggle ───────────────────────────────────────────────────────────
   modeToggle: { flexDirection: 'row', gap: 8, marginBottom: 16 },
