@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BADGE_MAP, TIER_COLORS } from '../types/badges';
 import type { BadgeDefinition, BadgeTier } from '../types/badges';
 import { useStore } from '../store/useStore';
@@ -89,13 +90,19 @@ export default function BadgeToast() {
     });
   }, [markBadgeSeen, showNext]);
 
-  // Watch for unseen badges
+  // Watch for unseen badges (suppress in demo mode)
   useEffect(() => {
     const unseen = earnedBadges.filter(b => !b.seen).map(b => b.badgeId);
-    if (unseen.length > 0) {
+    if (unseen.length === 0) return;
+    AsyncStorage.getItem('_demo_active').then(flag => {
+      if (flag === 'true') {
+        // Silently mark all as seen — don't toast in demo mode
+        unseen.forEach(id => markBadgeSeen(id));
+        return;
+      }
       queue.current = [...new Set([...queue.current, ...unseen])];
       showNext();
-    }
+    });
   }, [earnedBadges, showNext]);
 
   if (!currentBadge) return null;
