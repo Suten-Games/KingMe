@@ -630,7 +630,7 @@ function SortMode({
               style={styles.modalInput}
               value={newCatLabel}
               onChangeText={setNewCatLabel}
-              placeholder="e.g. Mistress"
+              placeholder="e.g. Fast Food"
               placeholderTextColor="#555"
               autoFocus={Platform.OS === 'web'}
               {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}

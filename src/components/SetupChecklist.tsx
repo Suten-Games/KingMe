@@ -42,7 +42,7 @@ export default function SetupChecklist() {
     { key: 'bank',        label: 'Add a bank account',       done: hasBankAccounts,  route: '/(tabs)/assets',       emoji: '🏦', priority: 'recommended' },
     { key: 'assets',      label: 'Add your assets',          done: hasAssets,        route: '/(tabs)/assets',       emoji: '📈', priority: 'recommended' },
     { key: 'debts',       label: 'Track your debts',         done: hasDebts,         route: '/(tabs)/debts',        emoji: 'optional' as any, priority: 'optional' },
-    { key: 'wallet',      label: 'Connect a Solana wallet',  done: hasWallet,        route: '/(tabs)/assets',       emoji: '👛', priority: 'optional' },
+    { key: 'wallet',      label: 'Connect a Solana wallet',  done: hasWallet,        route: '/wallet-setup',        emoji: '👛', priority: 'optional' },
   ];
 
   const criticalMissing = items.filter(i => i.priority === 'critical' && !i.done);
