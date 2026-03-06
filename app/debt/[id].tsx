@@ -222,8 +222,18 @@ export default function DebtDetailScreen() {
       const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/*'], copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;
       const file = result.assets[0];
-      const text = await FileSystem.readAsStringAsync(file.uri);
+      let text: string;
+      if (Platform.OS === 'web') {
+        const resp = await fetch(file.uri);
+        text = await resp.text();
+      } else {
+        text = await FileSystem.readAsStringAsync(file.uri);
+      }
       setCsvText(text);
+      if (text.trim() && id) {
+        const parsed = parseCSVTransactions(text, id);
+        setImportPreview(parsed);
+      }
     } catch (err: any) {
       Alert.alert('Error', 'Failed to read file');
     }
