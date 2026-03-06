@@ -99,7 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="companionship" options={{ headerShown: false }} />
           <Stack.Screen name="bank-consolidation" options={{ headerShown: false }} />
           <Stack.Screen name="badges" options={{ title: 'Badges' }} />
-          <Stack.Screen name="watchlist" options={{ title: 'Watchlist', headerStyle: { backgroundColor: '#080c18' }, headerTintColor: '#f4c430' }} />
+          <Stack.Screen name="watchlist" options={{ headerShown: false }} />
           <Stack.Screen name="goals" options={{ headerShown: false }} />
           <Stack.Screen name="categorize" options={{ headerShown: false }} />
           <Stack.Screen name="spending" options={{ headerShown: false }} />
