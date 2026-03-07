@@ -634,13 +634,13 @@ export default function WatchlistScreen() {
                               <TouchableOpacity
                                 key={f.assetId}
                                 style={st.fundingRow}
-                                onPress={() => router.push(`/asset/${f.assetId}` as any)}
+                                onPress={() => router.push(`/asset/${heldAsset ? heldAsset.id : f.assetId}` as any)}
                               >
                                 <View style={{ flex: 1 }}>
                                   <Text style={st.fundingSymbol}>{f.symbol}</Text>
                                   <Text style={st.fundingValue}>{formatUSD(f.value)}</Text>
                                 </View>
-                                <Text style={st.fundingAction}>Swap →</Text>
+                                <Text style={st.fundingAction}>Buy {token.symbol} →</Text>
                               </TouchableOpacity>
                             ))}
                           </View>
@@ -654,7 +654,7 @@ export default function WatchlistScreen() {
                               <TouchableOpacity
                                 key={f.assetId}
                                 style={st.fundingRow}
-                                onPress={() => router.push(`/asset/${f.assetId}` as any)}
+                                onPress={() => router.push(`/asset/${heldAsset ? heldAsset.id : f.assetId}` as any)}
                               >
                                 <View style={{ flex: 1 }}>
                                   <Text style={st.fundingSymbol}>{f.symbol}</Text>
@@ -663,7 +663,7 @@ export default function WatchlistScreen() {
                                     <Text style={{ color: '#f87171' }}> ({f.change24h?.toFixed(1)}% 24h)</Text>
                                   </Text>
                                 </View>
-                                <Text style={st.fundingAction}>Swap →</Text>
+                                <Text style={st.fundingAction}>Buy {token.symbol} →</Text>
                               </TouchableOpacity>
                             ))}
                           </View>

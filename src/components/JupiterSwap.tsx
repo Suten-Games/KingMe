@@ -66,6 +66,7 @@ export default function JupiterSwap({ asset }: Props) {
   const [quoting, setQuoting] = useState(false);
   const [quoteOutput, setQuoteOutput] = useState<string | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [paymentBalance, setPaymentBalance] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!mint || asset.type !== 'crypto') return null;
@@ -79,8 +80,18 @@ export default function JupiterSwap({ asset }: Props) {
   const inputSymbol = flipped ? output.label : symbol;
   const outputSymbol = flipped ? symbol : output.label;
   const inputLogo = flipped ? outputLogoURI : logoURI;
-  const inputBalance = flipped ? null : balance; // Only show balance for own token
+  const inputBalance = flipped ? paymentBalance : balance;
   const numAmount = parseFloat(amount) || 0;
+
+  // Fetch payment token balance when in buy mode
+  useEffect(() => {
+    if (!flipped || !connected || !publicKey) { setPaymentBalance(null); return; }
+    fetchLiveBalances(publicKey.toBase58(), output.mint)
+      .then(({ tokenBalance, solBalance }) => {
+        setPaymentBalance(output.mint === MINTS.SOL ? solBalance : tokenBalance);
+      })
+      .catch(() => setPaymentBalance(null));
+  }, [flipped, outputIdx, connected, publicKey]);
 
   // Auto-quote with 500ms debounce
   useEffect(() => {
@@ -297,7 +308,7 @@ export default function JupiterSwap({ asset }: Props) {
           value={amount}
           onChangeText={setAmount}
         />
-        {!flipped && inputBalance != null && (
+        {inputBalance != null && (
           <View style={s.pctRow}>
             {PERCENTAGES.map(p => (
               <TouchableOpacity key={p} style={s.pctPill} onPress={() => handlePercentage(p)}>

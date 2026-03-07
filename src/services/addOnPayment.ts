@@ -24,6 +24,9 @@ const RPC_PROXY = `${API_BASE}/api/rpc/send`;
 const TREASURY_WALLET = new PublicKey('AY9orTn5i8jbHU4RyC1k4MhzXchJaMpmQahpMrLfQCXi');
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
+const SKR_MINT = new PublicKey('SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3');
+const SKR_DECIMALS = 9;
+const SKR_PRICE_USD = 0.0178; // $0.0178 per SKR
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
@@ -103,6 +106,13 @@ export function parsePriceToUsdc(priceStr: string): number {
   // "$4.99" → 4.99
   return parseFloat(priceStr.replace(/[^0-9.]/g, ''));
 }
+
+// ── Convert USD price to SKR amount ──────────────────────────
+export function usdToSkr(priceUsd: number): number {
+  return Math.ceil(priceUsd / SKR_PRICE_USD);
+}
+
+export { SKR_PRICE_USD };
 
 // ── Execute USDC payment ─────────────────────────────────────
 export async function payForAddOn(
@@ -263,6 +273,145 @@ export async function payForAddOn(
       message = 'Payment cancelled';
     } else if (message.includes('insufficient') || message.includes('0x1')) {
       message = 'Insufficient USDC balance';
+    }
+
+    return { success: false, error: message };
+  }
+}
+
+// ── Execute SKR payment ──────────────────────────────────────
+export async function payForAddOnWithSKR(
+  addonId: string,
+  priceUsd: number,
+  userPublicKey: string,
+  signTransaction: (transaction: any) => Promise<any>,
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>,
+  signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
+): Promise<PaymentResult> {
+  const isWeb = Platform.OS === 'web';
+  const skrAmount = usdToSkr(priceUsd);
+
+  try {
+    const payer = new PublicKey(userPublicKey);
+    const payerAta = getAssociatedTokenAddress(payer, SKR_MINT);
+    const treasuryAta = getAssociatedTokenAddress(TREASURY_WALLET, SKR_MINT);
+    const amountSmallest = BigInt(Math.round(skrAmount * 10 ** SKR_DECIMALS));
+
+    console.log(`[PAYMENT-SKR] ${addonId}: ${skrAmount} SKR (~$${priceUsd}) from ${userPublicKey.slice(0, 8)}...`);
+
+    // Get recent blockhash
+    const bhRes = await fetch(RPC_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getLatestBlockhash',
+        params: [{ commitment: 'confirmed' }],
+      }),
+    });
+    const bhData = await bhRes.json();
+    if (bhData.error) throw new Error(`RPC error: ${bhData.error.message}`);
+    const blockhash = bhData.result.value.blockhash;
+
+    // Build transaction
+    const tx = new Transaction();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = payer;
+
+    // Ensure treasury ATA exists for SKR
+    tx.add(createAssociatedTokenAccountIdempotentInstruction(
+      payer, treasuryAta, TREASURY_WALLET, SKR_MINT,
+    ));
+
+    // Transfer SKR
+    tx.add(createTransferInstruction(payerAta, treasuryAta, payer, amountSmallest));
+
+    // Sign and send
+    let signature: string;
+
+    if (isWeb && signAndSendTransaction) {
+      const result = await signAndSendTransaction(tx);
+      signature = result.signature;
+    } else {
+      const signed = await signTransaction(tx);
+      const raw = signed.serialize ? signed.serialize() : signed;
+      const rawBase64 = Buffer.from(raw).toString('base64');
+
+      const sendRes = await fetch(RPC_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'sendRawTransaction',
+          params: [rawBase64, { skipPreflight: false, maxRetries: 3, preflightCommitment: 'confirmed' }],
+        }),
+      });
+      const sendData = await sendRes.json();
+      if (sendData.error) throw new Error(`Send failed: ${sendData.error.message}`);
+      signature = sendData.result;
+
+      // Poll for confirmation
+      const maxAttempts = 30;
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const statusRes = await fetch(RPC_PROXY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'getSignatureStatuses',
+            params: [[signature], { searchTransactionHistory: false }],
+          }),
+        });
+        const statusData = await statusRes.json();
+        const status = statusData.result?.value?.[0];
+        if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+          if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+          break;
+        }
+        if (i === maxAttempts - 1) {
+          console.warn('[PAYMENT-SKR] Confirmation timeout, tx may still confirm');
+        }
+      }
+    }
+
+    console.log(`[PAYMENT-SKR] Confirmed: ${signature}`);
+
+    // Store unlock locally
+    await unlockAddOn(addonId);
+
+    // Store receipt
+    const receipt: PaymentReceipt = {
+      addonId,
+      signature,
+      walletAddress: userPublicKey,
+      amount: priceUsd,
+      timestamp: new Date().toISOString(),
+    };
+    await storeReceipt(receipt);
+
+    // Persist purchase server-side
+    try {
+      const authParams = await getAuthParams(signMessage, userPublicKey);
+      await fetch(`${getApiBase()}/api/purchases?${authParams}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addonId, signature, amount: priceUsd, token: 'SKR', skrAmount }),
+      });
+    } catch (err) {
+      console.warn('[PAYMENT-SKR] Failed to persist purchase server-side:', err);
+    }
+
+    return { success: true, signature };
+
+  } catch (error: any) {
+    console.error('[PAYMENT-SKR] Error:', error);
+
+    let message = error.message || 'Payment failed';
+    if (message.includes('User rejected') || message.includes('cancelled')) {
+      message = 'Payment cancelled';
+    } else if (message.includes('insufficient') || message.includes('0x1')) {
+      message = 'Insufficient SKR balance';
     }
 
     return { success: false, error: message };

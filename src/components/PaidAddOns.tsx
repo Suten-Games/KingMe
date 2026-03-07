@@ -11,7 +11,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, Activ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useWallet } from '../providers/wallet-provider';
-import { payForAddOn, parsePriceToUsdc, getUnlockedAddOns, restorePurchases } from '../services/addOnPayment';
+import { payForAddOn, payForAddOnWithSKR, parsePriceToUsdc, usdToSkr, SKR_PRICE_USD, getUnlockedAddOns, restorePurchases } from '../services/addOnPayment';
 
 const HIDDEN_KEY = 'paid_addons_hidden';
 
@@ -95,6 +95,9 @@ export default function PaidAddOns() {
   const [paying, setPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+  const [payWithSKR, setPayWithSKR] = useState(false);
+
+  const isAndroid = Platform.OS === 'android';
 
   useEffect(() => {
     // Load local unlocks immediately
@@ -140,7 +143,8 @@ export default function PaidAddOns() {
     setPaymentError(null);
 
     const priceUsd = parsePriceToUsdc(paymentAddon.price);
-    const result = await payForAddOn(
+    const payFn = payWithSKR ? payForAddOnWithSKR : payForAddOn;
+    const result = await payFn(
       paymentAddon.id,
       priceUsd,
       publicKey.toBase58(),
@@ -153,7 +157,6 @@ export default function PaidAddOns() {
 
     if (result.success) {
       setPaymentSuccess(result.signature || 'confirmed');
-      // Refresh unlocked set
       const updated = await getUnlockedAddOns();
       setUnlocked(updated);
     } else {
@@ -163,16 +166,17 @@ export default function PaidAddOns() {
 
   const closePaymentModal = () => {
     if (paymentSuccess && paymentAddon) {
-      // Navigate to the tool after closing success modal
       const route = paymentAddon.route;
       setPaymentAddon(null);
       setPaymentSuccess(null);
       setPaymentError(null);
+      setPayWithSKR(false);
       router.push(route as any);
     } else {
       setPaymentAddon(null);
       setPaymentSuccess(null);
       setPaymentError(null);
+      setPayWithSKR(false);
     }
   };
 
@@ -278,15 +282,41 @@ export default function PaidAddOns() {
                 <Text style={s.modalTitle}>Unlock {paymentAddon?.name}</Text>
                 <Text style={s.modalDesc}>{paymentAddon?.description}</Text>
 
-                <View style={s.priceBox}>
+                {isAndroid && (
+                  <View style={s.tokenToggle}>
+                    <TouchableOpacity
+                      style={[s.tokenOption, !payWithSKR && s.tokenOptionActive]}
+                      onPress={() => setPayWithSKR(false)}
+                    >
+                      <Text style={[s.tokenOptionText, !payWithSKR && s.tokenOptionTextActive]}>USDC</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.tokenOption, payWithSKR && s.tokenOptionActiveSKR]}
+                      onPress={() => setPayWithSKR(true)}
+                    >
+                      <Text style={[s.tokenOptionText, payWithSKR && s.tokenOptionTextActive]}>SKR</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <View style={[s.priceBox, payWithSKR && s.priceBoxSKR]}>
                   <Text style={s.priceLabel}>One-time purchase</Text>
-                  <Text style={s.priceValue}>{paymentAddon?.price} USDC</Text>
+                  {payWithSKR ? (
+                    <>
+                      <Text style={s.priceValueSKR}>
+                        {paymentAddon ? usdToSkr(parsePriceToUsdc(paymentAddon.price)).toLocaleString() : '0'} SKR
+                      </Text>
+                      <Text style={s.priceSubtext}>≈ {paymentAddon?.price} USD @ ${SKR_PRICE_USD}/SKR</Text>
+                    </>
+                  ) : (
+                    <Text style={s.priceValue}>{paymentAddon?.price} USDC</Text>
+                  )}
                 </View>
 
                 {!connected && (
                   <View style={s.walletWarning}>
                     <Text style={s.walletWarningText}>
-                      Connect a Solana wallet to purchase with USDC
+                      Connect a Solana wallet to purchase with {payWithSKR ? 'SKR' : 'USDC'}
                     </Text>
                   </View>
                 )}
@@ -307,7 +337,7 @@ export default function PaidAddOns() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[s.payButton, (!connected || paying) && s.payButtonDisabled]}
+                    style={[s.payButton, payWithSKR && s.payButtonSKR, (!connected || paying) && s.payButtonDisabled]}
                     onPress={handlePayment}
                     disabled={!connected || paying}
                   >
@@ -315,7 +345,9 @@ export default function PaidAddOns() {
                       <ActivityIndicator color="#0a0e1a" size="small" />
                     ) : (
                       <Text style={s.payButtonText}>
-                        Pay {paymentAddon?.price} USDC
+                        {payWithSKR
+                          ? `Pay ${paymentAddon ? usdToSkr(parsePriceToUsdc(paymentAddon.price)).toLocaleString() : '0'} SKR`
+                          : `Pay ${paymentAddon?.price} USDC`}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -447,13 +479,28 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8, textAlign: 'center' },
   modalDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20, marginBottom: 20 },
 
+  tokenToggle: {
+    flexDirection: 'row', marginBottom: 16, width: '100%',
+    backgroundColor: '#1a1f2e', borderRadius: 10, padding: 3,
+  },
+  tokenOption: {
+    flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+  },
+  tokenOptionActive: { backgroundColor: '#f4c430' },
+  tokenOptionActiveSKR: { backgroundColor: '#9945FF' },
+  tokenOptionText: { fontSize: 14, fontWeight: '700', color: '#666' },
+  tokenOptionTextActive: { color: '#0a0e1a' },
+
   priceBox: {
     backgroundColor: '#1a1f2e', borderRadius: 12, padding: 16,
     width: '100%', alignItems: 'center', marginBottom: 20,
     borderWidth: 1, borderColor: '#f4c43040',
   },
+  priceBoxSKR: { borderColor: '#9945FF40' },
   priceLabel: { fontSize: 12, color: '#666', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
   priceValue: { fontSize: 28, fontWeight: '800', color: '#f4c430' },
+  priceValueSKR: { fontSize: 28, fontWeight: '800', color: '#9945FF' },
+  priceSubtext: { fontSize: 11, color: '#666', marginTop: 4 },
 
   walletWarning: {
     backgroundColor: '#f4c43015', borderRadius: 10, padding: 12,
@@ -479,6 +526,7 @@ const s = StyleSheet.create({
     flex: 1, padding: 16, borderRadius: 12,
     backgroundColor: '#f4c430', alignItems: 'center',
   },
+  payButtonSKR: { backgroundColor: '#9945FF' },
   payButtonDisabled: { opacity: 0.4 },
   payButtonText: { color: '#0a0e1a', fontSize: 16, fontWeight: '800' },
 

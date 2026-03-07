@@ -14,6 +14,7 @@ import ThesisModal from '../../src/components/ThesisModal';
 import ConfirmModal from '../../src/components/ConfirmModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import AssetTargetSection from '@/components/AssetTargetSection';
+import WalletHeaderButton from '../../src/components/WalletHeaderButton';
 import JupiterSwap from '../../src/components/JupiterSwap';
 import KaminoLendCard from '../../src/components/KaminoLendCard';
 import SparklineChart from '../../src/components/SparklineChart';
@@ -320,6 +321,7 @@ export default function AssetDetailScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerActions}>
+            <WalletHeaderButton />
             <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.editHeaderButton}>
               <Text style={styles.editHeaderText}>Edit</Text>
             </TouchableOpacity>
