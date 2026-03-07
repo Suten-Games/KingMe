@@ -46,12 +46,24 @@ export default function IncomeScreen() {
     let cancelled = false;
     async function load() {
       let holding: SKRHolding | null = null;
-      if (wallets.length > 0) { for (const addr of wallets) { holding = await fetchSKRHolding(addr); if (holding) break; } }
+      if (wallets.length > 0) {
+        for (const addr of wallets) {
+          holding = await fetchSKRHolding(addr);
+          if (holding) {
+            // Get price from store assets
+            const skrAsset = assets.find(a => (a.metadata as any)?.symbol === 'SKR');
+            if (skrAsset) {
+              holding.priceUsd = (skrAsset.metadata as any)?.priceUSD || 0;
+            }
+            break;
+          }
+        }
+      }
       if (!cancelled) setSKRIncome(holding ? calcSKRIncome(holding) : null);
     }
     load();
     return () => { cancelled = true; };
-  }, [wallets]);
+  }, [wallets, assets]);
 
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [srcName, setSrcName] = useState('');

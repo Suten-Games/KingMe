@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CACHE_KEY = 'market_price_cache';
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
 
-const API_BASE = 'https://kingme.money/api';
+const API_BASE = 'https://kingme-api.vercel.app/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

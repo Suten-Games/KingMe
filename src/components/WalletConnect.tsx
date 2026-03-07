@@ -1,7 +1,6 @@
 // src/components/WalletConnect.tsx - Multi-wallet support
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Modal, Platform } from 'react-native';
 import { useState } from 'react';
-import { syncAllWallets } from '../services/helius';
 import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import WalletPickerModal from './WalletPickerModal';
@@ -64,12 +63,14 @@ export function WalletConnect() {
   };
   
 
+  const syncWalletAssets = useStore((state) => state.syncWalletAssets);
+
   const handleSync = async (walletAddress?: string) => {
     setIsSyncing(true);
-    
+
     try {
       const walletsToSync = walletAddress ? [walletAddress] : wallets;
-      
+
       if (walletsToSync.length === 0) {
         Alert.alert('No Wallets', 'Please connect a wallet first.');
         setIsSyncing(false);
@@ -77,23 +78,17 @@ export function WalletConnect() {
       }
 
       console.log(`Starting sync for ${walletsToSync.length} wallet(s)...`);
-      const allAssets = await syncAllWallets(walletsToSync);
-      console.log(`Sync complete: ${allAssets.length} assets found`);
 
-      const currentAssets = useStore.getState().assets;
-      const nonCryptoAssets = currentAssets.filter(a => 
-        a.type !== 'crypto' && a.type !== 'defi'
-      );
-      
-      useStore.setState({
-        assets: [...nonCryptoAssets, ...allAssets],
-      });
+      // Use the store's server-side sync (Helius wallet API) for each wallet
+      for (const addr of walletsToSync) {
+        await syncWalletAssets(addr);
+      }
 
       await saveProfile();
-      
+
       Alert.alert(
         'Sync Complete!',
-        `Found ${allAssets.length} tokens from ${walletsToSync.length} wallet(s)`
+        `Synced ${walletsToSync.length} wallet(s) via Helius`
       );
     } catch (error: any) {
       console.error('Sync error:', error);

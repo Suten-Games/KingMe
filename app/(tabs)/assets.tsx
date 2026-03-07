@@ -4,12 +4,13 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, Alert, Platform
 } from 'react-native';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { categorizeAssets, calculateTotalValue, calculateTotalIncome } from '../../src/utils/assetCalculations';
 import type { Asset, RealEstateAsset, BankAccount } from '../../src/types';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
+import { fetchSKRHolding } from '../../src/services/skr';
 
 import ThesisModal from '../../src/components/ThesisModal';
 import PortfolioSummary from '@/components/assets/PortfolioSummary';
@@ -26,28 +27,42 @@ import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 
 // ── Build SKRCard props from a store asset ─────────────────
-function buildSkrFromAsset(asset: Asset): { holding: SKRHolding; income: SKRIncomeSnapshot } | null {
+function buildSkrFromAsset(
+  asset: Asset,
+  liveHolding?: SKRHolding | null,
+): { holding: SKRHolding; income: SKRIncomeSnapshot } | null {
   const meta = asset.metadata as any;
   if (!meta) return null;
 
   const totalBalance = meta.quantity || meta.balance || 0;
   const apy = (meta.apy || 0) / 100; // SKRCard expects decimal (0.205 not 20.5)
-  const totalValue = asset.value;
+  const priceUsd = meta.priceUSD || 0;
+
+  // If we have live staking data from the API, use it
+  const holding: SKRHolding = liveHolding
+    ? { ...liveHolding, priceUsd }
+    : {
+        totalBalance,
+        stakedBalance: totalBalance,
+        liquidBalance: 0,
+        unstakingBalance: 0,
+        isUnstaking: false,
+        unstakeTimestamp: 0,
+        apy,
+        priceUsd,
+      };
+
+  const totalValue = holding.totalBalance * priceUsd;
+  const annualYield = holding.stakedBalance * priceUsd * (holding.apy || 0);
 
   return {
-    holding: {
-      totalBalance,
-      stakedBalance: totalBalance, // assume all staked for manual entry
-      liquidBalance: 0,
-      apy,
-      priceUsd: 0
-    },
+    holding,
     income: {
       totalValueUsd: totalValue,
-      annualYieldUsd: asset.annualIncome,
-      monthlyYieldUsd: asset.annualIncome / 12,
-      monthlyYieldSkr: 0,
-      apyUsed: 0
+      annualYieldUsd: annualYield,
+      monthlyYieldUsd: annualYield / 12,
+      monthlyYieldSkr: (holding.stakedBalance * (holding.apy || 0)) / 12,
+      apyUsed: holding.apy || 0,
     },
   };
 }
@@ -219,9 +234,24 @@ export default function AssetsScreen() {
     }
   }, []);
 
-  // ── SKR: detect from store ───────────────────────────────
+  // ── SKR: detect from store + fetch live staking data ─────
   const skrAsset = useMemo(() => assets.find(isSkrAsset), [assets]);
-  const skrData = useMemo(() => skrAsset ? buildSkrFromAsset(skrAsset) : null, [skrAsset]);
+  const [liveSkrHolding, setLiveSkrHolding] = useState<SKRHolding | null>(null);
+
+  const refreshSkr = useCallback(async () => {
+    if (wallets.length === 0) return;
+    for (const addr of wallets) {
+      const h = await fetchSKRHolding(addr);
+      if (h) { setLiveSkrHolding(h); return; }
+    }
+  }, [wallets]);
+
+  useEffect(() => { refreshSkr(); }, [refreshSkr]);
+
+  const skrData = useMemo(
+    () => skrAsset ? buildSkrFromAsset(skrAsset, liveSkrHolding) : null,
+    [skrAsset, liveSkrHolding],
+  );
 
   // ── Categorize: SKR excluded from list (shown as card) ───
   // But totals use ALL assets so SKR still counts in portfolio
@@ -439,6 +469,7 @@ export default function AssetsScreen() {
               setEditingAsset(skrAsset);
               setShowAddModal(true);
             }}
+            onRefresh={refreshSkr}
           />
         )}
 
