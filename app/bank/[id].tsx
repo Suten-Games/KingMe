@@ -96,6 +96,9 @@ export default function BankAccountDetailScreen() {
   const addDebt = useStore(s => s.addDebt);
   const updateBankAccount = useStore(s => s.updateBankAccount);
   const clearBankTransactions = useStore(s => s.clearBankTransactions);
+  const assets = useStore(s => s.assets);
+  const addAsset = useStore(s => s.addAsset);
+  const updateAsset = useStore(s => s.updateAsset);
 
   const account = bankAccounts.find(a => a.id === id);
   const accountTransactions = useMemo(
@@ -569,9 +572,84 @@ export default function BankAccountDetailScreen() {
     setImportPreview(result);
   };
 
+  // ── Handle crypto accumulations from CSV (e.g. Cash App BTC round-ups) ──
+  const handleCryptoAccumulations = useCallback(async (accumulations: NonNullable<typeof importPreview>['cryptoAccumulations']) => {
+    if (!accumulations || accumulations.length === 0) return;
+
+    for (const crypto of accumulations) {
+      const assetId = `cashapp_${crypto.asset.toLowerCase()}`;
+      const existing = assets.find(a => a.id === assetId);
+
+      // Fetch current price
+      let currentPrice = crypto.avgPrice;
+      try {
+        const coingeckoId = crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset.toLowerCase();
+        const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`);
+        const data = await resp.json();
+        if (data[coingeckoId]?.usd) currentPrice = data[coingeckoId].usd;
+      } catch {}
+
+      const currentValue = crypto.totalAmount * currentPrice;
+
+      if (existing) {
+        // Merge: add new amount to existing
+        const prevQty = (existing.metadata as any)?.quantity || 0;
+        const prevSpent = (existing.metadata as any)?.totalSpent || 0;
+        const newQty = prevQty + crypto.totalAmount;
+        const newSpent = prevSpent + crypto.totalSpent;
+        updateAsset(assetId, {
+          value: newQty * currentPrice,
+          metadata: {
+            ...existing.metadata,
+            type: 'crypto',
+            symbol: crypto.asset,
+            quantity: newQty,
+            priceUSD: currentPrice,
+            totalSpent: newSpent,
+            avgCost: newSpent / newQty,
+            description: `Cash App ${crypto.asset} round-ups`,
+            coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
+          } as any,
+        });
+        Alert.alert(
+          `${crypto.asset} Updated`,
+          `Added ${crypto.totalAmount.toFixed(8)} ${crypto.asset} from ${crypto.purchaseCount} round-ups.\n\nTotal: ${newQty.toFixed(8)} ${crypto.asset} ($${(newQty * currentPrice).toFixed(2)})`,
+        );
+      } else {
+        addAsset({
+          id: assetId,
+          type: 'crypto',
+          name: `Cash App ${crypto.asset}`,
+          value: currentValue,
+          annualIncome: 0,
+          metadata: {
+            type: 'crypto',
+            symbol: crypto.asset,
+            quantity: crypto.totalAmount,
+            priceUSD: currentPrice,
+            totalSpent: crypto.totalSpent,
+            avgCost: crypto.avgPrice,
+            description: `Cash App ${crypto.asset} round-ups`,
+            coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
+          } as any,
+        });
+        Alert.alert(
+          `${crypto.asset} Asset Created`,
+          `${crypto.totalAmount.toFixed(8)} ${crypto.asset} from ${crypto.purchaseCount} round-ups added to your Assets.\n\nValue: $${currentValue.toFixed(2)} at $${currentPrice.toLocaleString()}/${crypto.asset}`,
+        );
+      }
+    }
+  }, [assets, addAsset, updateAsset]);
+
   const handleConfirmImport = () => {
     if (!importPreview) return;
     importBankTransactions(importPreview.transactions);
+
+    // Handle any crypto accumulations (Cash App BTC, etc.)
+    if (importPreview.cryptoAccumulations) {
+      handleCryptoAccumulations(importPreview.cryptoAccumulations);
+    }
+
     setCsvText('');
     setImportPreview(null);
     setShowImportModal(false);
@@ -1384,6 +1462,23 @@ export default function BankAccountDetailScreen() {
                       <Text style={s.importPreviewMore}>
                         ...and {importPreview.transactions.length - 5} more
                       </Text>
+                    )}
+                    {importPreview.cryptoAccumulations && importPreview.cryptoAccumulations.length > 0 && (
+                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
+                        {importPreview.cryptoAccumulations.map((c, i) => (
+                          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontSize: 13, color: '#fbbf24', fontWeight: '700' }}>
+                              {c.totalAmount.toFixed(8)} {c.asset} detected
+                            </Text>
+                            <Text style={{ fontSize: 12, color: '#888' }}>
+                              {c.purchaseCount} round-ups (${c.totalSpent.toFixed(2)})
+                            </Text>
+                          </View>
+                        ))}
+                        <Text style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+                          Will be added to your Assets on import
+                        </Text>
+                      </View>
                     )}
                   </View>
 

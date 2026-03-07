@@ -67,7 +67,7 @@ const AUTO_CATEGORY_RULES: Array<{
 
     // Financial
     { keywords: ['atm', 'withdrawal', 'cash back'], category: 'other' },
-    { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley'], category: 'financial_investment' },
+    { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley', 'purchase of btc', 'purchase of eth', 'purchase of bitcoin'], category: 'financial_investment' },
     { keywords: ['savings transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
     { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment', 'capital one mobile pmt', 'american express', 'amex', 'discover payment', 'chase payment', 'bridgecrest', 'foris dax', 'applecard gsbank', 'apple card'], category: 'financial_debt_payment' },
     { keywords: ['overdraft', 'nsf', 'fee', 'service charge', 'monthly fee', 'maintenance fee'], category: 'financial_fees' },
@@ -171,6 +171,18 @@ interface ColumnMap {
   typeCol?: number;    // SoFi has a "Type" column (P2P, DEBIT_CARD, DEPOSIT)
   statusCol?: number;  // SoFi has "Status" (Posted, Pending)
   senderCol?: number;  // Cash App has "Name of sender/receiver"
+  assetTypeCol?: number;   // Cash App: "Asset Type" (BTC)
+  assetAmountCol?: number; // Cash App: "Asset Amount" (0.00000482)
+  assetPriceCol?: number;  // Cash App: "Asset Price" ($70,606.40)
+}
+
+export interface CryptoAccumulation {
+  asset: string;       // e.g. "BTC"
+  totalAmount: number; // total crypto accumulated
+  totalSpent: number;  // total USD spent
+  avgPrice: number;    // average purchase price
+  purchaseCount: number;
+  lastPurchaseDate: string;
 }
 
 function detectColumns(headers: string[]): ColumnMap {
@@ -215,6 +227,17 @@ function detectColumns(headers: string[]): ColumnMap {
     h === 'status' || h === 'transaction status'
   );
 
+  // Cash App crypto columns
+  const assetTypeCol = lower.findIndex(h =>
+    h === 'asset type' || h === 'asset'
+  );
+  const assetAmountCol = lower.findIndex(h =>
+    h === 'asset amount' || h === 'asset qty' || h === 'asset quantity'
+  );
+  const assetPriceCol = lower.findIndex(h =>
+    h === 'asset price' || h === 'price per coin'
+  );
+
   return {
     dateCol: dateCol >= 0 ? dateCol : 0,
     descCol: descCol >= 0 ? descCol : 1,
@@ -224,6 +247,9 @@ function detectColumns(headers: string[]): ColumnMap {
     typeCol: typeCol >= 0 ? typeCol : undefined,
     statusCol: statusCol >= 0 ? statusCol : undefined,
     senderCol: senderCol >= 0 ? senderCol : undefined,
+    assetTypeCol: assetTypeCol >= 0 ? assetTypeCol : undefined,
+    assetAmountCol: assetAmountCol >= 0 ? assetAmountCol : undefined,
+    assetPriceCol: assetPriceCol >= 0 ? assetPriceCol : undefined,
   };
 }
 
@@ -415,7 +441,7 @@ function detectHeaderless(rows: string[][]): { isHeaderless: boolean; columns: C
 export function parseCSVTransactions(
   csvText: string,
   bankAccountId: string,
-): { transactions: BankTransaction[]; errors: string[]; summary: string } {
+): { transactions: BankTransaction[]; errors: string[]; summary: string; cryptoAccumulations?: CryptoAccumulation[] } {
   const errors: string[] = [];
   const transactions: BankTransaction[] = [];
   const batchId = `csv_${Date.now()}`;
@@ -444,6 +470,9 @@ export function parseCSVTransactions(
 
   console.log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
   console.log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
+
+  // Track crypto purchases (e.g. Cash App BTC round-ups)
+  const cryptoMap: Record<string, { totalAmount: number; totalSpent: number; count: number; lastDate: string }> = {};
 
   // Parse data rows
   for (let i = dataStartIndex; i < rows.length; i++) {
@@ -536,6 +565,24 @@ export function parseCSVTransactions(
       };
 
       transactions.push(transaction);
+
+      // Track crypto purchases (Cash App BTC round-ups, etc.)
+      if (columns.assetTypeCol !== undefined && columns.assetAmountCol !== undefined) {
+        const assetType = (row[columns.assetTypeCol] || '').trim().toUpperCase();
+        const assetAmount = parseFloat((row[columns.assetAmountCol] || '0').replace(/[,$]/g, ''));
+        if (assetType && assetAmount > 0) {
+          if (!cryptoMap[assetType]) {
+            cryptoMap[assetType] = { totalAmount: 0, totalSpent: 0, count: 0, lastDate: '' };
+          }
+          cryptoMap[assetType].totalAmount += assetAmount;
+          cryptoMap[assetType].totalSpent += Math.abs(rawAmount);
+          cryptoMap[assetType].count += 1;
+          const txDate = parseDate(dateStr);
+          if (!cryptoMap[assetType].lastDate || txDate > cryptoMap[assetType].lastDate) {
+            cryptoMap[assetType].lastDate = txDate;
+          }
+        }
+      }
     } catch (err) {
       errors.push(`Row ${i + 1}: Parse error`);
     }
@@ -549,9 +596,23 @@ export function parseCSVTransactions(
   const totalIn = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalOut = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
+  // Build crypto accumulations
+  const cryptoAccumulations: CryptoAccumulation[] = Object.entries(cryptoMap).map(([asset, data]) => ({
+    asset,
+    totalAmount: data.totalAmount,
+    totalSpent: data.totalSpent,
+    avgPrice: data.totalSpent / data.totalAmount,
+    purchaseCount: data.count,
+    lastPurchaseDate: data.lastDate,
+  }));
+
+  if (cryptoAccumulations.length > 0) {
+    console.log('[CSV_IMPORT] Crypto detected:', cryptoAccumulations.map(c => `${c.totalAmount} ${c.asset} ($${c.totalSpent.toFixed(2)} spent)`).join(', '));
+  }
+
   const summary = `${transactions.length} transactions: ${incomeCount} deposits ($${totalIn.toLocaleString()}), ${expenseCount} expenses ($${totalOut.toLocaleString()})`;
 
-  return { transactions, errors, summary };
+  return { transactions, errors, summary, cryptoAccumulations: cryptoAccumulations.length > 0 ? cryptoAccumulations : undefined };
 }
 
 /**
