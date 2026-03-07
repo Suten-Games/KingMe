@@ -27,6 +27,7 @@ import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 import TradeInsightCards from '@/components/TradeInsightCards';
 import WatchlistAlerts from '@/components/WatchlistAlerts';
 import TargetIcon from '@/components/icons/TargetIcon';
+import { getUnlockedAddOns } from '../../src/services/addOnPayment';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -101,6 +102,7 @@ export default function HomeScreen() {
   const [infoDetails, setInfoDetails] = useState(false);
   const [includeHouse, setIncludeHouse] = useState(false);
   const [showCashFlow, setShowCashFlow] = useState(false);
+  const [unlockedAddOns, setUnlockedAddOns] = useState<Set<string>>(new Set());
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -131,6 +133,9 @@ export default function HomeScreen() {
 
   useEffect(() => { checkThesisAlerts(); const i = setInterval(() => checkThesisAlerts(), 86400000); return () => clearInterval(i); }, []);
   useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/intro'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
+
+  // Load unlocked paid add-ons
+  useEffect(() => { getUnlockedAddOns().then(setUnlockedAddOns); }, []);
 
   // Auto-refresh stock/crypto prices if stale (>5min) or never fetched
   useEffect(() => {
@@ -680,6 +685,22 @@ export default function HomeScreen() {
           colors={['#3a1a1a', '#281018']} accent="#f87171" onPress={() => router.push('/spending')} />
         <ToolCard emoji="👤" title="Profile & Settings" sub="Accounts and backup"
           colors={['#2a1a40', '#181028']} accent="#a78bfa" onPress={() => router.push('/profile')} />
+        {unlockedAddOns.has('business_dashboard') && (
+          <ToolCard emoji="🏢" title="Business Dashboard" sub="Revenue, expenses & P&L"
+            colors={['#1a3020', '#102018']} accent="#4ade80" onPress={() => router.push('/business')} />
+        )}
+        {unlockedAddOns.has('divorce_simulator') && (
+          <ToolCard emoji="💔" title="Divorce Simulator" sub="Financial impact analysis"
+            colors={['#3a1a2a', '#281020']} accent="#f472b6" onPress={() => router.push('/divorce-simulator')} />
+        )}
+        {unlockedAddOns.has('companionship_tracker') && (
+          <ToolCard emoji="💜" title="Companionship" sub="Track spending for someone special"
+            colors={['#2a1a3a', '#1a1028']} accent="#c084fc" onPress={() => router.push('/companionship')} />
+        )}
+        {unlockedAddOns.has('bank_consolidation') && (
+          <ToolCard emoji="🏦" title="Bank Consolidation" sub="Optimize your accounts"
+            colors={['#1a2a3a', '#101828']} accent="#38bdf8" onPress={() => router.push('/bank-consolidation')} />
+        )}
       </View>
 
       <View style={styles.toolsSection}>

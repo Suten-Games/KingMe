@@ -109,7 +109,7 @@ export interface BankTransaction {
   isRecurring?: boolean;             // Flagged as a recurring obligation
   recurringName?: string;            // Cleaned name for obligation matching (e.g., "Netflix")
   notes?: string;
-  importedFrom?: 'csv' | 'manual';  // How it was entered
+  importedFrom?: 'csv' | 'manual' | 'reassigned';  // How it was entered
   importBatchId?: string;            // Groups CSV imports together
 }
 

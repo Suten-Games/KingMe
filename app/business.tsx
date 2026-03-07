@@ -5,10 +5,10 @@
 // Auto-syncs business net value → personal asset of type 'business'
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, Image,
+  TextInput, Modal, Alert, ActivityIndicator, Image, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,9 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
+import { parseCSVTransactions } from '../src/utils/csvBankImport';
+import type { BankTransaction } from '../src/types/bankTransactionTypes';
 
 const STORAGE_KEY = 'business_dashboard_data';
 const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
@@ -52,6 +56,7 @@ interface Distribution {
 
 interface BusinessData {
   businessName: string;
+  businessDescription: string;
   entityType: EntityType;
   referralWallet: string;
   referralBalance: {
@@ -70,6 +75,7 @@ interface BusinessData {
   expenses: BusinessExpense[];
   distributions: Distribution[];
   contributions: Distribution[]; // Capital contributions (personal → business)
+  transactions: BankTransaction[]; // Imported business transactions (CSV)
 }
 
 const EXPENSE_CATEGORIES: Record<string, { emoji: string; label: string }> = {
@@ -84,6 +90,7 @@ const EXPENSE_CATEGORIES: Record<string, { emoji: string; label: string }> = {
 
 const DEFAULT_DATA: BusinessData = {
   businessName: '',
+  businessDescription: '',
   entityType: 'llc',
   referralWallet: '',
   referralBalance: null,
@@ -91,6 +98,7 @@ const DEFAULT_DATA: BusinessData = {
   expenses: [],
   distributions: [],
   contributions: [],
+  transactions: [],
 };
 
 // ─── Auto-sync business → personal asset ─────────────────────────────────────
@@ -161,6 +169,7 @@ export default function BusinessDashboard() {
 
   // Setup form
   const [setupName, setSetupName] = useState('');
+  const [setupDesc, setSetupDesc] = useState('');
   const [setupEntity, setSetupEntity] = useState<EntityType>('llc');
 
   // Expense form
@@ -187,6 +196,15 @@ export default function BusinessDashboard() {
   const [contribAmount, setContribAmount] = useState('');
   const [contribNotes, setContribNotes] = useState('');
 
+  // CSV import
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; errors: string[]; summary: string } | null>(null);
+
+  // Personal transaction reassignment
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassignCategory, setReassignCategory] = useState('');
+
   // ── Load / Save ────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(raw => {
@@ -212,7 +230,7 @@ export default function BusinessDashboard() {
   // ── Setup ──────────────────────────────────────────────────
   const handleSetup = () => {
     if (!setupName.trim()) return;
-    const newData = { ...data, businessName: setupName.trim(), entityType: setupEntity };
+    const newData = { ...data, businessName: setupName.trim(), businessDescription: setupDesc.trim(), entityType: setupEntity };
     save(newData);
     setShowSetupModal(false);
   };
@@ -225,10 +243,11 @@ export default function BusinessDashboard() {
     }
     setSyncing(true);
     try {
-      const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+      const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+      const rpcProxy = `${API_BASE}/api/rpc/send`;
 
       // SOL balance
-      const balResp = await fetch(rpcUrl, {
+      const balResp = await fetch(rpcProxy, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getBalance', params: [data.referralWallet] }),
@@ -237,7 +256,7 @@ export default function BusinessDashboard() {
       const solBalance = (balData.result?.value || 0) / 1e9;
 
       // Token accounts
-      const tokResp = await fetch(rpcUrl, {
+      const tokResp = await fetch(rpcProxy, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -386,6 +405,77 @@ export default function BusinessDashboard() {
     save({ ...data, contributions: (data.contributions || []).filter(c => c.id !== id) });
   };
 
+  // ── CSV Import ──────────────────────────────────────────────
+  const handlePickCSVFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/plain', 'text/tab-separated-values', 'application/csv', '*/*'] });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      let text = '';
+      if (Platform.OS === 'web') {
+        const resp = await fetch(file.uri);
+        text = await resp.text();
+      } else {
+        text = await FileSystem.readAsStringAsync(file.uri);
+      }
+      setCsvText(text);
+      if (text.trim()) {
+        const parsed = parseCSVTransactions(text, `biz_${data.businessName}`);
+        setImportPreview(parsed);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to read file');
+    }
+  };
+
+  const handleParseCSV = () => {
+    if (!csvText.trim()) return;
+    const result = parseCSVTransactions(csvText, `biz_${data.businessName}`);
+    setImportPreview(result);
+  };
+
+  const handleConfirmImport = () => {
+    if (!importPreview) return;
+    const existing = data.transactions || [];
+    const existingDates = new Set(existing.map(t => `${t.date}|${t.description}|${t.amount}`));
+    const newTxns = importPreview.transactions.filter(t => !existingDates.has(`${t.date}|${t.description}|${t.amount}`));
+    save({ ...data, transactions: [...existing, ...newTxns] });
+    Alert.alert('Imported', `${newTxns.length} new transactions added (${importPreview.transactions.length - newTxns.length} duplicates skipped)`);
+    setCsvText(''); setImportPreview(null); setShowImportModal(false);
+  };
+
+  // ── Personal transactions that might be business expenses ──
+  const bankAccounts = useStore((s) => s.bankAccounts);
+  const allBankTransactions = useStore((s) => s.bankTransactions || []);
+  const personalBizTransactions = useMemo(() => {
+    if (!reassignCategory) return [];
+    const catLower = reassignCategory.toLowerCase();
+    return allBankTransactions.filter(t => {
+      const cat = (t.category || '').toLowerCase();
+      const desc = (t.description || '').toLowerCase();
+      const notes = (t.notes || '').toLowerCase();
+      return cat.includes(catLower) || desc.includes(catLower) || notes.includes(catLower);
+    });
+  }, [allBankTransactions, reassignCategory]);
+
+  const handleReassignTransactions = () => {
+    if (personalBizTransactions.length === 0) return;
+    const existing = data.transactions || [];
+    const existingDates = new Set(existing.map(t => `${t.date}|${t.description}|${t.amount}`));
+    const newTxns = personalBizTransactions
+      .filter(t => !existingDates.has(`${t.date}|${t.description}|${t.amount}`))
+      .map(t => ({ ...t, bankAccountId: `biz_${data.businessName}`, importedFrom: 'reassigned' as const }));
+
+    const totalAmount = newTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    save({ ...data, transactions: [...existing, ...newTxns] });
+
+    Alert.alert(
+      `${newTxns.length} Transactions Reassigned`,
+      `$${totalAmount.toLocaleString()} in expenses moved to ${data.businessName}.\n\nConsider transferring this amount from your personal account to your business account to properly fund these expenses.`,
+    );
+    setShowReassignModal(false);
+  };
+
   // ── Calculations ───────────────────────────────────────────
   const monthlyExpenses = data.expenses.reduce((sum, e) => {
     if (e.frequency === 'monthly') return sum + e.amount;
@@ -437,10 +527,16 @@ export default function BusinessDashboard() {
 
       <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Business name */}
-        <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
-          <Text style={st.pageTitle}>🏢 {data.businessName || 'My Business'}</Text>
+        <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+          <Text style={st.pageTitle}>{data.businessName || 'My Business'}</Text>
         </TouchableOpacity>
         <Text style={st.entityLabel}>{ENTITY_LABELS[data.entityType]} · Tap name to edit</Text>
+
+        {data.businessDescription ? (
+          <View style={st.descriptionBox}>
+            <Text style={st.descriptionText}>{data.businessDescription}</Text>
+          </View>
+        ) : null}
 
       {/* ── Referral Wallet ──────────────────────────────────── */}
       <View style={st.section}>
@@ -670,7 +766,190 @@ export default function BusinessDashboard() {
         </View>
       </View>
 
+      {/* ── Business Transactions ───────────────────────────── */}
+      <View style={st.section}>
+        <View style={st.sectionHeader}>
+          <Text style={st.sectionTitle}>Transactions</Text>
+          <TouchableOpacity onPress={() => setShowImportModal(true)}>
+            <Text style={st.syncBtn}>Import CSV</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(data.transactions || []).length === 0 ? (
+          <TouchableOpacity style={st.setupCard} onPress={() => setShowImportModal(true)}>
+            <Text style={st.setupEmoji}>{'\uD83D\uDCC4'}</Text>
+            <Text style={st.setupText}>Import business transactions</Text>
+            <Text style={st.setupSub}>Upload a CSV from your business bank account</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            {(data.transactions || []).slice(0, 10).map(t => (
+              <View key={t.id} style={st.expenseRow}>
+                <Text style={st.expenseEmoji}>{t.type === 'income' ? '\u2B06\uFE0F' : '\u2B07\uFE0F'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.expenseName} numberOfLines={1}>{t.description}</Text>
+                  <Text style={st.expenseMeta}>{t.date}{t.importedFrom === 'reassigned' ? ' \u00B7 from personal' : ''}</Text>
+                </View>
+                <Text style={[st.expenseAmount, t.type === 'income' && { color: '#4ade80' }]}>
+                  {t.type === 'income' ? '+' : '-'}${t.amount.toFixed(2)}
+                </Text>
+              </View>
+            ))}
+            {(data.transactions || []).length > 10 && (
+              <Text style={[st.mutedText, { textAlign: 'center', marginTop: 8 }]}>
+                +{(data.transactions || []).length - 10} more transactions
+              </Text>
+            )}
+            <View style={st.totalBar}>
+              <Text style={st.totalLabel}>Total ({(data.transactions || []).length})</Text>
+              <View>
+                <Text style={[st.totalValue, { color: '#4ade80' }]}>
+                  +${(data.transactions || []).filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </Text>
+                <Text style={[st.totalValue, { color: '#f87171', fontSize: 12 }]}>
+                  -${(data.transactions || []).filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* ── Reassign Personal Transactions ─────────────────── */}
+      <View style={st.section}>
+        <View style={st.sectionHeader}>
+          <Text style={st.sectionTitle}>Personal {'\u2192'} Business</Text>
+          <TouchableOpacity onPress={() => setShowReassignModal(true)}>
+            <Text style={st.syncBtn}>Find & Move</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={st.card}>
+          <Text style={st.descriptionText}>
+            If you've been paying business expenses from personal accounts, you can find those transactions by category or keyword and reassign them here. The app will calculate how much you should transfer to your business account.
+          </Text>
+        </View>
+      </View>
+
       {/* ═══════════════ MODALS ═══════════════ */}
+
+      {/* CSV Import Modal */}
+      <Modal visible={showImportModal} transparent animationType="slide" onRequestClose={() => setShowImportModal(false)}>
+        <View style={st.modalOverlay}>
+          <View style={st.modalContent}>
+            <ScrollView>
+              <Text style={st.modalTitle}>Import Business Transactions</Text>
+              <Text style={st.modalSub}>
+                Upload a CSV from your business bank account. Supports Chase, BoA, Wells Fargo, Capital One, SoFi, and most standard CSVs.
+              </Text>
+
+              <TouchableOpacity style={st.catPillActive2} onPress={handlePickCSVFile}>
+                <Text style={st.modalSaveText}>Choose CSV File</Text>
+              </TouchableOpacity>
+
+              <Text style={st.modalLabel}>Or paste CSV data</Text>
+              <TextInput style={[st.modalInput, { height: 120, textAlignVertical: 'top' }]}
+                placeholder="Paste CSV data here..." placeholderTextColor="#666"
+                value={csvText} onChangeText={setCsvText} multiline />
+
+              {csvText && !importPreview && (
+                <TouchableOpacity style={st.modalSave} onPress={handleParseCSV}>
+                  <Text style={st.modalSaveText}>Parse</Text>
+                </TouchableOpacity>
+              )}
+
+              {importPreview && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={[st.expenseName, { marginBottom: 8 }]}>{importPreview.summary}</Text>
+                  {importPreview.errors.length > 0 && (
+                    <Text style={{ color: '#f87171', fontSize: 12, marginBottom: 8 }}>
+                      {importPreview.errors.length} warning(s)
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              <View style={st.modalBtns}>
+                <TouchableOpacity style={st.modalCancel} onPress={() => { setShowImportModal(false); setCsvText(''); setImportPreview(null); }}>
+                  <Text style={st.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.modalSave, !importPreview && { opacity: 0.4 }]}
+                  onPress={handleConfirmImport}
+                  disabled={!importPreview}
+                >
+                  <Text style={st.modalSaveText}>Import {importPreview ? importPreview.transactions.length : 0}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reassign Personal Transactions Modal */}
+      <Modal visible={showReassignModal} transparent animationType="slide" onRequestClose={() => setShowReassignModal(false)}>
+        <View style={st.modalOverlay}>
+          <View style={st.modalContent}>
+            <ScrollView>
+              <Text style={st.modalTitle}>Find Business Transactions</Text>
+              <Text style={st.modalSub}>
+                Search your personal bank transactions by category or keyword to find business expenses you've been paying from personal accounts.
+              </Text>
+
+              <Text style={st.modalLabel}>Category or keyword to search</Text>
+              <TextInput style={st.modalInput}
+                placeholder="e.g. suten biz, business, consulting"
+                placeholderTextColor="#666" value={reassignCategory}
+                onChangeText={setReassignCategory} autoCapitalize="none" />
+
+              <View style={[st.card, { marginBottom: 12 }]}>
+                <Text style={st.descriptionText}>
+                  {'\uD83D\uDCA1'} Tip: If you've been tagging business expenses with a custom category (e.g. "suten biz"), enter that here. If not, try keywords from the transaction descriptions like your business name or common vendors.
+                </Text>
+              </View>
+
+              {reassignCategory.length > 0 && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={st.expenseName}>
+                    Found {personalBizTransactions.length} matching transaction{personalBizTransactions.length !== 1 ? 's' : ''}
+                  </Text>
+                  {personalBizTransactions.length > 0 && (
+                    <>
+                      <Text style={[st.expenseMeta, { marginTop: 4 }]}>
+                        Total expenses: ${personalBizTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </Text>
+                      {personalBizTransactions.slice(0, 5).map(t => (
+                        <View key={t.id} style={[st.expenseRow, { marginTop: 6 }]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.expenseName} numberOfLines={1}>{t.description}</Text>
+                            <Text style={st.expenseMeta}>{t.date} {'\u00B7'} {bankAccounts.find(a => a.id === t.bankAccountId)?.name || 'Unknown account'}</Text>
+                          </View>
+                          <Text style={st.expenseAmount}>${t.amount.toFixed(2)}</Text>
+                        </View>
+                      ))}
+                      {personalBizTransactions.length > 5 && (
+                        <Text style={[st.mutedText, { marginTop: 6 }]}>+{personalBizTransactions.length - 5} more...</Text>
+                      )}
+                    </>
+                  )}
+                </View>
+              )}
+
+              <View style={st.modalBtns}>
+                <TouchableOpacity style={st.modalCancel} onPress={() => { setShowReassignModal(false); setReassignCategory(''); }}>
+                  <Text style={st.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.modalSave, personalBizTransactions.length === 0 && { opacity: 0.4 }]}
+                  onPress={handleReassignTransactions}
+                  disabled={personalBizTransactions.length === 0}
+                >
+                  <Text style={st.modalSaveText}>Move {personalBizTransactions.length} to Business</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Setup / Edit Business Modal */}
       <Modal visible={showSetupModal} transparent animationType="slide" onRequestClose={() => { if (data.businessName) setShowSetupModal(false); }}>
@@ -682,6 +961,12 @@ export default function BusinessDashboard() {
             <Text style={st.modalLabel}>Business Name</Text>
             <TextInput style={st.modalInput} placeholder="e.g. Suten LLC, My Consulting" placeholderTextColor="#666"
               value={setupName} onChangeText={setSetupName} />
+
+            <Text style={st.modalLabel}>Description</Text>
+            <TextInput style={[st.modalInput, { height: 100, textAlignVertical: 'top' }]}
+              placeholder="What does your business do? (optional)"
+              placeholderTextColor="#666" value={setupDesc} onChangeText={setSetupDesc}
+              multiline numberOfLines={4} />
 
             <Text style={st.modalLabel}>Entity Type</Text>
             <View style={st.pillRow}>
@@ -864,7 +1149,13 @@ const st = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 4 },
   backBtn: { fontSize: 16, color: '#f4c430', fontWeight: '600' },
   pageTitle: { fontSize: 24, fontWeight: '800', color: '#f4c430' },
-  entityLabel: { fontSize: 12, color: '#666', marginBottom: 16, paddingLeft: 4 },
+  entityLabel: { fontSize: 12, color: '#666', marginBottom: 8, paddingLeft: 4 },
+
+  descriptionBox: {
+    backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14, marginBottom: 16,
+    borderWidth: 1, borderColor: '#2a2f3e', borderLeftWidth: 3, borderLeftColor: '#f4c43060',
+  },
+  descriptionText: { fontSize: 13, color: '#a0a0a0', lineHeight: 20 },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -936,6 +1227,7 @@ const st = StyleSheet.create({
     backgroundColor: '#141825', borderWidth: 1, borderColor: '#2a2f3e',
   },
   catPillActive: { backgroundColor: '#f4c43020', borderColor: '#f4c430' },
+  catPillActive2: { backgroundColor: '#f4c430', borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 12 },
   catPillText: { fontSize: 12, color: '#888', fontWeight: '600' },
   catPillTextActive: { color: '#f4c430' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 16 },
