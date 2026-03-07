@@ -490,7 +490,6 @@ export default function AssetsScreen() {
               setShowAddModal(true);
             }}
             onRefresh={refreshSkr}
-            showToast={showToast}
           />
         )}
 
