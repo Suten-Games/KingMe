@@ -391,6 +391,36 @@ export async function executeSwap(
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
       console.log(`[JUPITER] Phantom submitted: ${signature}`);
+
+      // Phantom returns a signature but doesn't guarantee success —
+      // poll for confirmation to catch on-chain errors (slippage, etc.)
+      const rpcProxy = `${getApiBase()}/api/rpc/send`;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          const statusRes = await fetch(rpcProxy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1,
+              method: 'getSignatureStatuses',
+              params: [[signature], { searchTransactionHistory: false }],
+            }),
+          });
+          const statusData = await statusRes.json();
+          const status = statusData.result?.value?.[0];
+          if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+            if (status.err) {
+              console.error('[JUPITER] Transaction failed on-chain:', status.err);
+              throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
+            }
+            break;
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message?.includes('Transaction failed on-chain')) throw pollErr;
+          // Network error polling — continue
+        }
+      }
     } else {
       // Mobile (MWA): sign locally, then submit to RPC ourselves
       console.log('[JUPITER] Using signTransaction + manual submit (mobile)...');
@@ -439,7 +469,7 @@ export async function executeSwap(
     let message = error.message || 'Swap failed';
     if (message.includes('User rejected') || message.includes('cancelled')) {
       message = 'Transaction cancelled by user';
-    } else if (message.includes('0x1788') || message.includes('6024') || message.includes('SlippageTolerance') || message.includes('slippage')) {
+    } else if (message.includes('0x1788') || message.includes('6024') || message.includes('6014') || message.includes('SlippageTolerance') || message.includes('slippage')) {
       message = 'Slippage exceeded — increase slippage tolerance and try again';
     } else if (message.includes('insufficient') || message.includes('not enough')) {
       message = 'Insufficient balance for this swap';

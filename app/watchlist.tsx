@@ -686,11 +686,16 @@ export default function WatchlistScreen() {
 
                 {/* Held badge */}
                 {heldAsset && (
-                  <View style={st.heldBadge}>
+                  <TouchableOpacity
+                    style={st.heldBadge}
+                    onPress={() => router.push(`/asset/${heldAsset.id}` as any)}
+                  >
                     <Text style={st.heldBadgeText}>
-                      Holding {formatUSD(heldAsset.value)}
+                      💰 Holding {formatUSD(heldAsset.value)}
+                      {(heldAsset.metadata as any)?.quantity ? ` · ${((heldAsset.metadata as any).quantity).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${token.symbol}` : ''}
+                      {' →'}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 )}
 
                 {/* Main info row */}
@@ -821,7 +826,7 @@ export default function WatchlistScreen() {
                         style={st.viewAssetButton}
                         onPress={() => router.push(`/asset/${heldAsset.id}` as any)}
                       >
-                        <Text style={st.viewAssetText}>View {token.symbol} details & swap</Text>
+                        <Text style={st.viewAssetText}>📊 View {token.symbol} · Set thesis & targets →</Text>
                       </TouchableOpacity>
                     )}
 
