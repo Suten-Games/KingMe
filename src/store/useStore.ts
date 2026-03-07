@@ -1510,8 +1510,12 @@ export const useStore = create<AppState>((set, get) => ({
         appOpenDays: imported.appOpenDays ?? [],
       };
       set(merged);
-      // Save immediately after import
-      get().saveProfile();
+      // Save immediately after import — but skip in demo mode to protect real profile
+      AsyncStorage.getItem('_demo_active').then(flag => {
+        if (flag !== 'true') {
+          get().saveProfile();
+        }
+      });
       console.log('Backup imported successfully');
     } catch (error) {
       console.error('Failed to import backup:', error);
@@ -2519,16 +2523,31 @@ export const useFreedomScore = () => {
 // Auto-save on any state change (debounced)
 // Guard: only save after the initial loadProfile completes (tracked by _isLoaded flag)
 // Additional safety: wait 3 seconds after app start before allowing any saves
+// IMPORTANT: skip auto-save in demo mode to avoid overwriting real profile
 const APP_START_TIME = Date.now();
 const MIN_STARTUP_DELAY = 3000; // 3 seconds
 
 let saveTimeout: NodeJS.Timeout;
+export let _demoModeCache: boolean | null = null;
+let _demoCacheTime = 0;
+export function invalidateDemoCache() { _demoModeCache = null; _demoCacheTime = 0; }
+
 useStore.subscribe((state) => {
   if (!state._isLoaded) return; // don't save until first load is done
   if (Date.now() - APP_START_TIME < MIN_STARTUP_DELAY) return; // don't save during startup window
 
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
+  saveTimeout = setTimeout(async () => {
+    // Check demo mode flag (cached for 10s to avoid AsyncStorage spam)
+    const now = Date.now();
+    if (_demoModeCache === null || now - _demoCacheTime > 10000) {
+      try {
+        const flag = await AsyncStorage.getItem('_demo_active');
+        _demoModeCache = flag === 'true';
+        _demoCacheTime = now;
+      } catch { _demoModeCache = false; }
+    }
+    if (_demoModeCache) return; // skip save in demo mode
     state.saveProfile();
   }, 2000); // increased from 1s to 2s
 });

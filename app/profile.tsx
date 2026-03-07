@@ -7,7 +7,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
-import { useStore, useFreedomScore } from '../src/store/useStore';
+import { useStore, useFreedomScore, invalidateDemoCache } from '../src/store/useStore';
 import { useWallet } from '../src/providers/wallet-provider';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
@@ -94,7 +94,9 @@ export default function ProfileScreen() {
 
   const handleLoadPersona = async (persona: DemoPersona) => {
     // Save real profile first (only on first demo load)
-    if (!savedRealProfile) {
+    // Check AsyncStorage flag too — React state resets on navigation
+    const alreadyInDemo = savedRealProfile || (await AsyncStorage.getItem('_demo_active')) === 'true';
+    if (!alreadyInDemo) {
       const backup = exportBackup();
       setSavedRealProfile(backup);
       // Persist real profile and demo state so it survives navigation
@@ -108,6 +110,10 @@ export default function ProfileScreen() {
         await AsyncStorage.setItem('_demo_saved_goals', goals || '[]');
         await AsyncStorage.setItem('_demo_saved_plans', plans || '{}');
       } catch {}
+    } else if (!savedRealProfile) {
+      // Restore savedRealProfile from AsyncStorage (React state lost on nav)
+      const realProfile = await AsyncStorage.getItem('_demo_saved_profile');
+      if (realProfile) setSavedRealProfile(realProfile);
     }
     // Clear goals & plans for demo persona
     await Promise.all([
@@ -116,6 +122,7 @@ export default function ProfileScreen() {
       AsyncStorage.setItem('_demo_active', 'true'),
       AsyncStorage.setItem('_demo_persona_id', persona.id),
     ]);
+    invalidateDemoCache(); // ensure auto-save picks up new demo flag
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     setActivePersona(persona.id);
     setIsDemoMode(true);
@@ -124,6 +131,9 @@ export default function ProfileScreen() {
 
   const handleExitDemo = async () => {
     if (savedRealProfile) {
+      // Clear demo flag FIRST so importBackup's save actually persists
+      await AsyncStorage.removeItem('_demo_active');
+      invalidateDemoCache(); // ensure auto-save resumes
       importBackup(savedRealProfile);
       setSavedRealProfile(null);
       // Restore saved goals & accumulation plans
@@ -138,7 +148,6 @@ export default function ProfileScreen() {
           AsyncStorage.removeItem('_demo_saved_goals'),
           AsyncStorage.removeItem('_demo_saved_plans'),
           AsyncStorage.removeItem('_demo_saved_profile'),
-          AsyncStorage.removeItem('_demo_active'),
           AsyncStorage.removeItem('_demo_persona_id'),
         ]);
       } catch {}
