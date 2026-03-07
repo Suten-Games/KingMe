@@ -14,6 +14,8 @@ import {
 } from '@solana/web3.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getAuthParams } from './walletStorage';
+import { getApiBase } from './apiBase';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
@@ -108,6 +110,7 @@ export async function payForAddOn(
   priceUsd: number,
   userPublicKey: string,
   signTransaction: (transaction: any) => Promise<any>,
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
 ): Promise<PaymentResult> {
   const isWeb = Platform.OS === 'web';
@@ -227,7 +230,7 @@ export async function payForAddOn(
     // Store unlock locally
     await unlockAddOn(addonId);
 
-    // Store receipt
+    // Store receipt locally
     const receipt: PaymentReceipt = {
       addonId,
       signature,
@@ -236,6 +239,19 @@ export async function payForAddOn(
       timestamp: new Date().toISOString(),
     };
     await storeReceipt(receipt);
+
+    // Persist purchase server-side (Upstash Redis, keyed by wallet)
+    try {
+      const authParams = await getAuthParams(signMessage, userPublicKey);
+      await fetch(`${getApiBase()}/api/purchases?${authParams}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addonId, signature, amount: priceUsd }),
+      });
+      console.log(`[PAYMENT] Purchase stored server-side for ${addonId}`);
+    } catch (err) {
+      console.warn('[PAYMENT] Failed to persist purchase server-side:', err);
+    }
 
     return { success: true, signature };
 
@@ -284,4 +300,34 @@ async function storeReceipt(receipt: PaymentReceipt): Promise<void> {
 export async function getReceipts(): Promise<PaymentReceipt[]> {
   const raw = await AsyncStorage.getItem(RECEIPTS_KEY);
   return raw ? JSON.parse(raw) : [];
+}
+
+// ── Restore purchases from server ────────────────────────────
+// Call on app load when wallet is connected to sync unlocks across devices.
+export async function restorePurchases(
+  walletAddress: string,
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>,
+): Promise<Set<string>> {
+  try {
+    const authParams = await getAuthParams(signMessage, walletAddress);
+    const res = await fetch(`${getApiBase()}/api/purchases?${authParams}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const { purchases } = await res.json();
+    if (!Array.isArray(purchases) || purchases.length === 0) {
+      return await getUnlockedAddOns();
+    }
+
+    // Merge server purchases into local storage
+    const raw = await AsyncStorage.getItem(UNLOCKED_KEY);
+    const local: string[] = raw ? JSON.parse(raw) : [];
+    const merged = new Set([...local, ...purchases.map((p: any) => p.addonId)]);
+    await AsyncStorage.setItem(UNLOCKED_KEY, JSON.stringify([...merged]));
+
+    console.log(`[PAYMENT] Restored ${purchases.length} purchases from server`);
+    return merged;
+  } catch (err) {
+    console.warn('[PAYMENT] Failed to restore purchases from server:', err);
+    return await getUnlockedAddOns();
+  }
 }

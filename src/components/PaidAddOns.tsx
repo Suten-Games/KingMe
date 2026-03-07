@@ -11,7 +11,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, Activ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useWallet } from '../providers/wallet-provider';
-import { payForAddOn, parsePriceToUsdc, getUnlockedAddOns } from '../services/addOnPayment';
+import { payForAddOn, parsePriceToUsdc, getUnlockedAddOns, restorePurchases } from '../services/addOnPayment';
 
 const HIDDEN_KEY = 'paid_addons_hidden';
 
@@ -85,7 +85,7 @@ const ADD_ONS: AddOn[] = [
 
 export default function PaidAddOns() {
   const router = useRouter();
-  const { connected, publicKey, signTransaction, signAndSendTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction } = useWallet();
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
@@ -97,11 +97,21 @@ export default function PaidAddOns() {
   const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    // Load local unlocks immediately
     getUnlockedAddOns().then(setUnlocked);
     AsyncStorage.getItem(HIDDEN_KEY).then(raw => {
       if (raw) setHidden(new Set(JSON.parse(raw)));
     });
   }, []);
+
+  // Restore purchases from server when wallet connects
+  useEffect(() => {
+    if (connected && publicKey && signMessage) {
+      restorePurchases(publicKey.toBase58(), signMessage)
+        .then(setUnlocked)
+        .catch(() => {});
+    }
+  }, [connected, publicKey]);
 
   const saveHidden = useCallback(async (newHidden: Set<string>) => {
     setHidden(newHidden);
@@ -135,6 +145,7 @@ export default function PaidAddOns() {
       priceUsd,
       publicKey.toBase58(),
       signTransaction,
+      signMessage,
       signAndSendTransaction,
     );
 
