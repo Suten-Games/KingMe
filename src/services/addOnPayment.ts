@@ -6,7 +6,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import {
-  Connection,
   PublicKey,
   Transaction,
   TransactionInstruction,
@@ -18,7 +17,7 @@ import { Platform } from 'react-native';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
-const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const RPC_PROXY = `${API_BASE}/api/rpc/send`;
 
 const TREASURY_WALLET = new PublicKey('AY9orTn5i8jbHU4RyC1k4MhzXchJaMpmQahpMrLfQCXi');
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -123,12 +122,20 @@ export async function payForAddOn(
     console.log(`[PAYMENT] Payer ATA: ${payerAta.toBase58()}`);
     console.log(`[PAYMENT] Treasury ATA: ${treasuryAta.toBase58()}`);
 
-    // Use RPC proxy to avoid rate limits
-    const rpcEndpoint = `${API_BASE}/api/rpc/send`;
-    const connection = new Connection(RPC_URL, 'confirmed');
-
-    // Get recent blockhash
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    // Get recent blockhash via RPC proxy (public RPC 403s from browsers)
+    const bhRes = await fetch(RPC_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getLatestBlockhash',
+        params: [{ commitment: 'confirmed' }],
+      }),
+    });
+    const bhData = await bhRes.json();
+    if (bhData.error) throw new Error(`RPC error: ${bhData.error.message}`);
+    const blockhash = bhData.result.value.blockhash;
+    const lastValidBlockHeight = bhData.result.value.lastValidBlockHeight;
 
     // Build transaction
     const tx = new Transaction();
@@ -154,19 +161,44 @@ export async function payForAddOn(
       console.log('[PAYMENT] Using signTransaction + manual submit...');
       const signed = await signTransaction(tx);
       const raw = signed.serialize ? signed.serialize() : signed;
-      signature = await connection.sendRawTransaction(raw, {
-        skipPreflight: false,
-        maxRetries: 3,
-        preflightCommitment: 'confirmed',
-      });
+      const rawBase64 = Buffer.from(raw).toString('base64');
 
-      // Confirm
-      const confirmation = await connection.confirmTransaction(
-        { signature, blockhash, lastValidBlockHeight },
-        'confirmed',
-      );
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      // Submit via RPC proxy
+      const sendRes = await fetch(RPC_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1,
+          method: 'sendRawTransaction',
+          params: [rawBase64, { skipPreflight: false, maxRetries: 3, preflightCommitment: 'confirmed' }],
+        }),
+      });
+      const sendData = await sendRes.json();
+      if (sendData.error) throw new Error(`Send failed: ${sendData.error.message}`);
+      signature = sendData.result;
+
+      // Poll for confirmation via RPC proxy
+      const maxAttempts = 30;
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const statusRes = await fetch(RPC_PROXY, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'getSignatureStatuses',
+            params: [[signature], { searchTransactionHistory: false }],
+          }),
+        });
+        const statusData = await statusRes.json();
+        const status = statusData.result?.value?.[0];
+        if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+          if (status.err) throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+          break;
+        }
+        if (i === maxAttempts - 1) {
+          console.warn('[PAYMENT] Confirmation timeout, tx may still confirm');
+        }
       }
     }
 
