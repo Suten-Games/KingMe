@@ -26,7 +26,7 @@ export const TOKEN_REGISTRY: Record<string, TokenInfo> = {
     symbol: 'SKR',
     name: 'Seeker (Solana Mobile)',
     logoURI: 'https://assets.coingecko.com/coins/images/52383/small/SKR.png',
-    mint: 'SKRy1C6Smucp4Wz2MPnKgvDRFgDHraoskMJH3a2fMec',
+    mint: 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
     coingeckoId: 'seeker-token',
   },
   ETH: {

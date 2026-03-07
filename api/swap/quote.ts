@@ -22,7 +22,7 @@ const KNOWN_MINTS: Record<string, string> = {
   JTO:  'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL',
   JUP:  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
   DRIFT: 'DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7',
-  SKR:  'SKRy4ABKZ3dFJEmb47aNqWoMnajpVnFozTPCiZD3eHv',
+  SKR:  'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
   'USD*': 'BenJy1n3WTx9mTjEvy63e8Q1j4RqUc6E4VBMz3ir4Wo6',
 };
 
