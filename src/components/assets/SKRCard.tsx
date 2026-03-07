@@ -1,10 +1,15 @@
 // src/components/assets/SKRCard.tsx
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert as RNAlert, ActivityIndicator, Platform } from 'react-native';
 import { Transaction } from '@solana/web3.js';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../services/skr';
 import { buildStakeTransaction, buildUnstakeTransaction } from '../../services/skr';
 import { useWallet } from '../../providers/wallet-provider';
+
+function alert(title: string, msg?: string) {
+  if (Platform.OS === 'web') window.alert(msg ? `${title}\n\n${msg}` : title);
+  else RNAlert.alert(title, msg);
+}
 
 interface SKRCardProps {
   holding: SKRHolding;
@@ -32,7 +37,7 @@ export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardP
     if (!publicKey || !amount) return;
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Amount', 'Enter a valid amount of SKR.');
+      alert('Invalid Amount', 'Enter a valid amount of SKR.');
       return;
     }
 
@@ -40,27 +45,39 @@ export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardP
     setLoading(true);
 
     try {
+      console.log(`[SKR] Building ${action} tx for ${amt} SKR...`);
       const { transaction: txBase64 } =
         action === 'stake'
           ? await buildStakeTransaction(wallet, amt)
           : await buildUnstakeTransaction(wallet, amt);
 
-      // Deserialize the legacy Transaction from base64
+      console.log('[SKR] Got tx from API, deserializing...');
       const txBuffer = Buffer.from(txBase64, 'base64');
       const tx = Transaction.from(txBuffer);
+      console.log(`[SKR] Transaction has ${tx.instructions.length} instructions, sending to wallet...`);
 
       const isWeb = Platform.OS === 'web';
+      let signature = '';
       if (isWeb && signAndSendTransaction) {
-        await signAndSendTransaction(tx);
+        const result = await signAndSendTransaction(tx);
+        signature = result.signature;
+        console.log('[SKR] signAndSendTransaction result:', signature);
       } else if (signTransaction) {
         const signed = await signTransaction(tx);
         const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
         const { Connection } = await import('@solana/web3.js');
         const conn = new Connection(rpcUrl, 'confirmed');
-        await conn.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
+        signature = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 });
+        console.log('[SKR] sendRawTransaction result:', signature);
+      } else {
+        throw new Error('No signing method available');
       }
 
-      Alert.alert(
+      if (signature) {
+        console.log(`[SKR] ${action} tx sent: ${signature}`);
+      }
+
+      alert(
         action === 'stake' ? 'Staked!' : 'Unstake Started',
         action === 'stake'
           ? `${amt} SKR staked successfully.`
@@ -70,7 +87,8 @@ export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardP
       setAmount('');
       onRefresh?.();
     } catch (err: any) {
-      Alert.alert('Failed', err.message || 'Transaction failed');
+      console.error(`[SKR] ${action} failed:`, err);
+      alert('Failed', err.message || 'Transaction failed');
     } finally {
       setLoading(false);
     }
