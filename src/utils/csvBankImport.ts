@@ -67,8 +67,11 @@ const AUTO_CATEGORY_RULES: Array<{
 
     // Financial
     { keywords: ['atm', 'withdrawal', 'cash back'], category: 'other' },
-    { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley', 'purchase of btc', 'purchase of eth', 'purchase of bitcoin'], category: 'financial_investment' },
-    { keywords: ['savings transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
+    { keywords: ['investment', 'fidelity', 'schwab', 'vanguard', 'robinhood', 'etrade', 'brokerage', 'morgan stanley', 'purchase of btc', 'purchase of eth', 'purchase of bitcoin', 'sale of', 'purchase of'], category: 'financial_investment' },
+    { keywords: ['savings transfer', 'savings internal transfer', 'save', 'to savings'], category: 'financial_savings_transfer' },
+    { keywords: ['borrowing in cash app', 'borrow'], category: 'financial_debt_payment' },
+    { keywords: ['afterpay'], category: 'financial_debt_payment' },
+    { keywords: ['repayment', 'overdraft'], category: 'financial_debt_payment' },
     { keywords: ['loan payment', 'student loan', 'auto loan', 'credit card payment', 'capital one mobile pmt', 'american express', 'amex', 'discover payment', 'chase payment', 'bridgecrest', 'foris dax', 'applecard gsbank', 'apple card'], category: 'financial_debt_payment' },
     { keywords: ['overdraft', 'nsf', 'fee', 'service charge', 'monthly fee', 'maintenance fee'], category: 'financial_fees' },
     { keywords: ['irs', 'tax', 'state tax', 'property tax'], category: 'financial_taxes' },
@@ -176,12 +179,34 @@ interface ColumnMap {
   assetPriceCol?: number;  // Cash App: "Asset Price" ($70,606.40)
 }
 
+export interface SavingsAccumulation {
+  totalDeposits: number;   // total USD moved to savings
+  totalWithdrawals: number; // total USD moved from savings
+  netBalance: number;      // deposits - withdrawals
+  transactionCount: number;
+  lastDate: string;
+}
+
+export interface DebtAccumulation {
+  name: string;            // e.g. "Cash App Borrow", "Afterpay"
+  totalBorrowed: number;   // total USD borrowed
+  totalRepaid: number;     // total USD repaid
+  outstandingBalance: number; // borrowed - repaid
+  transactionCount: number;
+  lastDate: string;
+}
+
 export interface CryptoAccumulation {
   asset: string;       // e.g. "BTC"
-  totalAmount: number; // total crypto accumulated
-  totalSpent: number;  // total USD spent
+  totalBought: number; // total crypto purchased
+  totalSold: number;   // total crypto sold
+  totalAmount: number; // net position (bought - sold)
+  totalSpent: number;  // total USD spent on buys
+  totalProceeds: number; // total USD received from sells
   avgPrice: number;    // average purchase price
   purchaseCount: number;
+  sellCount: number;
+  realizedPnL: number; // proceeds - cost basis of sold units
   lastPurchaseDate: string;
 }
 
@@ -269,14 +294,16 @@ function typeFromBankType(bankType: string, amount: number): 'income' | 'expense
 
   // Transfer types
   if (upper === 'P2P' || upper === 'TRANSFER' || upper === 'WIRE' ||
-    upper === 'ACH_TRANSFER' || upper === 'INTERNAL_TRANSFER') {
+    upper === 'ACH_TRANSFER' || upper === 'INTERNAL_TRANSFER' ||
+    upper === 'SAVINGS INTERNAL TRANSFER') {
     return 'transfer';
   }
 
   // Expense types
   if (upper === 'DEBIT_CARD' || upper === 'DEBIT' || upper === 'CHECK' ||
     upper === 'ATM' || upper === 'WITHDRAWAL' || upper === 'FEE' ||
-    upper === 'ACH_DEBIT' || upper === 'POS' || upper === 'PURCHASE') {
+    upper === 'ACH_DEBIT' || upper === 'POS' || upper === 'PURCHASE' ||
+    upper === 'BORROW' || upper === 'OVERDRAFT') {
     return 'expense';
   }
 
@@ -441,7 +468,7 @@ function detectHeaderless(rows: string[][]): { isHeaderless: boolean; columns: C
 export function parseCSVTransactions(
   csvText: string,
   bankAccountId: string,
-): { transactions: BankTransaction[]; errors: string[]; summary: string; cryptoAccumulations?: CryptoAccumulation[] } {
+): { transactions: BankTransaction[]; errors: string[]; summary: string; cryptoAccumulations?: CryptoAccumulation[]; savingsAccumulation?: SavingsAccumulation; debtAccumulations?: DebtAccumulation[] } {
   const errors: string[] = [];
   const transactions: BankTransaction[] = [];
   const batchId = `csv_${Date.now()}`;
@@ -471,8 +498,14 @@ export function parseCSVTransactions(
   console.log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
   console.log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
 
-  // Track crypto purchases (e.g. Cash App BTC round-ups)
-  const cryptoMap: Record<string, { totalAmount: number; totalSpent: number; count: number; lastDate: string }> = {};
+  // Track crypto buys & sells (e.g. Cash App BTC round-ups, stock trades)
+  const cryptoMap: Record<string, { totalBought: number; totalSold: number; totalSpent: number; totalProceeds: number; buyCount: number; sellCount: number; lastBuyDate: string }> = {};
+
+  // Track savings transfers
+  const savings = { deposits: 0, withdrawals: 0, count: 0, lastDate: '' };
+
+  // Track borrows and repayments
+  const debtMap: Record<string, { borrowed: number; repaid: number; count: number; lastDate: string }> = {};
 
   // Parse data rows
   for (let i = dataStartIndex; i < rows.length; i++) {
@@ -566,22 +599,70 @@ export function parseCSVTransactions(
 
       transactions.push(transaction);
 
-      // Track crypto purchases (Cash App BTC round-ups, etc.)
+      // Track crypto/stock buys & sells (Cash App BTC round-ups, stock trades, etc.)
       if (columns.assetTypeCol !== undefined && columns.assetAmountCol !== undefined) {
         const assetType = (row[columns.assetTypeCol] || '').trim().toUpperCase();
         const assetAmount = parseFloat((row[columns.assetAmountCol] || '0').replace(/[,$]/g, ''));
         if (assetType && assetAmount > 0) {
           if (!cryptoMap[assetType]) {
-            cryptoMap[assetType] = { totalAmount: 0, totalSpent: 0, count: 0, lastDate: '' };
+            cryptoMap[assetType] = { totalBought: 0, totalSold: 0, totalSpent: 0, totalProceeds: 0, buyCount: 0, sellCount: 0, lastBuyDate: '' };
           }
-          cryptoMap[assetType].totalAmount += assetAmount;
-          cryptoMap[assetType].totalSpent += Math.abs(rawAmount);
-          cryptoMap[assetType].count += 1;
-          const txDate = parseDate(dateStr);
-          if (!cryptoMap[assetType].lastDate || txDate > cryptoMap[assetType].lastDate) {
-            cryptoMap[assetType].lastDate = txDate;
+          // Negative rawAmount = money leaving = buy; Positive rawAmount = money coming in = sell
+          const isSell = rawAmount > 0 || description.toLowerCase().includes('sale of');
+          if (isSell) {
+            cryptoMap[assetType].totalSold += assetAmount;
+            cryptoMap[assetType].totalProceeds += Math.abs(rawAmount);
+            cryptoMap[assetType].sellCount += 1;
+          } else {
+            cryptoMap[assetType].totalBought += assetAmount;
+            cryptoMap[assetType].totalSpent += Math.abs(rawAmount);
+            cryptoMap[assetType].buyCount += 1;
+            const txDate = parseDate(dateStr);
+            if (!cryptoMap[assetType].lastBuyDate || txDate > cryptoMap[assetType].lastBuyDate) {
+              cryptoMap[assetType].lastBuyDate = txDate;
+            }
           }
         }
+      }
+
+      // Track savings transfers
+      const descLower = description.toLowerCase();
+      if (descLower === 'savings' || descLower.includes('savings internal transfer') || descLower.includes('savings transfer')) {
+        const amt = Math.abs(rawAmount);
+        // Negative rawAmount = money leaving checking to savings = deposit into savings
+        if (rawAmount < 0) {
+          savings.deposits += amt;
+        } else {
+          savings.withdrawals += amt;
+        }
+        savings.count += 1;
+        const txDate = parseDate(dateStr);
+        if (!savings.lastDate || txDate > savings.lastDate) savings.lastDate = txDate;
+      }
+
+      // Track borrows and repayments
+      if (descLower.includes('borrowing in cash app') || descLower.includes('borrow')) {
+        const key = 'Cash App Borrow';
+        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
+        debtMap[key].borrowed += Math.abs(rawAmount);
+        debtMap[key].count += 1;
+        const txDate = parseDate(dateStr);
+        if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
+      } else if (descLower.includes('repayment') || (descLower.includes('overdraft') && rawAmount < 0)) {
+        const key = 'Cash App Borrow';
+        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
+        debtMap[key].repaid += Math.abs(rawAmount);
+        debtMap[key].count += 1;
+        const txDate = parseDate(dateStr);
+        if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
+      } else if (descLower.includes('afterpay')) {
+        const key = 'Afterpay';
+        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
+        // Afterpay payments are repayments (money going out)
+        debtMap[key].repaid += Math.abs(rawAmount);
+        debtMap[key].count += 1;
+        const txDate = parseDate(dateStr);
+        if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
       }
     } catch (err) {
       errors.push(`Row ${i + 1}: Parse error`);
@@ -597,22 +678,70 @@ export function parseCSVTransactions(
   const totalOut = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
   // Build crypto accumulations
-  const cryptoAccumulations: CryptoAccumulation[] = Object.entries(cryptoMap).map(([asset, data]) => ({
-    asset,
-    totalAmount: data.totalAmount,
-    totalSpent: data.totalSpent,
-    avgPrice: data.totalSpent / data.totalAmount,
-    purchaseCount: data.count,
-    lastPurchaseDate: data.lastDate,
-  }));
+  const cryptoAccumulations: CryptoAccumulation[] = Object.entries(cryptoMap).map(([asset, data]) => {
+    const netAmount = data.totalBought - data.totalSold;
+    const avgBuyPrice = data.totalBought > 0 ? data.totalSpent / data.totalBought : 0;
+    // Realized P&L: proceeds from sells - cost basis of sold units (using avg buy price)
+    const costBasisSold = data.totalSold * avgBuyPrice;
+    const realizedPnL = data.totalProceeds - costBasisSold;
+    return {
+      asset,
+      totalBought: data.totalBought,
+      totalSold: data.totalSold,
+      totalAmount: netAmount,
+      totalSpent: data.totalSpent,
+      totalProceeds: data.totalProceeds,
+      avgPrice: avgBuyPrice,
+      purchaseCount: data.buyCount,
+      sellCount: data.sellCount,
+      realizedPnL,
+      lastPurchaseDate: data.lastBuyDate,
+    };
+  });
 
   if (cryptoAccumulations.length > 0) {
-    console.log('[CSV_IMPORT] Crypto detected:', cryptoAccumulations.map(c => `${c.totalAmount} ${c.asset} ($${c.totalSpent.toFixed(2)} spent)`).join(', '));
+    console.log('[CSV_IMPORT] Assets detected:', cryptoAccumulations.map(c =>
+      `${c.asset}: bought ${c.totalBought} ($${c.totalSpent.toFixed(2)}), sold ${c.totalSold} ($${c.totalProceeds.toFixed(2)}), net ${c.totalAmount}`
+    ).join(', '));
+  }
+
+  // Build savings accumulation
+  const savingsAccumulation: SavingsAccumulation | undefined = savings.count > 0 ? {
+    totalDeposits: savings.deposits,
+    totalWithdrawals: savings.withdrawals,
+    netBalance: savings.deposits - savings.withdrawals,
+    transactionCount: savings.count,
+    lastDate: savings.lastDate,
+  } : undefined;
+
+  if (savingsAccumulation) {
+    console.log(`[CSV_IMPORT] Savings detected: $${savingsAccumulation.totalDeposits.toFixed(2)} in, $${savingsAccumulation.totalWithdrawals.toFixed(2)} out, net $${savingsAccumulation.netBalance.toFixed(2)}`);
+  }
+
+  // Build debt accumulations
+  const debtAccumulations: DebtAccumulation[] = Object.entries(debtMap).map(([name, data]) => ({
+    name,
+    totalBorrowed: data.borrowed,
+    totalRepaid: data.repaid,
+    outstandingBalance: data.borrowed - data.repaid,
+    transactionCount: data.count,
+    lastDate: data.lastDate,
+  }));
+
+  if (debtAccumulations.length > 0) {
+    console.log('[CSV_IMPORT] Debts detected:', debtAccumulations.map(d =>
+      `${d.name}: borrowed $${d.totalBorrowed.toFixed(2)}, repaid $${d.totalRepaid.toFixed(2)}, outstanding $${d.outstandingBalance.toFixed(2)}`
+    ).join(', '));
   }
 
   const summary = `${transactions.length} transactions: ${incomeCount} deposits ($${totalIn.toLocaleString()}), ${expenseCount} expenses ($${totalOut.toLocaleString()})`;
 
-  return { transactions, errors, summary, cryptoAccumulations: cryptoAccumulations.length > 0 ? cryptoAccumulations : undefined };
+  return {
+    transactions, errors, summary,
+    cryptoAccumulations: cryptoAccumulations.length > 0 ? cryptoAccumulations : undefined,
+    savingsAccumulation,
+    debtAccumulations: debtAccumulations.length > 0 ? debtAccumulations : undefined,
+  };
 }
 
 /**

@@ -28,6 +28,26 @@ import * as FileSystem from 'expo-file-system';
 // ─── View modes ────────────────────────────────────────────────────────────────
 type ViewMode = 'transactions' | 'budget' | 'recurring';
 
+// ─── Institution logos ─────────────────────────────────────────────────────────
+const INSTITUTION_LOGOS: Record<string, { uri: string; bg: string }> = {
+  'Cash App':   { uri: 'https://logo.clearbit.com/cash.app',       bg: '#00D632' },
+  'Chase':      { uri: 'https://logo.clearbit.com/chase.com',      bg: '#117ACA' },
+  'SoFi':       { uri: 'https://logo.clearbit.com/sofi.com',       bg: '#6933FF' },
+  'Wells Fargo':{ uri: 'https://logo.clearbit.com/wellsfargo.com', bg: '#D71E28' },
+  'Bank of America': { uri: 'https://logo.clearbit.com/bankofamerica.com', bg: '#012169' },
+  'Capital One':{ uri: 'https://logo.clearbit.com/capitalone.com', bg: '#004977' },
+  'Ally':       { uri: 'https://logo.clearbit.com/ally.com',       bg: '#4F2683' },
+  'Discover':   { uri: 'https://logo.clearbit.com/discover.com',   bg: '#FF6600' },
+  'Chime':      { uri: 'https://logo.clearbit.com/chime.com',      bg: '#00D54B' },
+  'USAA':       { uri: 'https://logo.clearbit.com/usaa.com',       bg: '#003D6B' },
+  'Navy Federal': { uri: 'https://logo.clearbit.com/navyfederal.org', bg: '#003468' },
+  'PNC':        { uri: 'https://logo.clearbit.com/pnc.com',        bg: '#F58025' },
+  'TD Bank':    { uri: 'https://logo.clearbit.com/td.com',         bg: '#2D8B2D' },
+  'US Bank':    { uri: 'https://logo.clearbit.com/usbank.com',     bg: '#D71E28' },
+  'Citi':       { uri: 'https://logo.clearbit.com/citi.com',       bg: '#003B70' },
+  'Citibank':   { uri: 'https://logo.clearbit.com/citi.com',       bg: '#003B70' },
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
@@ -99,6 +119,8 @@ export default function BankAccountDetailScreen() {
   const assets = useStore(s => s.assets);
   const addAsset = useStore(s => s.addAsset);
   const updateAsset = useStore(s => s.updateAsset);
+  const addBankAccount = useStore(s => s.addBankAccount);
+  const updateDebt = useStore(s => s.updateDebt);
 
   const account = bankAccounts.find(a => a.id === id);
   const accountTransactions = useMemo(
@@ -589,33 +611,44 @@ export default function BankAccountDetailScreen() {
         if (data[coingeckoId]?.usd) currentPrice = data[coingeckoId].usd;
       } catch {}
 
-      const currentValue = crypto.totalAmount * currentPrice;
+      // Build summary lines
+      const lines: string[] = [];
+      if (crypto.purchaseCount > 0) lines.push(`Bought: ${crypto.totalBought.toFixed(8)} ${crypto.asset} ($${crypto.totalSpent.toFixed(2)}) from ${crypto.purchaseCount} purchases`);
+      if (crypto.sellCount > 0) lines.push(`Sold: ${crypto.totalSold.toFixed(8)} ${crypto.asset} ($${crypto.totalProceeds.toFixed(2)}) from ${crypto.sellCount} sales`);
+      if (crypto.sellCount > 0) lines.push(`Realized P&L: ${crypto.realizedPnL >= 0 ? '+' : ''}$${crypto.realizedPnL.toFixed(2)}`);
+
+      const netAmount = crypto.totalAmount; // already net (bought - sold)
 
       if (existing) {
-        // Merge: add new amount to existing
+        // Merge: apply net change to existing position
         const prevQty = (existing.metadata as any)?.quantity || 0;
         const prevSpent = (existing.metadata as any)?.totalSpent || 0;
-        const newQty = prevQty + crypto.totalAmount;
+        const prevProceeds = (existing.metadata as any)?.totalProceeds || 0;
+        const prevRealizedPnL = (existing.metadata as any)?.realizedPnL || 0;
+        const newQty = prevQty + netAmount;
         const newSpent = prevSpent + crypto.totalSpent;
+        const newProceeds = prevProceeds + crypto.totalProceeds;
+        const newRealizedPnL = prevRealizedPnL + crypto.realizedPnL;
         updateAsset(assetId, {
-          value: newQty * currentPrice,
+          value: Math.max(0, newQty) * currentPrice,
           metadata: {
             ...existing.metadata,
             type: 'crypto',
             symbol: crypto.asset,
-            quantity: newQty,
+            quantity: Math.max(0, newQty),
             priceUSD: currentPrice,
             totalSpent: newSpent,
-            avgCost: newSpent / newQty,
-            description: `Cash App ${crypto.asset} round-ups`,
+            totalProceeds: newProceeds,
+            avgCost: newQty > 0 ? newSpent / (prevQty + crypto.totalBought) : 0,
+            realizedPnL: newRealizedPnL,
+            description: `Cash App ${crypto.asset}`,
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        Alert.alert(
-          `${crypto.asset} Updated`,
-          `Added ${crypto.totalAmount.toFixed(8)} ${crypto.asset} from ${crypto.purchaseCount} round-ups.\n\nTotal: ${newQty.toFixed(8)} ${crypto.asset} ($${(newQty * currentPrice).toFixed(2)})`,
-        );
+        lines.push(`\nNet position: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
+        Alert.alert(`${crypto.asset} Updated`, lines.join('\n'));
       } else {
+        const currentValue = Math.max(0, netAmount) * currentPrice;
         addAsset({
           id: assetId,
           type: 'crypto',
@@ -625,21 +658,91 @@ export default function BankAccountDetailScreen() {
           metadata: {
             type: 'crypto',
             symbol: crypto.asset,
-            quantity: crypto.totalAmount,
+            quantity: Math.max(0, netAmount),
             priceUSD: currentPrice,
             totalSpent: crypto.totalSpent,
+            totalProceeds: crypto.totalProceeds,
             avgCost: crypto.avgPrice,
-            description: `Cash App ${crypto.asset} round-ups`,
+            realizedPnL: crypto.realizedPnL,
+            description: `Cash App ${crypto.asset}`,
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        Alert.alert(
-          `${crypto.asset} Asset Created`,
-          `${crypto.totalAmount.toFixed(8)} ${crypto.asset} from ${crypto.purchaseCount} round-ups added to your Assets.\n\nValue: $${currentValue.toFixed(2)} at $${currentPrice.toLocaleString()}/${crypto.asset}`,
-        );
+        lines.push(`\nNet position: ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
+        Alert.alert(`${crypto.asset} Asset Created`, lines.join('\n'));
       }
     }
   }, [assets, addAsset, updateAsset]);
+
+  // ── Handle savings accumulation from CSV (e.g. Cash App Savings) ──
+  const handleSavingsAccumulation = useCallback((savingsData: NonNullable<typeof importPreview>['savingsAccumulation']) => {
+    if (!savingsData) return;
+    const savingsId = `cashapp_savings`;
+    const existing = bankAccounts.find(a => a.id === savingsId);
+
+    if (existing) {
+      // Update balance by adding net change
+      const newBalance = existing.currentBalance + savingsData.netBalance;
+      updateBankAccount(savingsId, { currentBalance: newBalance });
+      Alert.alert(
+        'Cash App Savings Updated',
+        `Deposits: +$${savingsData.totalDeposits.toFixed(2)}\nWithdrawals: -$${savingsData.totalWithdrawals.toFixed(2)}\nNew balance: $${newBalance.toFixed(2)}`,
+      );
+    } else {
+      addBankAccount({
+        id: savingsId,
+        name: 'Cash App Savings',
+        type: 'savings',
+        currentBalance: savingsData.netBalance,
+        institution: 'Cash App',
+        isPrimaryIncome: false,
+      });
+      Alert.alert(
+        'Cash App Savings Created',
+        `${savingsData.transactionCount} transfers detected.\nDeposits: +$${savingsData.totalDeposits.toFixed(2)}\nWithdrawals: -$${savingsData.totalWithdrawals.toFixed(2)}\nBalance: $${savingsData.netBalance.toFixed(2)}`,
+      );
+    }
+  }, [bankAccounts, addBankAccount, updateBankAccount]);
+
+  // ── Handle debt accumulations from CSV (e.g. Cash App Borrow, Afterpay) ──
+  const handleDebtAccumulations = useCallback((debtData: NonNullable<typeof importPreview>['debtAccumulations']) => {
+    if (!debtData || debtData.length === 0) return;
+
+    for (const debt of debtData) {
+      const debtId = `cashapp_${debt.name.toLowerCase().replace(/\s+/g, '_')}`;
+      const existing = debts.find(d => d.id === debtId);
+
+      if (existing) {
+        // Update: adjust balance based on new borrows and repayments
+        const newBalance = Math.max(0, (existing.balance ?? existing.principal) + debt.totalBorrowed - debt.totalRepaid);
+        updateDebt(debtId, {
+          balance: newBalance,
+          principal: existing.principal + debt.totalBorrowed,
+        });
+        Alert.alert(
+          `${debt.name} Updated`,
+          `Borrowed: +$${debt.totalBorrowed.toFixed(2)}\nRepaid: -$${debt.totalRepaid.toFixed(2)}\nOutstanding: $${newBalance.toFixed(2)}`,
+        );
+      } else {
+        addDebt({
+          id: debtId,
+          name: debt.name,
+          principal: debt.totalBorrowed,
+          balance: debt.outstandingBalance,
+          interestRate: 0,
+          monthlyPayment: 0,
+          minimumPayment: 0,
+          dueDate: 1,
+          bankAccountId: id as string,
+          payee: 'Cash App',
+        });
+        Alert.alert(
+          `${debt.name} Debt Created`,
+          `Borrowed: $${debt.totalBorrowed.toFixed(2)}\nRepaid: $${debt.totalRepaid.toFixed(2)}\nOutstanding: $${debt.outstandingBalance.toFixed(2)}`,
+        );
+      }
+    }
+  }, [debts, addDebt, updateDebt, id]);
 
   const handleConfirmImport = () => {
     if (!importPreview) return;
@@ -648,6 +751,16 @@ export default function BankAccountDetailScreen() {
     // Handle any crypto accumulations (Cash App BTC, etc.)
     if (importPreview.cryptoAccumulations) {
       handleCryptoAccumulations(importPreview.cryptoAccumulations);
+    }
+
+    // Handle savings accumulation (Cash App Savings)
+    if (importPreview.savingsAccumulation) {
+      handleSavingsAccumulation(importPreview.savingsAccumulation);
+    }
+
+    // Handle debt accumulations (Cash App Borrow, Afterpay)
+    if (importPreview.debtAccumulations) {
+      handleDebtAccumulations(importPreview.debtAccumulations);
     }
 
     setCsvText('');
@@ -762,9 +875,20 @@ export default function BankAccountDetailScreen() {
           style={s.accountHeader}
         >
           <View style={s.accountHeaderTop}>
-            <View>
-              <Text style={s.accountName}>{account.name}</Text>
-              <Text style={s.accountInstitution}>{account.institution} · {account.type}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              {INSTITUTION_LOGOS[account.institution] ? (
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: INSTITUTION_LOGOS[account.institution].bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <Image source={{ uri: INSTITUTION_LOGOS[account.institution].uri }} style={{ width: 32, height: 32, borderRadius: 6 }} resizeMode="contain" />
+                </View>
+              ) : (
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20 }}>🏦</Text>
+                </View>
+              )}
+              <View>
+                <Text style={s.accountName}>{account.name}</Text>
+                <Text style={s.accountInstitution}>{account.institution} · {account.type}</Text>
+              </View>
             </View>
             <TouchableOpacity style={s.balanceBox} onPress={() => {
               setBalanceInput((account.currentBalance ?? 0).toFixed(2));
@@ -1466,18 +1590,69 @@ export default function BankAccountDetailScreen() {
                     {importPreview.cryptoAccumulations && importPreview.cryptoAccumulations.length > 0 && (
                       <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
                         {importPreview.cryptoAccumulations.map((c, i) => (
-                          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ fontSize: 13, color: '#fbbf24', fontWeight: '700' }}>
-                              {c.totalAmount.toFixed(8)} {c.asset} detected
-                            </Text>
-                            <Text style={{ fontSize: 12, color: '#888' }}>
-                              {c.purchaseCount} round-ups (${c.totalSpent.toFixed(2)})
-                            </Text>
+                          <View key={i} style={{ marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 13, color: '#fbbf24', fontWeight: '700' }}>
+                                {c.asset} — net {c.totalAmount.toFixed(8)}
+                              </Text>
+                            </View>
+                            {c.purchaseCount > 0 && (
+                              <Text style={{ fontSize: 11, color: '#4ade80' }}>
+                                {c.purchaseCount} buys: {c.totalBought.toFixed(8)} (${c.totalSpent.toFixed(2)})
+                              </Text>
+                            )}
+                            {c.sellCount > 0 && (
+                              <Text style={{ fontSize: 11, color: '#f87171' }}>
+                                {c.sellCount} sells: {c.totalSold.toFixed(8)} (${c.totalProceeds.toFixed(2)}) P&L: {c.realizedPnL >= 0 ? '+' : ''}${c.realizedPnL.toFixed(2)}
+                              </Text>
+                            )}
                           </View>
                         ))}
                         <Text style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
                           Will be added to your Assets on import
                         </Text>
+                      </View>
+                    )}
+                    {importPreview.savingsAccumulation && (
+                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
+                        <Text style={{ fontSize: 13, color: '#60a5fa', fontWeight: '700' }}>
+                          Cash App Savings
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#4ade80' }}>
+                          Deposits: +${importPreview.savingsAccumulation.totalDeposits.toFixed(2)}
+                        </Text>
+                        {importPreview.savingsAccumulation.totalWithdrawals > 0 && (
+                          <Text style={{ fontSize: 11, color: '#f87171' }}>
+                            Withdrawals: -${importPreview.savingsAccumulation.totalWithdrawals.toFixed(2)}
+                          </Text>
+                        )}
+                        <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                          Net: ${importPreview.savingsAccumulation.netBalance.toFixed(2)} — will create/update savings account
+                        </Text>
+                      </View>
+                    )}
+                    {importPreview.debtAccumulations && importPreview.debtAccumulations.length > 0 && (
+                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
+                        {importPreview.debtAccumulations.map((d, i) => (
+                          <View key={i} style={{ marginBottom: 6 }}>
+                            <Text style={{ fontSize: 13, color: '#f87171', fontWeight: '700' }}>
+                              {d.name}
+                            </Text>
+                            {d.totalBorrowed > 0 && (
+                              <Text style={{ fontSize: 11, color: '#f87171' }}>
+                                Borrowed: ${d.totalBorrowed.toFixed(2)}
+                              </Text>
+                            )}
+                            {d.totalRepaid > 0 && (
+                              <Text style={{ fontSize: 11, color: '#4ade80' }}>
+                                Repaid: ${d.totalRepaid.toFixed(2)}
+                              </Text>
+                            )}
+                            <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                              Outstanding: ${d.outstandingBalance.toFixed(2)} — will create/update debt
+                            </Text>
+                          </View>
+                        ))}
                       </View>
                     )}
                   </View>
