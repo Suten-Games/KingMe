@@ -481,6 +481,7 @@ export interface DriftPerpPosition {
   sizeBase: number;
   sizeQuote: number;
   entryPrice: number;
+  oraclePrice: number;
   unrealizedPnl: number;
   breakEvenPrice: number;
 }

@@ -520,7 +520,6 @@ export default function TradingScreen() {
             )}
             {driftPositions.perpPositions.map((pos) => {
               const pnlPct = pos.entryPrice > 0 ? ((pos.unrealizedPnl / (pos.sizeBase * pos.entryPrice)) * 100) : 0;
-              const currentPrice = pos.sizeBase !== 0 ? pos.entryPrice + (pos.unrealizedPnl / pos.sizeBase) : pos.entryPrice;
               return (
                 <View key={`perp-${pos.marketIndex}`} style={[styles.positionCard, { borderLeftColor: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>
                   <View style={styles.positionHeader}>
@@ -550,10 +549,12 @@ export default function TradingScreen() {
                       <Text style={styles.positionDetailLabel}>Entry</Text>
                       <Text style={styles.positionDetailValue}>{formatCurrency(pos.entryPrice)}</Text>
                     </View>
-                    <View style={styles.positionDetail}>
-                      <Text style={styles.positionDetailLabel}>Current</Text>
-                      <Text style={[styles.positionDetailValue, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>{formatCurrency(currentPrice)}</Text>
-                    </View>
+                    {pos.oraclePrice > 0 && (
+                      <View style={styles.positionDetail}>
+                        <Text style={styles.positionDetailLabel}>Oracle</Text>
+                        <Text style={[styles.positionDetailValue, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>{formatCurrency(pos.oraclePrice)}</Text>
+                      </View>
+                    )}
                     <View style={styles.positionDetail}>
                       <Text style={styles.positionDetailLabel}>Break-even</Text>
                       <Text style={styles.positionDetailValue}>{formatCurrency(pos.breakEvenPrice)}</Text>
@@ -624,9 +625,7 @@ export default function TradingScreen() {
 
             <TouchableOpacity style={pf.driftBtn} onPress={chooseDrift}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#131A2A', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  <Image source={{ uri: 'https://logo.clearbit.com/drift.trade' }} style={{ width: 24, height: 24, borderRadius: 4 }} resizeMode="contain" />
-                </View>
+                <Image source={{ uri: DRIFT_LOGO }} style={{ width: 32, height: 32, borderRadius: 8 }} />
                 <View>
                   <Text style={pf.driftBtnText}>Drift <Text style={{ color: '#888', fontWeight: '400', fontSize: 12 }}>(Recommended)</Text></Text>
                   <Text style={pf.driftBtnSub}>Decentralized perps on Solana — auto-sync trades on-chain</Text>
