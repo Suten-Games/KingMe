@@ -520,6 +520,7 @@ export default function TradingScreen() {
             )}
             {driftPositions.perpPositions.map((pos) => {
               const pnlPct = pos.entryPrice > 0 ? ((pos.unrealizedPnl / (pos.sizeBase * pos.entryPrice)) * 100) : 0;
+              const currentPrice = pos.sizeBase !== 0 ? pos.entryPrice + (pos.unrealizedPnl / pos.sizeBase) : pos.entryPrice;
               return (
                 <View key={`perp-${pos.marketIndex}`} style={[styles.positionCard, { borderLeftColor: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>
                   <View style={styles.positionHeader}>
@@ -548,6 +549,10 @@ export default function TradingScreen() {
                     <View style={styles.positionDetail}>
                       <Text style={styles.positionDetailLabel}>Entry</Text>
                       <Text style={styles.positionDetailValue}>{formatCurrency(pos.entryPrice)}</Text>
+                    </View>
+                    <View style={styles.positionDetail}>
+                      <Text style={styles.positionDetailLabel}>Current</Text>
+                      <Text style={[styles.positionDetailValue, { color: pos.unrealizedPnl >= 0 ? '#4ade80' : '#f87171' }]}>{formatCurrency(currentPrice)}</Text>
                     </View>
                     <View style={styles.positionDetail}>
                       <Text style={styles.positionDetailLabel}>Break-even</Text>
