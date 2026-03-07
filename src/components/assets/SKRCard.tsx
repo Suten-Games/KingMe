@@ -12,9 +12,9 @@ function alert(title: string, msg?: string) {
 }
 
 type ShowToast = (config:
-  | { type: 'loading'; symbol: string; percentage: number }
-  | { type: 'success'; symbol: string; usdReceived: number; signature: string }
-  | { type: 'error'; message: string }
+  | { type: 'loading'; symbol: string; percentage: number; label?: string; detail?: string; topLabel?: string }
+  | { type: 'success'; symbol: string; usdReceived: number; signature: string; label?: string; topLabel?: string }
+  | { type: 'error'; message: string; topLabel?: string }
 ) => void;
 
 interface SKRCardProps {
@@ -50,7 +50,13 @@ export default function SKRCard({ holding, income, onEdit, onRefresh, showToast 
 
     const wallet = publicKey.toBase58();
     setLoading(true);
-    showToast?.({ type: 'loading', symbol: 'SKR', percentage: 0 });
+    const actionLabel = action === 'stake' ? 'Staking' : 'Unstaking';
+    showToast?.({
+      type: 'loading', symbol: 'SKR', percentage: 0,
+      topLabel: `${actionLabel.toUpperCase()} SKR`,
+      label: `${actionLabel} ${amt} SKR…`,
+      detail: 'Confirm in wallet',
+    });
 
     try {
       console.log(`[SKR] Building ${action} tx for ${amt} SKR...`);
@@ -86,6 +92,12 @@ export default function SKRCard({ holding, income, onEdit, onRefresh, showToast 
       }
 
       console.log(`[SKR] ${action} tx sent: ${signature}, confirming on-chain...`);
+      showToast?.({
+        type: 'loading', symbol: 'SKR', percentage: 0,
+        topLabel: `${actionLabel.toUpperCase()} SKR`,
+        label: `${actionLabel} ${amt} SKR…`,
+        detail: 'Confirming on-chain…',
+      });
 
       // Poll for on-chain confirmation via RPC proxy
       const rpcProxy = `${process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money'}/api/rpc/send`;
@@ -125,13 +137,17 @@ export default function SKRCard({ holding, income, onEdit, onRefresh, showToast 
         throw new Error(`Transaction sent (${signature.slice(0, 12)}...) but not confirmed after 30s. Check Solscan.`);
       }
 
-      showToast?.({ type: 'success', symbol: 'SKR', usdReceived: amt * (holding.priceUsd || 0), signature });
+      showToast?.({
+        type: 'success', symbol: 'SKR', usdReceived: amt * (holding.priceUsd || 0), signature,
+        topLabel: `${actionLabel.toUpperCase()} COMPLETE`,
+        label: `${amt} SKR ${action === 'stake' ? 'staked' : 'unstaked'} successfully`,
+      });
       setAction(null);
       setAmount('');
       onRefresh?.();
     } catch (err: any) {
       console.error(`[SKR] ${action} failed:`, err);
-      showToast?.({ type: 'error', message: err.message || 'Transaction failed' });
+      showToast?.({ type: 'error', message: err.message || 'Transaction failed', topLabel: `${actionLabel.toUpperCase()} FAILED` });
     } finally {
       setLoading(false);
     }

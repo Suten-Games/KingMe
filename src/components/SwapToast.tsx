@@ -11,9 +11,9 @@ import * as Linking from 'expo-linking';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type ToastConfig =
-  | { type: 'loading'; symbol: string; percentage: number }
-  | { type: 'success'; symbol: string; usdReceived: number; signature: string }
-  | { type: 'error'; message: string };
+  | { type: 'loading'; symbol: string; percentage: number; label?: string; detail?: string; topLabel?: string }
+  | { type: 'success'; symbol: string; usdReceived: number; signature: string; label?: string; topLabel?: string }
+  | { type: 'error'; message: string; topLabel?: string };
 
 // ── Theme per state ──────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ const THEMES = {
     border: '#60a5fa80',
     emojiBg: '#1a2a4a',
     accent: '#60a5fa',
-    label: 'SWAP PENDING',
+    defaultLabel: 'SWAP PENDING',
     emoji: '⏳',
   },
   success: {
@@ -31,7 +31,7 @@ const THEMES = {
     border: '#4ade8080',
     emojiBg: '#0f2a1a',
     accent: '#4ade80',
-    label: 'SWAP COMPLETE',
+    defaultLabel: 'SWAP COMPLETE',
     emoji: '✅',
   },
   error: {
@@ -39,7 +39,7 @@ const THEMES = {
     border: '#ff6b6b80',
     emojiBg: '#2a1010',
     accent: '#ff6b6b',
-    label: 'SWAP FAILED',
+    defaultLabel: 'SWAP FAILED',
     emoji: '❌',
   },
 } as const;
@@ -97,15 +97,16 @@ export function useSwapToast() {
     if (!config) return null;
 
     const theme = THEMES[config.type];
+    const topLabel = config.topLabel || theme.defaultLabel;
 
     let name = '';
     let detail = '';
 
     if (config.type === 'loading') {
-      name = `Trimming ${config.percentage}% of ${config.symbol}…`;
-      detail = 'Waiting for Phantom to sign';
+      name = config.label || `Trimming ${config.percentage}% of ${config.symbol}…`;
+      detail = config.detail || 'Waiting for Phantom to sign';
     } else if (config.type === 'success') {
-      name = `${config.symbol} → +$${(config.usdReceived ?? 0).toFixed(2)} received`;
+      name = config.label || `${config.symbol} → +$${(config.usdReceived ?? 0).toFixed(2)} received`;
       detail = `tx ${config.signature.slice(0, 12)}… · Tap to view on Solscan`;
     } else {
       name = 'Transaction failed';
@@ -148,7 +149,7 @@ export function useSwapToast() {
           {/* Info block */}
           <View style={s.info}>
             <View style={s.titleRow}>
-              <Text style={[s.label, { color: theme.accent }]}>{theme.label}</Text>
+              <Text style={[s.label, { color: theme.accent }]}>{topLabel}</Text>
             </View>
             <Text style={s.name} numberOfLines={1}>{name}</Text>
             <Text style={s.detail} numberOfLines={1}>{detail}</Text>
