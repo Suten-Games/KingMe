@@ -301,8 +301,10 @@ export default function AssetsScreen() {
     }
     try {
       await syncWalletAssets(wallets[0]);
+      // Also refresh SKR staking data
+      refreshSkr();
       const syncedCount = assets.filter(a => a.isAutoSynced).length;
-      Alert.alert('✅ Sync Complete', `Successfully synced ${syncedCount} assets from your wallet!`, [{ text: 'OK' }]);
+      Alert.alert('Sync Complete', `Successfully synced ${syncedCount} assets from your wallet!`, [{ text: 'OK' }]);
     } catch {
       Alert.alert('Sync Failed', 'Could not sync wallet. Please try again later.', [{ text: 'OK' }]);
     }
