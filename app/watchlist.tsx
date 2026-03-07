@@ -652,7 +652,15 @@ export default function WatchlistScreen() {
           const ext = extData[token.mint];
           if (!ext) return null;
 
-          const currentPrice = price?.currentPrice ?? 0;
+          // Fall back to store asset price if Jupiter/DexScreener didn't return one
+          let currentPrice = price?.currentPrice ?? 0;
+          if (currentPrice <= 0) {
+            const storeAsset = assets.find(a => {
+              const m = (a.metadata as any)?.tokenMint || (a.metadata as any)?.mint;
+              return m === token.mint;
+            });
+            if (storeAsset) currentPrice = (storeAsset.metadata as any)?.priceUSD || 0;
+          }
           const signal = getEntrySignal(ext, currentPrice);
           const dropFromAdd = ext.addedPrice > 0
             ? ((currentPrice - ext.addedPrice) / ext.addedPrice) * 100
