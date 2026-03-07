@@ -63,7 +63,8 @@ export default function WalletHeaderButton() {
       }
     } catch (error: any) {
       if (!error.message?.includes('User rejected')) {
-        Alert.alert('Connection Failed', error.message || 'Failed to connect wallet');
+        logError('[Wallet] Connect error:', error);
+        Alert.alert('Connection Failed', 'Unable to connect wallet. Please try again.');
       }
     }
   };

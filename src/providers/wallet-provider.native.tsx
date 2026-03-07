@@ -9,6 +9,7 @@ import * as MWA from '../services/mwaWallet';
 import WalletPickerModal from '../components/WalletPickerModal';
 import type { WalletOption } from '../components/WalletPickerModal';
 import { log, warn, error as logError } from '../utils/logger';
+import { useStore } from '../store/useStore';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -116,12 +117,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setConnecting(true);
     setConnectingWallet(option);
 
+    let connectedPubKey: PublicKey | null = null;
+
     try {
       switch (option) {
         case 'mwa': {
           const result = await MWA.connect();
           setMwaConnected(true);
           setMwaPubKey(result.publicKey);
+          connectedPubKey = result.publicKey;
           break;
         }
         case 'phantom':
@@ -130,6 +134,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           const result = await PhantomDeepLink.connect();
           setPhantomConnected(true);
           setPhantomPubKey(result.publicKey);
+          connectedPubKey = result.publicKey;
           break;
         }
         case 'solflare':
@@ -144,6 +149,20 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           throw new Error(`${option} not supported yet`);
       }
       setShowPicker(false);
+
+      // Save wallet address to zustand store so the rest of the app knows it's connected
+      if (connectedPubKey) {
+        const address = connectedPubKey.toBase58();
+        const currentWallets = useStore.getState().wallets;
+        if (!currentWallets.includes(address)) {
+          useStore.setState({ wallets: [...currentWallets, address] });
+          await useStore.getState().saveProfile();
+        }
+        // Auto-sync wallet assets
+        useStore.getState().syncWalletAssets(address).catch((e: any) =>
+          logError('[Wallet] Auto-sync failed:', e)
+        );
+      }
     } catch (error: any) {
       logError(`🔴 ${option} connect failed:`, error);
     } finally {
