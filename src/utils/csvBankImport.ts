@@ -174,6 +174,7 @@ interface ColumnMap {
   typeCol?: number;    // SoFi has a "Type" column (P2P, DEBIT_CARD, DEPOSIT)
   statusCol?: number;  // SoFi has "Status" (Posted, Pending)
   senderCol?: number;  // Cash App has "Name of sender/receiver"
+  currencyCol?: number;    // Cash App: "Currency" (USD, BTC)
   assetTypeCol?: number;   // Cash App: "Asset Type" (BTC)
   assetAmountCol?: number; // Cash App: "Asset Amount" (0.00000482)
   assetPriceCol?: number;  // Cash App: "Asset Price" ($70,606.40)
@@ -196,12 +197,17 @@ export interface CryptoAccumulation {
   asset: string;       // e.g. "BTC"
   totalBought: number; // total crypto purchased
   totalSold: number;   // total crypto sold
-  totalAmount: number; // net position (bought - sold)
+  totalTransferIn: number;  // total crypto received (deposits)
+  totalTransferOut: number; // total crypto sent (withdrawals)
+  totalAmount: number; // net position (bought - sold + transferIn - transferOut)
   totalSpent: number;  // total USD spent on buys
   totalProceeds: number; // total USD received from sells
   avgPrice: number;    // average purchase price
   purchaseCount: number;
   sellCount: number;
+  transferCount: number;
+  unknownQtyBuys: number; // recurring buys where BTC quantity not provided
+  unknownQtySpent: number; // USD spent on those buys
   realizedPnL: number; // proceeds - cost basis of sold units
   lastPurchaseDate: string;
 }
@@ -248,6 +254,11 @@ function detectColumns(headers: string[]): ColumnMap {
     h === 'status' || h === 'transaction status'
   );
 
+  // Cash App currency column (USD, BTC, etc.)
+  const currencyCol = lower.findIndex(h =>
+    h === 'currency'
+  );
+
   // Cash App crypto columns
   const assetTypeCol = lower.findIndex(h =>
     h === 'asset type' || h === 'asset'
@@ -268,6 +279,7 @@ function detectColumns(headers: string[]): ColumnMap {
     typeCol: typeCol >= 0 ? typeCol : undefined,
     statusCol: statusCol >= 0 ? statusCol : undefined,
     senderCol: senderCol >= 0 ? senderCol : undefined,
+    currencyCol: currencyCol >= 0 ? currencyCol : undefined,
     assetTypeCol: assetTypeCol >= 0 ? assetTypeCol : undefined,
     assetAmountCol: assetAmountCol >= 0 ? assetAmountCol : undefined,
     assetPriceCol: assetPriceCol >= 0 ? assetPriceCol : undefined,
@@ -494,8 +506,8 @@ export function parseCSVTransactions(
   console.log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
   console.log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
 
-  // Track crypto buys & sells (e.g. Cash App BTC round-ups, stock trades)
-  const cryptoMap: Record<string, { totalBought: number; totalSold: number; totalSpent: number; totalProceeds: number; buyCount: number; sellCount: number; lastBuyDate: string }> = {};
+  // Track crypto buys, sells & transfers (e.g. Cash App BTC round-ups, stock trades)
+  const cryptoMap: Record<string, { totalBought: number; totalSold: number; totalTransferIn: number; totalTransferOut: number; totalSpent: number; totalProceeds: number; buyCount: number; sellCount: number; transferCount: number; unknownQtyBuys: number; unknownQtySpent: number; lastBuyDate: string }> = {};
 
   // Track savings transfers (Cash App doesn't differentiate deposit vs withdrawal direction)
   const savings = { totalVolume: 0, count: 0, lastDate: '' };
@@ -531,6 +543,28 @@ export function parseCSVTransactions(
       if (columns.statusCol !== undefined) {
         const status = (row[columns.statusCol] || '').trim().toLowerCase();
         if (status === 'pending') continue; // only import posted transactions
+      }
+
+      // Handle non-USD currency rows (e.g. Cash App BTC Withdrawal/Deposit)
+      // These are crypto transfers, not USD transactions
+      if (columns.currencyCol !== undefined) {
+        const currency = (row[columns.currencyCol] || '').trim().toUpperCase();
+        if (currency && currency !== 'USD') {
+          // Amount is in crypto units, not dollars
+          const cryptoAmount = parseFloat((row[columns.amountCol] || '0').replace(/[,$]/g, ''));
+          if (cryptoAmount !== 0) {
+            if (!cryptoMap[currency]) {
+              cryptoMap[currency] = { totalBought: 0, totalSold: 0, totalTransferIn: 0, totalTransferOut: 0, totalSpent: 0, totalProceeds: 0, buyCount: 0, sellCount: 0, transferCount: 0, unknownQtyBuys: 0, unknownQtySpent: 0, lastBuyDate: '' };
+            }
+            if (cryptoAmount > 0) {
+              cryptoMap[currency].totalTransferIn += cryptoAmount;
+            } else {
+              cryptoMap[currency].totalTransferOut += Math.abs(cryptoAmount);
+            }
+            cryptoMap[currency].transferCount += 1;
+          }
+          continue; // Don't create a USD bank transaction for crypto transfers
+        }
       }
 
       // Determine amount
@@ -596,23 +630,38 @@ export function parseCSVTransactions(
       transactions.push(transaction);
 
       // Track crypto/stock buys & sells (Cash App BTC round-ups, stock trades, etc.)
-      if (columns.assetTypeCol !== undefined && columns.assetAmountCol !== undefined) {
+      if (columns.assetTypeCol !== undefined) {
         const assetType = (row[columns.assetTypeCol] || '').trim().toUpperCase();
-        const assetAmount = parseFloat((row[columns.assetAmountCol] || '0').replace(/[,$]/g, ''));
-        if (assetType && assetAmount > 0) {
+        const assetAmount = columns.assetAmountCol !== undefined
+          ? parseFloat((row[columns.assetAmountCol] || '0').replace(/[,$]/g, ''))
+          : 0;
+
+        if (assetType) {
           if (!cryptoMap[assetType]) {
-            cryptoMap[assetType] = { totalBought: 0, totalSold: 0, totalSpent: 0, totalProceeds: 0, buyCount: 0, sellCount: 0, lastBuyDate: '' };
+            cryptoMap[assetType] = { totalBought: 0, totalSold: 0, totalTransferIn: 0, totalTransferOut: 0, totalSpent: 0, totalProceeds: 0, buyCount: 0, sellCount: 0, transferCount: 0, unknownQtyBuys: 0, unknownQtySpent: 0, lastBuyDate: '' };
           }
-          // Negative rawAmount = money leaving = buy; Positive rawAmount = money coming in = sell
-          const isSell = rawAmount > 0 || description.toLowerCase().includes('sale of');
-          if (isSell) {
-            cryptoMap[assetType].totalSold += assetAmount;
-            cryptoMap[assetType].totalProceeds += Math.abs(rawAmount);
-            cryptoMap[assetType].sellCount += 1;
-          } else {
-            cryptoMap[assetType].totalBought += assetAmount;
-            cryptoMap[assetType].totalSpent += Math.abs(rawAmount);
-            cryptoMap[assetType].buyCount += 1;
+
+          if (assetAmount > 0) {
+            // We know the crypto quantity — track buy or sell
+            const isSell = rawAmount > 0 || description.toLowerCase().includes('sale of');
+            if (isSell) {
+              cryptoMap[assetType].totalSold += assetAmount;
+              cryptoMap[assetType].totalProceeds += Math.abs(rawAmount);
+              cryptoMap[assetType].sellCount += 1;
+            } else {
+              cryptoMap[assetType].totalBought += assetAmount;
+              cryptoMap[assetType].totalSpent += Math.abs(rawAmount);
+              cryptoMap[assetType].buyCount += 1;
+              const txDate = parseDate(dateStr);
+              if (!cryptoMap[assetType].lastBuyDate || txDate > cryptoMap[assetType].lastBuyDate) {
+                cryptoMap[assetType].lastBuyDate = txDate;
+              }
+            }
+          } else if (rawAmount < 0) {
+            // Has asset type but no asset amount (e.g. Cash App "Bitcoin Recurring Buy")
+            // We know USD spent but not crypto quantity received
+            cryptoMap[assetType].unknownQtyBuys += 1;
+            cryptoMap[assetType].unknownQtySpent += Math.abs(rawAmount);
             const txDate = parseDate(dateStr);
             if (!cryptoMap[assetType].lastBuyDate || txDate > cryptoMap[assetType].lastBuyDate) {
               cryptoMap[assetType].lastBuyDate = txDate;
@@ -662,7 +711,7 @@ export function parseCSVTransactions(
 
   // Build crypto accumulations
   const cryptoAccumulations: CryptoAccumulation[] = Object.entries(cryptoMap).map(([asset, data]) => {
-    const netAmount = data.totalBought - data.totalSold;
+    const netAmount = data.totalBought - data.totalSold + data.totalTransferIn - data.totalTransferOut;
     const avgBuyPrice = data.totalBought > 0 ? data.totalSpent / data.totalBought : 0;
     // Realized P&L: proceeds from sells - cost basis of sold units (using avg buy price)
     const costBasisSold = data.totalSold * avgBuyPrice;
@@ -671,21 +720,30 @@ export function parseCSVTransactions(
       asset,
       totalBought: data.totalBought,
       totalSold: data.totalSold,
+      totalTransferIn: data.totalTransferIn,
+      totalTransferOut: data.totalTransferOut,
       totalAmount: netAmount,
       totalSpent: data.totalSpent,
       totalProceeds: data.totalProceeds,
       avgPrice: avgBuyPrice,
       purchaseCount: data.buyCount,
       sellCount: data.sellCount,
+      transferCount: data.transferCount,
+      unknownQtyBuys: data.unknownQtyBuys,
+      unknownQtySpent: data.unknownQtySpent,
       realizedPnL,
       lastPurchaseDate: data.lastBuyDate,
     };
   });
 
   if (cryptoAccumulations.length > 0) {
-    console.log('[CSV_IMPORT] Assets detected:', cryptoAccumulations.map(c =>
-      `${c.asset}: bought ${c.totalBought} ($${c.totalSpent.toFixed(2)}), sold ${c.totalSold} ($${c.totalProceeds.toFixed(2)}), net ${c.totalAmount}`
-    ).join(', '));
+    console.log('[CSV_IMPORT] Assets detected:', cryptoAccumulations.map(c => {
+      let s = `${c.asset}: bought ${c.totalBought.toFixed(8)} ($${c.totalSpent.toFixed(2)}), sold ${c.totalSold.toFixed(8)} ($${c.totalProceeds.toFixed(2)})`;
+      if (c.transferCount > 0) s += `, transfers: +${c.totalTransferIn.toFixed(8)} -${c.totalTransferOut.toFixed(8)}`;
+      if (c.unknownQtyBuys > 0) s += `, ${c.unknownQtyBuys} recurring buys ($${c.unknownQtySpent.toFixed(2)}) qty unknown`;
+      s += `, net ${c.totalAmount.toFixed(8)}`;
+      return s;
+    }).join(', '));
   }
 
   // Build savings accumulation

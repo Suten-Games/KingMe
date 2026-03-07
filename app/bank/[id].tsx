@@ -614,10 +614,12 @@ export default function BankAccountDetailScreen() {
       // Build summary lines
       const lines: string[] = [];
       if (crypto.purchaseCount > 0) lines.push(`Bought: ${crypto.totalBought.toFixed(8)} ${crypto.asset} ($${crypto.totalSpent.toFixed(2)}) from ${crypto.purchaseCount} purchases`);
+      if (crypto.unknownQtyBuys > 0) lines.push(`Recurring buys: ${crypto.unknownQtyBuys}x ($${crypto.unknownQtySpent.toFixed(2)}) — qty not in CSV`);
       if (crypto.sellCount > 0) lines.push(`Sold: ${crypto.totalSold.toFixed(8)} ${crypto.asset} ($${crypto.totalProceeds.toFixed(2)}) from ${crypto.sellCount} sales`);
+      if (crypto.transferCount > 0) lines.push(`Transfers: +${crypto.totalTransferIn.toFixed(8)} / -${crypto.totalTransferOut.toFixed(8)} (${crypto.transferCount} txns)`);
       if (crypto.sellCount > 0) lines.push(`Realized P&L: ${crypto.realizedPnL >= 0 ? '+' : ''}$${crypto.realizedPnL.toFixed(2)}`);
 
-      const netAmount = crypto.totalAmount; // already net (bought - sold)
+      const netAmount = crypto.totalAmount; // net = bought - sold + transferIn - transferOut
 
       if (existing) {
         // Merge: apply net change to existing position
@@ -645,8 +647,8 @@ export default function BankAccountDetailScreen() {
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        lines.push(`\nNet (buys - sells): ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
-        lines.push(`\nNote: Doesn't include transfers/sends. Update quantity in Assets if needed.`);
+        lines.push(`\nNet position: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
+        if (crypto.unknownQtyBuys > 0) lines.push(`Note: Recurring buy quantities not in CSV — actual balance may be higher.`);
         Alert.alert(`${crypto.asset} Updated`, lines.join('\n'));
       } else {
         const currentValue = Math.max(0, netAmount) * currentPrice;
@@ -669,8 +671,8 @@ export default function BankAccountDetailScreen() {
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        lines.push(`\nNet (buys - sells): ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
-        lines.push(`\nNote: Doesn't include transfers/sends. Update quantity in Assets if needed.`);
+        lines.push(`\nNet position: ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
+        if (crypto.unknownQtyBuys > 0) lines.push(`Note: Recurring buy quantities not in CSV — actual balance may be higher.`);
         Alert.alert(`${crypto.asset} Asset Created`, lines.join('\n'));
       }
     }
@@ -1598,9 +1600,19 @@ export default function BankAccountDetailScreen() {
                                 {c.purchaseCount} buys: {c.totalBought.toFixed(8)} (${c.totalSpent.toFixed(2)})
                               </Text>
                             )}
+                            {c.unknownQtyBuys > 0 && (
+                              <Text style={{ fontSize: 11, color: '#a78bfa' }}>
+                                {c.unknownQtyBuys} recurring buys: ${c.unknownQtySpent.toFixed(2)} (qty not in CSV)
+                              </Text>
+                            )}
                             {c.sellCount > 0 && (
                               <Text style={{ fontSize: 11, color: '#f87171' }}>
                                 {c.sellCount} sells: {c.totalSold.toFixed(8)} (${c.totalProceeds.toFixed(2)}) P&L: {c.realizedPnL >= 0 ? '+' : ''}${c.realizedPnL.toFixed(2)}
+                              </Text>
+                            )}
+                            {c.transferCount > 0 && (
+                              <Text style={{ fontSize: 11, color: '#60a5fa' }}>
+                                {c.transferCount} transfers: +{c.totalTransferIn.toFixed(8)} / -{c.totalTransferOut.toFixed(8)}
                               </Text>
                             )}
                           </View>
