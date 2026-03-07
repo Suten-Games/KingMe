@@ -11,14 +11,21 @@ function alert(title: string, msg?: string) {
   else RNAlert.alert(title, msg);
 }
 
+type ShowToast = (config:
+  | { type: 'loading'; symbol: string; percentage: number }
+  | { type: 'success'; symbol: string; usdReceived: number; signature: string }
+  | { type: 'error'; message: string }
+) => void;
+
 interface SKRCardProps {
   holding: SKRHolding;
   income: SKRIncomeSnapshot;
   onEdit?: () => void;
   onRefresh?: () => void;
+  showToast?: ShowToast;
 }
 
-export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardProps) {
+export default function SKRCard({ holding, income, onEdit, onRefresh, showToast }: SKRCardProps) {
   const { publicKey, signAndSendTransaction, signTransaction } = useWallet();
   const [action, setAction] = useState<'stake' | 'unstake' | null>(null);
   const [amount, setAmount] = useState('');
@@ -43,6 +50,7 @@ export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardP
 
     const wallet = publicKey.toBase58();
     setLoading(true);
+    showToast?.({ type: 'loading', symbol: 'SKR', percentage: 0 });
 
     try {
       console.log(`[SKR] Building ${action} tx for ${amt} SKR...`);
@@ -73,22 +81,57 @@ export default function SKRCard({ holding, income, onEdit, onRefresh }: SKRCardP
         throw new Error('No signing method available');
       }
 
-      if (signature) {
-        console.log(`[SKR] ${action} tx sent: ${signature}`);
+      if (!signature) {
+        throw new Error('No signature returned — transaction may not have been sent');
       }
 
-      alert(
-        action === 'stake' ? 'Staked!' : 'Unstake Started',
-        action === 'stake'
-          ? `${amt} SKR staked successfully.`
-          : `${amt} SKR unstaking (48-hour cooldown).`,
-      );
+      console.log(`[SKR] ${action} tx sent: ${signature}, confirming on-chain...`);
+
+      // Poll for on-chain confirmation via RPC proxy
+      const rpcProxy = `${process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money'}/api/rpc/send`;
+      let confirmed = false;
+      for (let i = 0; i < 15; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const statusRes = await fetch(rpcProxy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1,
+              method: 'getSignatureStatuses',
+              params: [[signature], { searchTransactionHistory: true }],
+            }),
+          });
+          const statusData = await statusRes.json();
+          const status = statusData?.result?.value?.[0];
+          if (status) {
+            if (status.err) {
+              console.error('[SKR] Transaction failed on-chain:', status.err);
+              throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
+            }
+            if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+              confirmed = true;
+              console.log(`[SKR] Confirmed: ${status.confirmationStatus}`);
+              break;
+            }
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message?.includes('failed on-chain')) throw pollErr;
+          console.warn('[SKR] Poll error:', pollErr.message);
+        }
+      }
+
+      if (!confirmed) {
+        throw new Error(`Transaction sent (${signature.slice(0, 12)}...) but not confirmed after 30s. Check Solscan.`);
+      }
+
+      showToast?.({ type: 'success', symbol: 'SKR', usdReceived: amt * (holding.priceUsd || 0), signature });
       setAction(null);
       setAmount('');
       onRefresh?.();
     } catch (err: any) {
       console.error(`[SKR] ${action} failed:`, err);
-      alert('Failed', err.message || 'Transaction failed');
+      showToast?.({ type: 'error', message: err.message || 'Transaction failed' });
     } finally {
       setLoading(false);
     }

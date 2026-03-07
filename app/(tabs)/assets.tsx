@@ -25,6 +25,7 @@ import AccumulationPlanCard from '@/components/AccumulationPlanCard';
 import { loadAllPlans, createPlan, getPlan, type AccumulationPlan } from '@/services/accumulationPlan';
 import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
+import { useSwapToast } from '@/components/SwapToast';
 
 // ── Build SKRCard props from a store asset ─────────────────
 function buildSkrFromAsset(
@@ -201,6 +202,7 @@ export default function AssetsScreen() {
   const addBankAccount = useStore((state) => state.addBankAccount);
   const updateBankAccount = useStore((state) => state.updateBankAccount);
   const addThesis = useStore((state) => state.addThesis);
+  const { showToast, ToastComponent } = useSwapToast();
   const investmentTheses = useStore((state) => state.investmentTheses);
 
   const [showThesisModal, setShowThesisModal] = useState(false);
@@ -488,6 +490,7 @@ export default function AssetsScreen() {
               setShowAddModal(true);
             }}
             onRefresh={refreshSkr}
+            showToast={showToast}
           />
         )}
 
@@ -691,6 +694,9 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Swap/Stake toast */}
+      <ToastComponent />
     </View>
   );
 }
