@@ -54,7 +54,10 @@ export default async function handler(request: Request) {
       autoSlippage = false,
       maxAutoSlippageBps = 1000,
       action = 'quote',
+      skipFee = false,
     } = body;
+
+    const applyFee = !skipFee && !!JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0;
 
     if (!inputMint || !outputMint || !amount || !userPublicKey) {
       return jsonResponse({
@@ -83,9 +86,7 @@ export default async function handler(request: Request) {
         amount: amount.toString(),
         slippageBps: slippageBps.toString(),
         ...(autoSlippage ? { autoSlippage: 'true', maxAutoSlippageBps: maxAutoSlippageBps.toString() } : {}),
-        ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
-          ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
-          : {}),
+        ...(applyFee ? { platformFeeBps: PLATFORM_FEE_BPS.toString() } : {}),
       });
 
       const controller = new AbortController();
@@ -175,7 +176,7 @@ export default async function handler(request: Request) {
       prioritizationFeeLamports: 'auto',
     };
 
-    if (JUPITER_REFERRAL_ACCOUNT) {
+    if (applyFee) {
       swapBody.feeAccount = JUPITER_REFERRAL_ACCOUNT;
     }
 
@@ -214,7 +215,7 @@ export default async function handler(request: Request) {
         inAmount: quoteData.inAmount,
         outAmount: quoteData.outAmount,
         priceImpactPct: quoteData.priceImpactPct,
-        platformFee: PLATFORM_FEE_BPS > 0 ? {
+        platformFee: applyFee ? {
           bps: PLATFORM_FEE_BPS,
           pct: (PLATFORM_FEE_BPS / 100).toFixed(2),
         } : null,

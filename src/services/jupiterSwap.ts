@@ -331,6 +331,13 @@ export async function executeSwap(
   console.log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint} slippage=${slippageBps}bps auto=${autoSlippage}`);
   console.log(`[JUPITER] API URL: ${url}, amount: ${amountSmallest} (${decimals} decimals)`);
 
+  // Attempt swap — retry without platform fee on InvalidAccountData
+  // (referral token account may not exist for this output token)
+  for (const skipFee of [false, true]) {
+    if (skipFee) {
+      console.log('[JUPITER] Retrying swap without platform fee...');
+    }
+
   try {
     // ── 1. Get serialized swap transaction from edge function ──
     let response: Response;
@@ -347,6 +354,7 @@ export async function executeSwap(
           autoSlippage,
           maxAutoSlippageBps: 1000,
           action: 'swap',
+          skipFee,
         }),
       });
     } catch (networkError: any) {
@@ -465,14 +473,23 @@ export async function executeSwap(
   } catch (error: any) {
     console.error('[JUPITER] Swap error:', error);
 
+    // If InvalidAccountData and we haven't retried without fee yet, retry
+    const msg = error.message || '';
+    if (!skipFee && msg.includes('InvalidAccountData')) {
+      console.warn('[JUPITER] InvalidAccountData — likely missing referral token account, retrying without fee...');
+      continue; // retry the for loop with skipFee=true
+    }
+
     // Friendly error messages
-    let message = error.message || 'Swap failed';
+    let message = msg || 'Swap failed';
     if (message.includes('User rejected') || message.includes('cancelled')) {
       message = 'Transaction cancelled by user';
     } else if (message.includes('0x1788') || message.includes('6024') || message.includes('6014') || message.includes('SlippageTolerance') || message.includes('slippage')) {
       message = 'Slippage exceeded — increase slippage tolerance and try again';
     } else if (message.includes('insufficient') || message.includes('not enough')) {
       message = 'Insufficient balance for this swap';
+    } else if (message.includes('InvalidAccountData')) {
+      message = 'Swap failed — please try again';
     }
 
     return {
@@ -480,6 +497,9 @@ export async function executeSwap(
       error: message,
     };
   }
+  } // end for skipFee loop
+
+  return { success: false, error: 'Swap failed after retry' };
 }
 
 // ══════════════════════════════════════════════════════════════
