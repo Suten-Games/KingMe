@@ -195,7 +195,7 @@ export default function HomeScreen() {
           generateScenarios(); // Refresh so the card disappears
           Alert.alert('Goal Updated! 🎉', `Your goal now targets ${upgrade.toSymbol}.`, [{ text: 'OK' }]);
         } catch (err: any) {
-          Alert.alert('Error', err.message || 'Failed to update goal');
+          Alert.alert('Error', 'Failed to update goal. Please try again.');
         }
       }
       return;

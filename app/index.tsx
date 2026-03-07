@@ -33,7 +33,10 @@ export default function Index() {
       setIsLoading(false);
     };
     
-    initApp();
+    initApp().catch((err) => {
+      console.error('[Init] Failed to load app:', err);
+      setIsLoading(false); // Let routing proceed even on error
+    });
   }, []);
   
   useEffect(() => {

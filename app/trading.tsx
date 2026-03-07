@@ -193,7 +193,7 @@ export default function TradingScreen() {
         Alert.alert('Synced', `Imported ${result.imported} trade${result.imported === 1 ? '' : 's'} from Drift.`);
       }
     } catch (err: any) {
-      Alert.alert('Sync Error', err.message || 'Something went wrong');
+      Alert.alert('Sync Error', 'Something went wrong. Please check your connection and try again.');
     } finally {
       setIsSyncing(false);
     }

@@ -211,7 +211,7 @@ export default function BusinessDashboard() {
       });
     } catch (err: any) {
       console.error('Referral sync error:', err);
-      Alert.alert('Sync Failed', err.message);
+      Alert.alert('Sync Failed', 'Could not sync referral data. Please check your connection and try again.');
     } finally {
       setSyncing(false);
     }
@@ -358,7 +358,7 @@ export default function BusinessDashboard() {
         Alert.alert('PDF Saved', `Saved to ${newUri}`);
       }
     } catch (err: any) {
-      Alert.alert('Export Failed', err.message);
+      Alert.alert('Export Failed', 'Could not export data. Please try again.');
     }
   };
 

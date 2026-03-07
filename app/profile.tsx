@@ -17,7 +17,7 @@ import { loadBackup, saveBackup } from '@/services/encryptedBackup';
 import { buildFullBackup, restoreAsyncData, deserializeBackup, serializeBackup } from '@/services/fullBackup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 //import { encryptProfileWithWallet, decryptProfileWithWallet } from './walletStorage';
-const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'http://localhost:3000/api/backup';
+const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'https://kingme-api.vercel.app/api/backup';
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
 import KingMeFooter from '../src/components/KingMeFooter';
@@ -196,7 +196,7 @@ export default function ProfileScreen() {
       setBackupJson(JSON.stringify(fullBackup));
       setShowBackupModal(true);
     } catch (error) {
-      crossAlert('Error', 'Failed to create backup: ' + (error as Error).message);
+      crossAlert('Error', 'Failed to create backup. Please try again.');
     }
   };
 
@@ -226,7 +226,7 @@ export default function ProfileScreen() {
         setImportJson(content);
       }
     } catch (error) {
-      crossAlert('Error', 'Failed to read file: ' + (error as Error).message);
+      crossAlert('Error', 'Failed to read file. Please try a different file.');
     }
   };
 
@@ -343,7 +343,7 @@ export default function ProfileScreen() {
       );
     } catch (error: any) {
       console.error('Backup failed:', error);
-      crossAlert('Backup Failed', error.message);
+      crossAlert('Backup Failed', 'Could not save backup. Please check your connection and try again.');
     } finally {
       setIsSyncing(false);
     }
@@ -416,7 +416,7 @@ export default function ProfileScreen() {
           );
         } catch (error: any) {
           console.error('Restore failed:', error);
-          crossAlert('Restore Failed', error.message || 'No backup found for this wallet');
+          crossAlert('Restore Failed', 'Could not restore backup. Make sure you have a previous backup with this wallet.');
         } finally {
           setIsSyncing(false);
         }
