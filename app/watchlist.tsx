@@ -317,6 +317,35 @@ export default function WatchlistScreen() {
     try {
       let wl = await getWatchlist();
 
+      // Fix stale mints: map old wrong mints to correct ones
+      const MINT_FIXES: Record<string, string> = {
+        'SKRy1C6Smucp4Wz2MPnKgvDRFgDHraoskMJH3a2fMec': 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
+        'SKRy4ABKZ3dFJEmb47aNqWoMnajpVnFozTPCiZD3eHv': 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
+      };
+      let fixedAny = false;
+      for (const token of wl) {
+        if (MINT_FIXES[token.mint]) {
+          console.log(`[WATCHLIST] Fixing stale mint for ${token.symbol}: ${token.mint.slice(0, 8)} → ${MINT_FIXES[token.mint].slice(0, 8)}`);
+          await removeFromWatchlist(token.mint);
+          await addToWatchlist(MINT_FIXES[token.mint], token.symbol);
+          fixedAny = true;
+        }
+      }
+      if (fixedAny) {
+        wl = await getWatchlist();
+        // Migrate ext data to new mints
+        const ext = await loadExtData();
+        let extChanged = false;
+        for (const [oldMint, newMint] of Object.entries(MINT_FIXES)) {
+          if (ext[oldMint] && !ext[newMint]) {
+            ext[newMint] = { ...ext[oldMint], mint: newMint };
+            delete ext[oldMint];
+            extChanged = true;
+          }
+        }
+        if (extChanged) await saveExtData(ext);
+      }
+
       // Auto-add held coins that aren't tracked yet
       const addedCount = await autoTrackHeldCoins(wl);
       if (addedCount > 0) wl = await getWatchlist();
