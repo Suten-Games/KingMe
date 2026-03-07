@@ -16,7 +16,7 @@ export default async function handler(req: Request) {
     const body = await req.json();
 
     // Only allow sendRawTransaction and getLatestBlockhash — don't proxy everything
-    const allowed = ['sendRawTransaction', 'sendTransaction', 'getLatestBlockhash', 'confirmTransaction', 'getSignatureStatuses', 'getBalance', 'getTokenAccountsByOwner'];
+    const allowed = ['sendRawTransaction', 'sendTransaction', 'getLatestBlockhash', 'confirmTransaction', 'getSignatureStatuses', 'getBalance', 'getTokenAccountsByOwner', 'getAccountInfo'];
     if (!allowed.includes(body.method)) {
       return new Response(JSON.stringify({ error: `Method ${body.method} not allowed` }), { status: 403 });
     }
