@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AVATAR_PREVIEWS } from '../../src/utils/constants';
+import { isSeeker } from '../../src/utils/device';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useWallet } from '../../src/providers/wallet-provider';
 import { loadBackup } from '../../src/services/encryptedBackup';
@@ -157,7 +158,9 @@ export default function OnboardingIntro() {
                       } catch (e: any) {
                         const msg = e.message || 'Failed to connect';
                         if (/not found|not installed|no provider|No Solana/i.test(msg)) {
-                          setRestoreError('No Solana wallet found. Install Phantom, Solflare, or another Solana wallet.');
+                          setRestoreError(isSeeker
+                            ? 'No wallet found. Open your Seed Vault wallet and try again.'
+                            : 'No Solana wallet found. Install Phantom, Solflare, or another Solana wallet.');
                         } else { setRestoreError(msg); }
                         setRestoring(false);
                       }

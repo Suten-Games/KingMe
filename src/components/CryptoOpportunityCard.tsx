@@ -12,6 +12,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Linking, Platform } from 'react-native';
 import { useStore } from '../store/useStore';
 import { LinearGradient } from 'expo-linear-gradient';
+import { isSeeker } from '../utils/device';
 
 // ── Account Detection ────────────────────────────────────────────
 
@@ -87,9 +88,11 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
     detail: 'Once you have USDC in your wallet, KingMe will help you deposit into Perena USD* — a stablecoin savings protocol. Your dollars earn yield 24/7 with no lockup.',
   };
 
+  let steps: { step: number; emoji: string; title: string; detail: string }[];
+
   switch (path) {
     case 'cashapp':
-      return [
+      steps = [
         { step: 1, emoji: '📲', title: 'Download Phantom wallet',
           detail: 'Free app on iOS and Android. Takes 30 seconds — no ID required, no sign-up forms. Just set a password and save your recovery phrase somewhere safe.' },
         { step: 2, emoji: '💳', title: 'Buy SOL with your Cash Card',
@@ -99,9 +102,10 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
         { ...connectStep, step: 4 },
         { ...perenaStep, step: 5 },
       ];
+      break;
 
     case 'fintech':
-      return [
+      steps = [
         { step: 1, emoji: '📲', title: 'Download Phantom wallet',
           detail: `Free app on iOS and Android. No ID needed — just a password and recovery phrase.` },
         { step: 2, emoji: '💳', title: `Buy SOL using your ${detail} debit card`,
@@ -111,9 +115,10 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
         { ...connectStep, step: 4 },
         { ...perenaStep, step: 5 },
       ];
+      break;
 
     case 'crypto_exchange':
-      return [
+      steps = [
         { step: 1, emoji: '📲', title: 'Download Phantom wallet',
           detail: 'If you don\'t have it already. Free on iOS and Android.' },
         { step: 2, emoji: '📤', title: `Send SOL or USDC from ${detail}`,
@@ -121,9 +126,10 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
         { ...connectStep, step: 3 },
         { ...perenaStep, step: 4 },
       ];
+      break;
 
     case 'bank':
-      return [
+      steps = [
         { step: 1, emoji: '📲', title: 'Download Phantom wallet',
           detail: 'Free app on iOS and Android. Takes 30 seconds — just a password and recovery phrase. No ID upload needed.' },
         { step: 2, emoji: '💳', title: `Buy SOL with your ${detail} debit card`,
@@ -133,10 +139,11 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
         { ...connectStep, step: 4 },
         { ...perenaStep, step: 5 },
       ];
+      break;
 
     case 'none':
     default:
-      return [
+      steps = [
         { step: 1, emoji: '📲', title: 'Download Phantom wallet',
           detail: 'Free app on iOS and Android. No ID, no sign-up forms. Just a password and a recovery phrase (write it down!).' },
         { step: 2, emoji: '💳', title: 'Buy SOL with any debit card',
@@ -146,7 +153,18 @@ function getGuideSteps(path: UserPath, detail: string): GuideStep[] {
         { ...connectStep, step: 4 },
         { ...perenaStep, step: 5 },
       ];
+      break;
   }
+
+  // On Seeker, replace "Download Phantom" with built-in wallet step
+  if (isSeeker) {
+    return steps.map(s => s.title === 'Download Phantom wallet'
+      ? { ...s, title: 'Open your Seed Vault wallet', detail: 'Your Seeker has a built-in Solana wallet. Tap the wallet icon to get started — no downloads needed.' }
+      : s
+    );
+  }
+
+  return steps;
 }
 
 // ── Main Component ───────────────────────────────────────────────
@@ -272,14 +290,16 @@ export default function CryptoOpportunityCard() {
                 </View>
               ))}
 
-              {/* Phantom download link */}
-              <TouchableOpacity
-                style={st.phantomButton}
-                onPress={() => Linking.openURL('https://phantom.app/download')}
-                activeOpacity={0.8}
-              >
-                <Text style={st.phantomButtonText}>👻 Download Phantom Wallet</Text>
-              </TouchableOpacity>
+              {/* Phantom download link — hidden on Seeker (has built-in wallet) */}
+              {!isSeeker && (
+                <TouchableOpacity
+                  style={st.phantomButton}
+                  onPress={() => Linking.openURL('https://phantom.app/download')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={st.phantomButtonText}>👻 Download Phantom Wallet</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Risk disclosure */}
               <View style={st.riskBox}>

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Image } from 'react-native';
+import { isSeeker } from '../utils/device';
 
 export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave' | 'mwa';
 
@@ -54,7 +55,7 @@ export default function WalletPickerModal({
           <Text style={s.subtitle}>Choose how to connect</Text>
 
           {/* MWA — Solana Mobile standard */}
-          <Text style={s.sectionLabel}>SOLANA MOBILE</Text>
+          <Text style={s.sectionLabel}>{isSeeker ? 'SEEKER WALLET' : 'SOLANA MOBILE'}</Text>
           <View style={s.walletList}>
             {mwaOptions.map((option) => {
               const isConnecting = connecting && connectingWallet === option.id;
@@ -77,8 +78,8 @@ export default function WalletPickerModal({
             })}
           </View>
 
-          {/* External wallet apps */}
-          {externalWalletsAvailable && (
+          {/* External wallet apps — hide on Seeker since it has built-in wallet */}
+          {externalWalletsAvailable && !isSeeker && (
             <>
               <Text style={[s.sectionLabel, { marginTop: 16 }]}>DEEP LINK</Text>
               <View style={s.walletList}>

@@ -13,6 +13,7 @@ import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useWallet } from '@/providers/wallet-provider';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
+import { isSeeker } from '@/utils/device';
 
 const isWeb = Platform.OS === 'web';
 
@@ -59,6 +60,24 @@ const WALLET_GUIDES: WalletGuide[] = isWeb ? [
     platforms: 'Chrome, Brave',
     url: 'https://backpack.app/downloads',
     color: '#e33e3f',
+  },
+] : isSeeker ? [
+  {
+    name: 'Seed Vault Wallet',
+    emoji: '\u{1F331}',
+    description: 'Your Seeker has a built-in Solana wallet. Connect with one tap — no downloads needed.',
+    platforms: 'Seeker',
+    url: '',
+    color: '#9945FF',
+    recommended: true,
+  },
+  {
+    name: 'Sign in with Google/Apple',
+    emoji: '\u{1F511}',
+    description: 'Or create a separate wallet using Privy. Just sign in.',
+    platforms: 'In-app',
+    url: '',
+    color: '#4ade80',
   },
 ] : [
   {
