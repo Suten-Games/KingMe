@@ -90,6 +90,7 @@ export default function HomeScreen() {
   const avatarType          = useStore((state) => state.settings.avatarType);
   const bankAccounts        = useStore((state) => state.bankAccounts);
   const incomeSources       = useStore((state) => state.income.sources || []);
+  const driftTrades         = useStore((state) => state.driftTrades || []);
   const obligations         = useStore((state) => state.obligations);
   const debts               = useStore((state) => state.debts);
   const assets              = useStore((state) => state.assets);
@@ -678,8 +679,10 @@ export default function HomeScreen() {
       {/* ── Tools ─────────────────────────────────────────────────── */}
       <View style={styles.toolsSection}>
         <Text style={styles.toolsSectionTitle}>Tools</Text>
-        <ToolCard emoji="📊" title="Trading Tracker" sub="Track trades and performance"
-          colors={['#1a2a50', '#121830']} accent="#60a5fa" onPress={() => router.push('/trading')} />
+        {(incomeSources.some((s: any) => s.type === 'trading') || driftTrades.length > 0) && (
+          <ToolCard emoji="📊" title="Trading Tracker" sub="Track trades and performance"
+            colors={['#1a2a50', '#121830']} accent="#60a5fa" onPress={() => router.push('/trading')} />
+        )}
         <ToolCard emoji="💸" title="Daily Expenses" sub="Log daily spending"
           colors={['#402a1a', '#281810']} accent="#fb923c" onPress={() => router.push('/expenses')} />
         <ToolCard emoji="🧾" title="View All Spending" sub="Full breakdown with editing"
