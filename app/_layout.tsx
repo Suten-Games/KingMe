@@ -1,7 +1,7 @@
 // app/_layout.tsx
 import '../src/polyfills';
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { WalletProvider } from '@/providers/wallet-provider';
 import {
@@ -48,8 +48,8 @@ export default function RootLayout() {
 
   useBadgeChecker();
 
-  // Inject Vercel Analytics on web
-  useEffect(() => { inject(); }, []);
+  // Inject Vercel Analytics on web only
+  useEffect(() => { if (Platform.OS === 'web') inject(); }, []);
 
   // Show splash while fonts or store load
   if (!fontsLoaded || !isLoaded) {
