@@ -116,8 +116,11 @@ export async function fetchMintDecimals(mint: string): Promise<number> {
   if (TOKEN_DECIMALS[mint]) return TOKEN_DECIMALS[mint];
   if (_decimalsCache[mint] !== undefined) return _decimalsCache[mint];
 
+  // Use RPC proxy on web (public RPC 403s from browsers), direct RPC on mobile
+  const rpcEndpoint = isWeb ? `${getApiBase()}/api/rpc/send` : RPC_URL;
+
   try {
-    const response = await fetch(RPC_URL, {
+    const response = await fetch(rpcEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
