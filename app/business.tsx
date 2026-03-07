@@ -5,10 +5,10 @@
 // Auto-syncs business net value → personal asset of type 'business'
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, Image, Platform,
+  TextInput, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,90 +16,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as ImagePicker from 'expo-image-picker';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
-import { parseCSVTransactions } from '../src/utils/csvBankImport';
-import type { BankTransaction } from '../src/types/bankTransactionTypes';
+import {
+  type BusinessData, type PLSnapshot,
+  ENTITY_LABELS, EXPENSE_CATEGORIES, DEFAULT_INFO, DEFAULT_DATA,
+} from '../src/types/businessTypes';
+import {
+  SetupModal, WalletModal, BankModal, ExpenseModal,
+  DistributionModal, ContributionModal, InfoModal, ImportModal, ReassignModal, AIModal,
+} from '../src/components/business/BusinessModals';
 
 const STORAGE_KEY = 'business_dashboard_data';
 const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-type EntityType = 'llc' | 's_corp' | 'c_corp' | 'sole_prop' | 'partnership' | 'other';
-
-const ENTITY_LABELS: Record<EntityType, string> = {
-  llc: 'LLC', s_corp: 'S-Corp', c_corp: 'C-Corp',
-  sole_prop: 'Sole Proprietorship', partnership: 'Partnership', other: 'Other',
-};
-
-interface BusinessExpense {
-  id: string;
-  name: string;
-  amount: number;
-  frequency: 'monthly' | 'annual' | 'one-time';
-  category: 'hosting' | 'dev_tools' | 'marketing' | 'legal' | 'domain' | 'api' | 'other';
-  notes?: string;
-}
-
-interface Distribution {
-  id: string;
-  amount: number;
-  date: string; // ISO date
-  notes?: string;
-}
-
-interface BusinessData {
-  businessName: string;
-  businessDescription: string;
-  entityType: EntityType;
-  referralWallet: string;
-  referralBalance: {
-    sol: number;
-    usdc: number;
-    other: { symbol: string; amount: number; valueUSD: number }[];
-    totalUSD: number;
-    lastFetched: string;
-  } | null;
-  bankAccount: {
-    name: string;
-    institution: string;
-    balance: number;
-    lastUpdated: string;
-  } | null;
-  expenses: BusinessExpense[];
-  distributions: Distribution[];
-  contributions: Distribution[]; // Capital contributions (personal → business)
-  transactions: BankTransaction[]; // Imported business transactions (CSV)
-}
-
-const EXPENSE_CATEGORIES: Record<string, { emoji: string; label: string }> = {
-  hosting: { emoji: '☁️', label: 'Hosting' },
-  dev_tools: { emoji: '🔧', label: 'Dev Tools' },
-  marketing: { emoji: '📢', label: 'Marketing' },
-  legal: { emoji: '⚖️', label: 'Legal' },
-  domain: { emoji: '🌐', label: 'Domains' },
-  api: { emoji: '🔌', label: 'APIs' },
-  other: { emoji: '📦', label: 'Other' },
-};
-
-const DEFAULT_DATA: BusinessData = {
-  businessName: '',
-  businessDescription: '',
-  entityType: 'llc',
-  referralWallet: '',
-  referralBalance: null,
-  bankAccount: null,
-  expenses: [],
-  distributions: [],
-  contributions: [],
-  transactions: [],
-};
 
 // ─── Auto-sync business → personal asset ─────────────────────────────────────
 
@@ -160,50 +96,25 @@ export default function BusinessDashboard() {
   const [data, setData] = useState<BusinessData>(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [showBankModal, setShowBankModal] = useState(false);
-  const [showWalletModal, setShowWalletModal] = useState(false);
+  // Modal visibility
   const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showDistModal, setShowDistModal] = useState(false);
   const [showContribModal, setShowContribModal] = useState(false);
-
-  // Setup form
-  const [setupName, setSetupName] = useState('');
-  const [setupDesc, setSetupDesc] = useState('');
-  const [setupEntity, setSetupEntity] = useState<EntityType>('llc');
-
-  // Expense form
-  const [expName, setExpName] = useState('');
-  const [expAmount, setExpAmount] = useState('');
-  const [expFreq, setExpFreq] = useState<'monthly' | 'annual' | 'one-time'>('monthly');
-  const [expCategory, setExpCategory] = useState<string>('hosting');
-  const [expNotes, setExpNotes] = useState('');
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiType, setAIType] = useState<'business_plan' | 'tax_strategy' | 'expense_optimization'>('business_plan');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
-  // Bank form
-  const [bankName, setBankName] = useState('');
-  const [bankInstitution, setBankInstitution] = useState('');
-  const [bankBalance, setBankBalance] = useState('');
+  // P&L snapshots
+  const [showSnapshotHistory, setShowSnapshotHistory] = useState(false);
 
-  // Wallet form
-  const [walletInput, setWalletInput] = useState('');
-
-  // Distribution form
-  const [distAmount, setDistAmount] = useState('');
-  const [distNotes, setDistNotes] = useState('');
-
-  // Contribution form
-  const [contribAmount, setContribAmount] = useState('');
-  const [contribNotes, setContribNotes] = useState('');
-
-  // CSV import
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [csvText, setCsvText] = useState('');
-  const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; errors: string[]; summary: string } | null>(null);
-
-  // Personal transaction reassignment
-  const [showReassignModal, setShowReassignModal] = useState(false);
-  const [reassignCategory, setReassignCategory] = useState('');
+  // Break-even calculator
+  const [revenuePerUser, setRevenuePerUser] = useState('4.99');
 
   // ── Load / Save ────────────────────────────────────────────
   useEffect(() => {
@@ -227,13 +138,10 @@ export default function BusinessDashboard() {
     syncBusinessAsset(newData);
   }, []);
 
-  // ── Setup ──────────────────────────────────────────────────
-  const handleSetup = () => {
-    if (!setupName.trim()) return;
-    const newData = { ...data, businessName: setupName.trim(), businessDescription: setupDesc.trim(), entityType: setupEntity };
-    save(newData);
-    setShowSetupModal(false);
-  };
+  // Unified save handler for modals
+  const handleModalSave = useCallback((updates: Partial<BusinessData>) => {
+    save({ ...data, ...updates });
+  }, [data, save]);
 
   // ── Sync Referral Wallet ───────────────────────────────────
   const syncReferralWallet = async () => {
@@ -309,173 +217,6 @@ export default function BusinessDashboard() {
     }
   };
 
-  // ── Expense CRUD ───────────────────────────────────────────
-  const addExpense = () => {
-    if (!expName || !expAmount) return;
-    const expense: BusinessExpense = {
-      id: editingExpenseId || Date.now().toString(),
-      name: expName, amount: parseFloat(expAmount), frequency: expFreq,
-      category: expCategory as any, notes: expNotes || undefined,
-    };
-    const newExpenses = editingExpenseId
-      ? data.expenses.map(e => e.id === editingExpenseId ? expense : e)
-      : [...data.expenses, expense];
-    save({ ...data, expenses: newExpenses });
-    resetExpenseForm();
-  };
-
-  const deleteExpense = (id: string) => save({ ...data, expenses: data.expenses.filter(e => e.id !== id) });
-
-  const editExpense = (e: BusinessExpense) => {
-    setEditingExpenseId(e.id); setExpName(e.name); setExpAmount(e.amount.toString());
-    setExpFreq(e.frequency); setExpCategory(e.category); setExpNotes(e.notes || '');
-    setShowExpenseModal(true);
-  };
-
-  const resetExpenseForm = () => {
-    setExpName(''); setExpAmount(''); setExpFreq('monthly');
-    setExpCategory('hosting'); setExpNotes(''); setEditingExpenseId(null);
-    setShowExpenseModal(false);
-  };
-
-  // ── Bank Account ───────────────────────────────────────────
-  const saveBankAccount = () => {
-    if (!bankName || !bankBalance) return;
-    save({ ...data, bankAccount: { name: bankName, institution: bankInstitution, balance: parseFloat(bankBalance), lastUpdated: new Date().toISOString() } });
-    setShowBankModal(false);
-  };
-
-  // ── Wallet ─────────────────────────────────────────────────
-  const saveWallet = () => {
-    if (!walletInput || walletInput.length < 30) return;
-    save({ ...data, referralWallet: walletInput.trim() });
-    setShowWalletModal(false);
-  };
-
-  // ── Distribution ───────────────────────────────────────────
-  const recordDistribution = () => {
-    const amount = parseFloat(distAmount);
-    if (!amount || amount <= 0) return;
-    const dist: Distribution = {
-      id: Date.now().toString(),
-      amount,
-      date: new Date().toISOString(),
-      notes: distNotes || undefined,
-    };
-    save({ ...data, distributions: [...data.distributions, dist] });
-    setDistAmount(''); setDistNotes(''); setShowDistModal(false);
-
-    // Also add as income source in personal store
-    // (Optional — user can do this manually too)
-    Alert.alert(
-      'Distribution Recorded',
-      `$${amount.toLocaleString()} distribution from ${data.businessName}.\n\nAdd to personal income?`,
-      [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => {
-          const store = useStore.getState();
-          const currentOther = store.income.otherIncome || 0;
-          useStore.setState({
-            income: { ...store.income, otherIncome: currentOther + amount },
-          });
-        }},
-      ]
-    );
-  };
-
-  const deleteDistribution = (id: string) => {
-    save({ ...data, distributions: data.distributions.filter(d => d.id !== id) });
-  };
-
-  // ── Capital Contributions ──────────────────────────────────
-  const recordContribution = () => {
-    const amount = parseFloat(contribAmount);
-    if (!amount || amount <= 0) return;
-    const contrib: Distribution = {
-      id: Date.now().toString(),
-      amount,
-      date: new Date().toISOString(),
-      notes: contribNotes || undefined,
-    };
-    save({ ...data, contributions: [...(data.contributions || []), contrib] });
-    setContribAmount(''); setContribNotes(''); setShowContribModal(false);
-  };
-
-  const deleteContribution = (id: string) => {
-    save({ ...data, contributions: (data.contributions || []).filter(c => c.id !== id) });
-  };
-
-  // ── CSV Import ──────────────────────────────────────────────
-  const handlePickCSVFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/plain', 'text/tab-separated-values', 'application/csv', '*/*'] });
-      if (result.canceled || !result.assets?.[0]) return;
-      const file = result.assets[0];
-      let text = '';
-      if (Platform.OS === 'web') {
-        const resp = await fetch(file.uri);
-        text = await resp.text();
-      } else {
-        text = await FileSystem.readAsStringAsync(file.uri);
-      }
-      setCsvText(text);
-      if (text.trim()) {
-        const parsed = parseCSVTransactions(text, `biz_${data.businessName}`);
-        setImportPreview(parsed);
-      }
-    } catch {
-      Alert.alert('Error', 'Failed to read file');
-    }
-  };
-
-  const handleParseCSV = () => {
-    if (!csvText.trim()) return;
-    const result = parseCSVTransactions(csvText, `biz_${data.businessName}`);
-    setImportPreview(result);
-  };
-
-  const handleConfirmImport = () => {
-    if (!importPreview) return;
-    const existing = data.transactions || [];
-    const existingDates = new Set(existing.map(t => `${t.date}|${t.description}|${t.amount}`));
-    const newTxns = importPreview.transactions.filter(t => !existingDates.has(`${t.date}|${t.description}|${t.amount}`));
-    save({ ...data, transactions: [...existing, ...newTxns] });
-    Alert.alert('Imported', `${newTxns.length} new transactions added (${importPreview.transactions.length - newTxns.length} duplicates skipped)`);
-    setCsvText(''); setImportPreview(null); setShowImportModal(false);
-  };
-
-  // ── Personal transactions that might be business expenses ──
-  const bankAccounts = useStore((s) => s.bankAccounts);
-  const allBankTransactions = useStore((s) => s.bankTransactions || []);
-  const personalBizTransactions = useMemo(() => {
-    if (!reassignCategory) return [];
-    const catLower = reassignCategory.toLowerCase();
-    return allBankTransactions.filter(t => {
-      const cat = (t.category || '').toLowerCase();
-      const desc = (t.description || '').toLowerCase();
-      const notes = (t.notes || '').toLowerCase();
-      return cat.includes(catLower) || desc.includes(catLower) || notes.includes(catLower);
-    });
-  }, [allBankTransactions, reassignCategory]);
-
-  const handleReassignTransactions = () => {
-    if (personalBizTransactions.length === 0) return;
-    const existing = data.transactions || [];
-    const existingDates = new Set(existing.map(t => `${t.date}|${t.description}|${t.amount}`));
-    const newTxns = personalBizTransactions
-      .filter(t => !existingDates.has(`${t.date}|${t.description}|${t.amount}`))
-      .map(t => ({ ...t, bankAccountId: `biz_${data.businessName}`, importedFrom: 'reassigned' as const }));
-
-    const totalAmount = newTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    save({ ...data, transactions: [...existing, ...newTxns] });
-
-    Alert.alert(
-      `${newTxns.length} Transactions Reassigned`,
-      `$${totalAmount.toLocaleString()} in expenses moved to ${data.businessName}.\n\nConsider transferring this amount from your personal account to your business account to properly fund these expenses.`,
-    );
-    setShowReassignModal(false);
-  };
-
   // ── Calculations ───────────────────────────────────────────
   const monthlyExpenses = data.expenses.reduce((sum, e) => {
     if (e.frequency === 'monthly') return sum + e.amount;
@@ -495,6 +236,131 @@ export default function BusinessDashboard() {
   const totalDistributions = data.distributions.reduce((s, d) => s + d.amount, 0);
   const totalContributions = (data.contributions || []).reduce((s, c) => s + c.amount, 0);
   const netPosition = bankBal + totalRevenue;
+
+  // Break-even
+  const rpu = parseFloat(revenuePerUser) || 0;
+  const usersToBreakEvenMonthly = rpu > 0 ? Math.ceil(monthlyExpenses / rpu) : 0;
+  const usersToBreakEvenAnnual = rpu > 0 ? Math.ceil(annualExpenses / rpu) : 0;
+
+  // ── Inline CRUD helpers ──────────────────────────────────────
+  const deleteExpense = (id: string) => save({ ...data, expenses: data.expenses.filter(e => e.id !== id) });
+  const deleteDistribution = (id: string) => save({ ...data, distributions: data.distributions.filter(d => d.id !== id) });
+  const deleteContribution = (id: string) => save({ ...data, contributions: (data.contributions || []).filter(c => c.id !== id) });
+
+  // ── Logo ─────────────────────────────────────────────────────
+  const pickLogo = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    // Store as base64 data URI for portability
+    const uri = asset.base64
+      ? `data:image/jpeg;base64,${asset.base64}`
+      : asset.uri;
+    save({ ...data, logoUri: uri });
+  };
+
+  // ── P&L Snapshot ────────────────────────────────────────────
+  const takeSnapshot = () => {
+    const now = new Date();
+    const label = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    // Don't allow duplicate snapshots for the same month
+    const existing = (data.plSnapshots || []);
+    const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
+    const alreadyExists = existing.find(s => {
+      const d = new Date(s.date);
+      return `${d.getFullYear()}-${d.getMonth()}` === monthKey;
+    });
+    if (alreadyExists) {
+      Alert.alert('Already Saved', `You already have a snapshot for ${label}. It will be updated.`);
+      const updated = existing.map(s => {
+        const d = new Date(s.date);
+        if (`${d.getFullYear()}-${d.getMonth()}` === monthKey) {
+          return { ...s, revenue: totalRevenue, bankBalance: bankBal, walletBalance: data.referralBalance?.totalUSD || 0,
+            monthlyExpenses, annualExpenses, totalDistributions, totalContributions, netPosition, date: now.toISOString() };
+        }
+        return s;
+      });
+      save({ ...data, plSnapshots: updated });
+      return;
+    }
+    const snapshot: PLSnapshot = {
+      id: Date.now().toString(),
+      date: now.toISOString(),
+      label,
+      revenue: totalRevenue,
+      bankBalance: bankBal,
+      walletBalance: data.referralBalance?.totalUSD || 0,
+      monthlyExpenses,
+      annualExpenses,
+      totalDistributions,
+      totalContributions,
+      netPosition,
+    };
+    save({ ...data, plSnapshots: [...existing, snapshot] });
+    Alert.alert('Snapshot Saved', `P&L snapshot for ${label} saved.`);
+  };
+
+  // ── PDF Export ──────────────────────────────────────────────
+  const exportPDF = async (content: string, title: string) => {
+    const logoHtml = data.logoUri
+      ? `<img src="${data.logoUri}" style="width:60px;height:60px;border-radius:8px;object-fit:cover;" />`
+      : '';
+    const htmlContent = content
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^\- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br/>');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+      <style>
+        body { font-family: -apple-system, Helvetica, Arial, sans-serif; padding: 40px; color: #1a1a2e; line-height: 1.6; }
+        .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #f4c430; }
+        .header h1 { margin: 0; font-size: 24px; color: #1a1a2e; }
+        .header .entity { color: #666; font-size: 14px; margin-top: 4px; }
+        h1 { font-size: 20px; color: #1a1a2e; margin-top: 24px; }
+        h2 { font-size: 18px; color: #2a2a4e; margin-top: 20px; }
+        h3 { font-size: 16px; color: #3a3a5e; margin-top: 16px; }
+        p { margin: 8px 0; }
+        ul { padding-left: 20px; }
+        li { margin: 4px 0; }
+        strong { color: #1a1a2e; }
+        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 11px; color: #999; }
+      </style></head><body>
+      <div class="header">
+        ${logoHtml}
+        <div>
+          <h1 style="margin:0">${data.businessName}</h1>
+          <div class="entity">${ENTITY_LABELS[data.entityType]}${data.info?.stateOfFormation ? ` \u00B7 ${data.info.stateOfFormation}` : ''}</div>
+        </div>
+      </div>
+      <p>${htmlContent}</p>
+      <div class="footer">Generated by KingMe Business Dashboard \u00B7 ${new Date().toLocaleDateString()}</div>
+    </body></html>`;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const pdfName = `${data.businessName.replace(/[^a-zA-Z0-9]/g, '_')}_${title.replace(/\s/g, '_')}.pdf`;
+      const newUri = `${FileSystem.cacheDirectory}${pdfName}`;
+      await FileSystem.moveAsync({ from: uri, to: newUri });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: title });
+      } else {
+        Alert.alert('PDF Saved', `Saved to ${newUri}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Export Failed', err.message);
+    }
+  };
 
   if (loading) {
     return <View style={st.loadingContainer}><ActivityIndicator color="#f4c430" size="large" /></View>;
@@ -526,17 +392,138 @@ export default function BusinessDashboard() {
       </LinearGradient>
 
       <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Business name */}
-        <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
-          <Text style={st.pageTitle}>{data.businessName || 'My Business'}</Text>
-        </TouchableOpacity>
-        <Text style={st.entityLabel}>{ENTITY_LABELS[data.entityType]} · Tap name to edit</Text>
+        {/* Business name + logo */}
+        <View style={st.bizHeader}>
+          <TouchableOpacity onPress={pickLogo} style={st.logoWrap}>
+            {data.logoUri ? (
+              <Image source={{ uri: data.logoUri }} style={st.logoImg} />
+            ) : (
+              <View style={st.logoPlaceholder}>
+                <Text style={{ fontSize: 20, color: '#555' }}>+</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+              <Text style={st.pageTitle}>{data.businessName || 'My Business'}</Text>
+            </TouchableOpacity>
+            <Text style={st.entityLabel}>{ENTITY_LABELS[data.entityType]}</Text>
+          </View>
+        </View>
 
         {data.businessDescription ? (
-          <View style={st.descriptionBox}>
+          <TouchableOpacity style={st.descriptionBox} activeOpacity={0.7}
+            onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
             <Text style={st.descriptionText}>{data.businessDescription}</Text>
+            <Text style={st.editHint}>Tap to edit</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={st.descriptionBox} activeOpacity={0.7}
+            onPress={() => { setSetupName(data.businessName); setSetupDesc(''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+            <Text style={[st.descriptionText, { fontStyle: 'italic' }]}>No description yet. Tap to add one.</Text>
+          </TouchableOpacity>
+        )}
+
+      {/* ── Business Info ─────────────────────────────────────── */}
+      <View style={st.section}>
+        <View style={st.sectionHeader}>
+          <Text style={st.sectionTitle}>Business Info</Text>
+          <TouchableOpacity onPress={() => { setInfoForm(data.info || DEFAULT_INFO); setShowInfoModal(true); }}>
+            <Text style={st.syncBtn}>{data.info?.ein ? 'Edit' : '+ Add'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {data.info?.ein || data.info?.stateOfFormation || data.info?.members ? (
+          <View style={st.card}>
+            {data.info.ein ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>EIN</Text>
+                <Text style={st.infoValue}>***-***{data.info.ein.slice(-4)}</Text>
+              </View>
+            ) : null}
+            {data.info.stateOfFormation ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>State</Text>
+                <Text style={st.infoValue}>{data.info.stateOfFormation}</Text>
+              </View>
+            ) : null}
+            {data.info.formationDate ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Formed</Text>
+                <Text style={st.infoValue}>{data.info.formationDate}</Text>
+              </View>
+            ) : null}
+            {data.info.registeredAgent ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Registered Agent</Text>
+                <Text style={st.infoValue}>{data.info.registeredAgent}</Text>
+              </View>
+            ) : null}
+            {data.info.taxStatus ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Tax Status</Text>
+                <Text style={st.infoValue}>{data.info.taxStatus}</Text>
+              </View>
+            ) : null}
+            {data.info.fiscalYearEnd ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Fiscal Year</Text>
+                <Text style={st.infoValue}>Ends {data.info.fiscalYearEnd}</Text>
+              </View>
+            ) : null}
+            {data.info.businessAddress ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Address</Text>
+                <Text style={st.infoValue}>{data.info.businessAddress}</Text>
+              </View>
+            ) : null}
+            {data.info.members ? (
+              <View style={st.infoRow}>
+                <Text style={st.infoLabel}>Members</Text>
+                <Text style={st.infoValue}>{data.info.members}</Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+        ) : (
+          <TouchableOpacity style={st.setupCard} onPress={() => { setInfoForm(DEFAULT_INFO); setShowInfoModal(true); }}>
+            <Text style={st.setupEmoji}>{'📋'}</Text>
+            <Text style={st.setupText}>Add business details</Text>
+            <Text style={st.setupSub}>EIN, state of formation, registered agent, etc.</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── AI Tools ──────────────────────────────────────────── */}
+      <View style={st.section}>
+        <Text style={st.sectionTitle}>AI-Powered Tools</Text>
+        <Text style={[st.mutedText, { marginBottom: 10 }]}>Generate insights using your business data</Text>
+        <View style={{ gap: 8 }}>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('business_plan'); setAIResult(''); setShowAIModal(true); }}>
+            <Text style={st.aiToolEmoji}>{'📝'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.aiToolTitle}>Business Plan</Text>
+              <Text style={st.aiToolDesc}>Executive summary, model, financials, growth strategy</Text>
+            </View>
+            <Text style={st.aiToolArrow}>{'>'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('tax_strategy'); setAIResult(''); setShowAIModal(true); }}>
+            <Text style={st.aiToolEmoji}>{'🏛️'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.aiToolTitle}>Tax Strategy</Text>
+              <Text style={st.aiToolDesc}>Deductions, entity optimization, quarterly estimates</Text>
+            </View>
+            <Text style={st.aiToolArrow}>{'>'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('expense_optimization'); setAIResult(''); setShowAIModal(true); }}>
+            <Text style={st.aiToolEmoji}>{'💡'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.aiToolTitle}>Expense Optimization</Text>
+              <Text style={st.aiToolDesc}>Cost reduction, tool alternatives, scaling insights</Text>
+            </View>
+            <Text style={st.aiToolArrow}>{'>'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* ── Referral Wallet ──────────────────────────────────── */}
       <View style={st.section}>
@@ -766,6 +753,114 @@ export default function BusinessDashboard() {
         </View>
       </View>
 
+      {/* ── P&L Snapshots ─────────────────────────────────────── */}
+      <View style={st.section}>
+        <View style={st.sectionHeader}>
+          <Text style={st.sectionTitle}>Monthly Snapshots</Text>
+          <TouchableOpacity onPress={takeSnapshot}>
+            <Text style={st.syncBtn}>Save This Month</Text>
+          </TouchableOpacity>
+        </View>
+
+        {(data.plSnapshots || []).length === 0 ? (
+          <TouchableOpacity style={st.setupCard} onPress={takeSnapshot}>
+            <Text style={st.setupEmoji}>{'📸'}</Text>
+            <Text style={st.setupText}>Save your first P&L snapshot</Text>
+            <Text style={st.setupSub}>Track how your business financials change month to month</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            {(data.plSnapshots || []).slice().reverse().slice(0, showSnapshotHistory ? undefined : 3).map((s, i) => {
+              const prev = (data.plSnapshots || []).slice().reverse()[i + 1];
+              const delta = prev ? s.netPosition - prev.netPosition : 0;
+              return (
+                <View key={s.id} style={st.snapshotRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.snapshotLabel}>{s.label}</Text>
+                    <Text style={st.expenseMeta}>
+                      Rev ${s.revenue.toFixed(0)} | Exp ${s.monthlyExpenses.toFixed(0)}/mo | Bank ${s.bankBalance.toLocaleString()}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[st.snapshotNet, { color: s.netPosition >= 0 ? '#4ade80' : '#f87171' }]}>
+                      ${s.netPosition.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </Text>
+                    {delta !== 0 && (
+                      <Text style={{ fontSize: 11, color: delta > 0 ? '#4ade80' : '#f87171', fontWeight: '600' }}>
+                        {delta > 0 ? '+' : ''}{delta.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+            {(data.plSnapshots || []).length > 3 && (
+              <TouchableOpacity onPress={() => setShowSnapshotHistory(!showSnapshotHistory)}>
+                <Text style={[st.syncBtn, { textAlign: 'center', marginTop: 8 }]}>
+                  {showSnapshotHistory ? 'Show less' : `Show all ${(data.plSnapshots || []).length} snapshots`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+
+      {/* ── Break-Even Calculator ──────────────────────────── */}
+      <View style={st.section}>
+        <Text style={st.sectionTitle}>Break-Even Calculator</Text>
+        <View style={st.plCard}>
+          <View style={st.plRow}>
+            <Text style={st.plLabel}>Monthly Expenses</Text>
+            <Text style={st.plRed}>${monthlyExpenses.toFixed(2)}/mo</Text>
+          </View>
+          <View style={st.plRow}>
+            <Text style={st.plLabel}>Annual Expenses</Text>
+            <Text style={st.plRed}>${annualExpenses.toFixed(2)}/yr</Text>
+          </View>
+          <View style={st.plDivider} />
+          <View style={[st.plRow, { alignItems: 'center' }]}>
+            <Text style={st.plLabel}>Revenue per user</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ color: '#888', marginRight: 4 }}>$</Text>
+              <TextInput
+                style={st.breakEvenInput}
+                value={revenuePerUser}
+                onChangeText={setRevenuePerUser}
+                keyboardType="numeric"
+                placeholder="4.99"
+                placeholderTextColor="#555"
+              />
+            </View>
+          </View>
+          <View style={st.plDivider} />
+          <View style={st.plRow}>
+            <Text style={st.plLabelBold}>Users to cover monthly</Text>
+            <Text style={st.plValueBold}>{usersToBreakEvenMonthly.toLocaleString()}</Text>
+          </View>
+          <View style={st.plRow}>
+            <Text style={st.plLabelBold}>Users to cover annual</Text>
+            <Text style={st.plValueBold}>{usersToBreakEvenAnnual.toLocaleString()}</Text>
+          </View>
+          {monthlyExpenses > 0 && rpu > 0 && (
+            <>
+              <View style={st.plDivider} />
+              <View style={st.plRow}>
+                <Text style={st.plLabel}>10 users/mo = </Text>
+                <Text style={st.plGreen}>${(10 * rpu).toFixed(2)}/mo</Text>
+              </View>
+              <View style={st.plRow}>
+                <Text style={st.plLabel}>50 users/mo = </Text>
+                <Text style={st.plGreen}>${(50 * rpu).toFixed(2)}/mo</Text>
+              </View>
+              <View style={st.plRow}>
+                <Text style={st.plLabel}>100 users/mo = </Text>
+                <Text style={st.plGreen}>${(100 * rpu).toFixed(2)}/mo</Text>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+
       {/* ── Business Transactions ───────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
@@ -831,309 +926,17 @@ export default function BusinessDashboard() {
       </View>
 
       {/* ═══════════════ MODALS ═══════════════ */}
+      <SetupModal visible={showSetupModal} onClose={() => setShowSetupModal(false)} data={data} onSave={handleModalSave} />
+      <WalletModal visible={showWalletModal} onClose={() => setShowWalletModal(false)} data={data} onSave={handleModalSave} />
+      <BankModal visible={showBankModal} onClose={() => setShowBankModal(false)} data={data} onSave={handleModalSave} />
+      <ExpenseModal visible={showExpenseModal} onClose={() => { setShowExpenseModal(false); setEditingExpenseId(null); }} data={data} onSave={handleModalSave} editId={editingExpenseId} />
+      <DistributionModal visible={showDistModal} onClose={() => setShowDistModal(false)} data={data} onSave={handleModalSave} />
+      <ContributionModal visible={showContribModal} onClose={() => setShowContribModal(false)} data={data} onSave={handleModalSave} />
+      <InfoModal visible={showInfoModal} onClose={() => setShowInfoModal(false)} data={data} onSave={handleModalSave} />
+      <ImportModal visible={showImportModal} onClose={() => setShowImportModal(false)} data={data} onSave={handleModalSave} />
+      <ReassignModal visible={showReassignModal} onClose={() => setShowReassignModal(false)} data={data} onSave={handleModalSave} />
+      <AIModal visible={showAIModal} onClose={() => setShowAIModal(false)} data={data} aiType={aiType} onGenerate={async () => {}} onExport={exportPDF} />
 
-      {/* CSV Import Modal */}
-      <Modal visible={showImportModal} transparent animationType="slide" onRequestClose={() => setShowImportModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <ScrollView>
-              <Text style={st.modalTitle}>Import Business Transactions</Text>
-              <Text style={st.modalSub}>
-                Upload a CSV from your business bank account. Supports Chase, BoA, Wells Fargo, Capital One, SoFi, and most standard CSVs.
-              </Text>
-
-              <TouchableOpacity style={st.catPillActive2} onPress={handlePickCSVFile}>
-                <Text style={st.modalSaveText}>Choose CSV File</Text>
-              </TouchableOpacity>
-
-              <Text style={st.modalLabel}>Or paste CSV data</Text>
-              <TextInput style={[st.modalInput, { height: 120, textAlignVertical: 'top' }]}
-                placeholder="Paste CSV data here..." placeholderTextColor="#666"
-                value={csvText} onChangeText={setCsvText} multiline />
-
-              {csvText && !importPreview && (
-                <TouchableOpacity style={st.modalSave} onPress={handleParseCSV}>
-                  <Text style={st.modalSaveText}>Parse</Text>
-                </TouchableOpacity>
-              )}
-
-              {importPreview && (
-                <View style={{ marginTop: 12 }}>
-                  <Text style={[st.expenseName, { marginBottom: 8 }]}>{importPreview.summary}</Text>
-                  {importPreview.errors.length > 0 && (
-                    <Text style={{ color: '#f87171', fontSize: 12, marginBottom: 8 }}>
-                      {importPreview.errors.length} warning(s)
-                    </Text>
-                  )}
-                </View>
-              )}
-
-              <View style={st.modalBtns}>
-                <TouchableOpacity style={st.modalCancel} onPress={() => { setShowImportModal(false); setCsvText(''); setImportPreview(null); }}>
-                  <Text style={st.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[st.modalSave, !importPreview && { opacity: 0.4 }]}
-                  onPress={handleConfirmImport}
-                  disabled={!importPreview}
-                >
-                  <Text style={st.modalSaveText}>Import {importPreview ? importPreview.transactions.length : 0}</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Reassign Personal Transactions Modal */}
-      <Modal visible={showReassignModal} transparent animationType="slide" onRequestClose={() => setShowReassignModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <ScrollView>
-              <Text style={st.modalTitle}>Find Business Transactions</Text>
-              <Text style={st.modalSub}>
-                Search your personal bank transactions by category or keyword to find business expenses you've been paying from personal accounts.
-              </Text>
-
-              <Text style={st.modalLabel}>Category or keyword to search</Text>
-              <TextInput style={st.modalInput}
-                placeholder="e.g. suten biz, business, consulting"
-                placeholderTextColor="#666" value={reassignCategory}
-                onChangeText={setReassignCategory} autoCapitalize="none" />
-
-              <View style={[st.card, { marginBottom: 12 }]}>
-                <Text style={st.descriptionText}>
-                  {'\uD83D\uDCA1'} Tip: If you've been tagging business expenses with a custom category (e.g. "suten biz"), enter that here. If not, try keywords from the transaction descriptions like your business name or common vendors.
-                </Text>
-              </View>
-
-              {reassignCategory.length > 0 && (
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={st.expenseName}>
-                    Found {personalBizTransactions.length} matching transaction{personalBizTransactions.length !== 1 ? 's' : ''}
-                  </Text>
-                  {personalBizTransactions.length > 0 && (
-                    <>
-                      <Text style={[st.expenseMeta, { marginTop: 4 }]}>
-                        Total expenses: ${personalBizTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </Text>
-                      {personalBizTransactions.slice(0, 5).map(t => (
-                        <View key={t.id} style={[st.expenseRow, { marginTop: 6 }]}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={st.expenseName} numberOfLines={1}>{t.description}</Text>
-                            <Text style={st.expenseMeta}>{t.date} {'\u00B7'} {bankAccounts.find(a => a.id === t.bankAccountId)?.name || 'Unknown account'}</Text>
-                          </View>
-                          <Text style={st.expenseAmount}>${t.amount.toFixed(2)}</Text>
-                        </View>
-                      ))}
-                      {personalBizTransactions.length > 5 && (
-                        <Text style={[st.mutedText, { marginTop: 6 }]}>+{personalBizTransactions.length - 5} more...</Text>
-                      )}
-                    </>
-                  )}
-                </View>
-              )}
-
-              <View style={st.modalBtns}>
-                <TouchableOpacity style={st.modalCancel} onPress={() => { setShowReassignModal(false); setReassignCategory(''); }}>
-                  <Text style={st.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[st.modalSave, personalBizTransactions.length === 0 && { opacity: 0.4 }]}
-                  onPress={handleReassignTransactions}
-                  disabled={personalBizTransactions.length === 0}
-                >
-                  <Text style={st.modalSaveText}>Move {personalBizTransactions.length} to Business</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Setup / Edit Business Modal */}
-      <Modal visible={showSetupModal} transparent animationType="slide" onRequestClose={() => { if (data.businessName) setShowSetupModal(false); }}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <Text style={st.modalTitle}>{data.businessName ? 'Edit Business' : 'Set Up Your Business'}</Text>
-            <Text style={st.modalSub}>This information is only stored on your device</Text>
-
-            <Text style={st.modalLabel}>Business Name</Text>
-            <TextInput style={st.modalInput} placeholder="e.g. Suten LLC, My Consulting" placeholderTextColor="#666"
-              value={setupName} onChangeText={setSetupName} />
-
-            <Text style={st.modalLabel}>Description</Text>
-            <TextInput style={[st.modalInput, { height: 100, textAlignVertical: 'top' }]}
-              placeholder="What does your business do? (optional)"
-              placeholderTextColor="#666" value={setupDesc} onChangeText={setSetupDesc}
-              multiline numberOfLines={4} />
-
-            <Text style={st.modalLabel}>Entity Type</Text>
-            <View style={st.pillRow}>
-              {(Object.entries(ENTITY_LABELS) as [EntityType, string][]).map(([key, label]) => (
-                <TouchableOpacity key={key}
-                  style={[st.catPill, setupEntity === key && st.catPillActive]}
-                  onPress={() => setSetupEntity(key)}>
-                  <Text style={[st.catPillText, setupEntity === key && st.catPillTextActive]}>{label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={st.modalBtns}>
-              {data.businessName ? (
-                <TouchableOpacity style={st.modalCancel} onPress={() => setShowSetupModal(false)}>
-                  <Text style={st.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity style={[st.modalSave, { flex: data.businessName ? 1 : undefined }]} onPress={handleSetup}>
-                <Text style={st.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Wallet Modal */}
-      <Modal visible={showWalletModal} transparent animationType="slide" onRequestClose={() => setShowWalletModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <Text style={st.modalTitle}>Referral Wallet Address</Text>
-            <Text style={st.modalSub}>The wallet receiving swap referral fees</Text>
-            <TextInput style={st.modalInput} placeholder="Solana wallet address" placeholderTextColor="#666"
-              value={walletInput} onChangeText={setWalletInput} autoCapitalize="none" />
-            <View style={st.modalBtns}>
-              <TouchableOpacity style={st.modalCancel} onPress={() => setShowWalletModal(false)}>
-                <Text style={st.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={st.modalSave} onPress={saveWallet}>
-                <Text style={st.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Bank Modal */}
-      <Modal visible={showBankModal} transparent animationType="slide" onRequestClose={() => setShowBankModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <Text style={st.modalTitle}>Business Bank Account</Text>
-            <TextInput style={st.modalInput} placeholder="Account name" placeholderTextColor="#666"
-              value={bankName} onChangeText={setBankName} />
-            <TextInput style={st.modalInput} placeholder="Institution (e.g. Mercury, Chase)" placeholderTextColor="#666"
-              value={bankInstitution} onChangeText={setBankInstitution} />
-            <TextInput style={st.modalInput} placeholder="Current balance" placeholderTextColor="#666"
-              keyboardType="numeric" value={bankBalance} onChangeText={setBankBalance} />
-            <View style={st.modalBtns}>
-              <TouchableOpacity style={st.modalCancel} onPress={() => setShowBankModal(false)}>
-                <Text style={st.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={st.modalSave} onPress={saveBankAccount}>
-                <Text style={st.modalSaveText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Expense Modal */}
-      <Modal visible={showExpenseModal} transparent animationType="slide" onRequestClose={resetExpenseForm}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <ScrollView>
-              <Text style={st.modalTitle}>{editingExpenseId ? 'Edit Expense' : 'Add Expense'}</Text>
-              <TextInput style={st.modalInput} placeholder="Expense name (e.g. Vercel Pro)" placeholderTextColor="#666"
-                value={expName} onChangeText={setExpName} />
-              <TextInput style={st.modalInput} placeholder="Amount" placeholderTextColor="#666"
-                keyboardType="numeric" value={expAmount} onChangeText={setExpAmount} />
-
-              <Text style={st.modalLabel}>Category</Text>
-              <View style={st.pillRow}>
-                {Object.entries(EXPENSE_CATEGORIES).map(([key, { emoji, label }]) => (
-                  <TouchableOpacity key={key}
-                    style={[st.catPill, expCategory === key && st.catPillActive]}
-                    onPress={() => setExpCategory(key)}>
-                    <Text style={[st.catPillText, expCategory === key && st.catPillTextActive]}>{emoji} {label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={st.modalLabel}>Frequency</Text>
-              <View style={st.pillRow}>
-                {(['monthly', 'annual', 'one-time'] as const).map(f => (
-                  <TouchableOpacity key={f}
-                    style={[st.catPill, expFreq === f && st.catPillActive]}
-                    onPress={() => setExpFreq(f)}>
-                    <Text style={[st.catPillText, expFreq === f && st.catPillTextActive]}>
-                      {f === 'one-time' ? 'One-time' : f.charAt(0).toUpperCase() + f.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TextInput style={st.modalInput} placeholder="Notes (optional)" placeholderTextColor="#666"
-                value={expNotes} onChangeText={setExpNotes} />
-
-              <View style={st.modalBtns}>
-                <TouchableOpacity style={st.modalCancel} onPress={resetExpenseForm}>
-                  <Text style={st.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={st.modalSave} onPress={addExpense}>
-                  <Text style={st.modalSaveText}>{editingExpenseId ? 'Save' : 'Add'}</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Distribution Modal */}
-      <Modal visible={showDistModal} transparent animationType="slide" onRequestClose={() => setShowDistModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <Text style={st.modalTitle}>Record Distribution</Text>
-            <Text style={st.modalSub}>
-              A distribution is money transferred from {data.businessName || 'your business'} to your personal accounts
-            </Text>
-            <TextInput style={st.modalInput} placeholder="Amount" placeholderTextColor="#666"
-              keyboardType="numeric" value={distAmount} onChangeText={setDistAmount} />
-            <TextInput style={st.modalInput} placeholder="Notes (optional)" placeholderTextColor="#666"
-              value={distNotes} onChangeText={setDistNotes} />
-            <View style={st.modalBtns}>
-              <TouchableOpacity style={st.modalCancel} onPress={() => { setShowDistModal(false); setDistAmount(''); setDistNotes(''); }}>
-                <Text style={st.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={st.modalSave} onPress={recordDistribution}>
-                <Text style={st.modalSaveText}>Record</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Contribution Modal */}
-      <Modal visible={showContribModal} transparent animationType="slide" onRequestClose={() => setShowContribModal(false)}>
-        <View style={st.modalOverlay}>
-          <View style={st.modalContent}>
-            <Text style={st.modalTitle}>Record Capital Contribution</Text>
-            <Text style={st.modalSub}>
-              Money transferred from your personal accounts to fund {data.businessName || 'your business'}
-            </Text>
-            <TextInput style={st.modalInput} placeholder="Amount" placeholderTextColor="#666"
-              keyboardType="numeric" value={contribAmount} onChangeText={setContribAmount} />
-            <TextInput style={st.modalInput} placeholder="Notes (optional, e.g. 'From Chase checking')" placeholderTextColor="#666"
-              value={contribNotes} onChangeText={setContribNotes} />
-            <View style={st.modalBtns}>
-              <TouchableOpacity style={st.modalCancel} onPress={() => { setShowContribModal(false); setContribAmount(''); setContribNotes(''); }}>
-                <Text style={st.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={st.modalSave} onPress={recordContribution}>
-                <Text style={st.modalSaveText}>Record</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
       <KingMeFooter />
     </ScrollView>
     </View>
@@ -1148,14 +951,25 @@ const st = StyleSheet.create({
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 4 },
   backBtn: { fontSize: 16, color: '#f4c430', fontWeight: '600' },
+
+  bizHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 12, paddingBottom: 4 },
+  logoWrap: { },
+  logoImg: { width: 56, height: 56, borderRadius: 12, borderWidth: 1, borderColor: '#2a2f3e' },
+  logoPlaceholder: {
+    width: 56, height: 56, borderRadius: 12, backgroundColor: '#141825',
+    borderWidth: 1, borderColor: '#2a2f3e', borderStyle: 'dashed' as any,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
   pageTitle: { fontSize: 24, fontWeight: '800', color: '#f4c430' },
-  entityLabel: { fontSize: 12, color: '#666', marginBottom: 8, paddingLeft: 4 },
+  entityLabel: { fontSize: 12, color: '#666', marginBottom: 8 },
 
   descriptionBox: {
     backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14, marginBottom: 16,
     borderWidth: 1, borderColor: '#2a2f3e', borderLeftWidth: 3, borderLeftColor: '#f4c43060',
   },
   descriptionText: { fontSize: 13, color: '#a0a0a0', lineHeight: 20 },
+  editHint: { fontSize: 11, color: '#555', marginTop: 6, textAlign: 'right' as const },
 
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -1235,4 +1049,41 @@ const st = StyleSheet.create({
   modalCancelText: { fontSize: 15, color: '#888', fontWeight: '700' },
   modalSave: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#f4c430', alignItems: 'center' },
   modalSaveText: { fontSize: 15, color: '#0a0e1a', fontWeight: '800' },
+
+  // Business Info
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#2a2f3e' },
+  infoLabel: { fontSize: 13, color: '#888', fontWeight: '600' },
+  infoValue: { fontSize: 13, color: '#e8e0d0', fontWeight: '700', textAlign: 'right' as const, flex: 1, marginLeft: 12 },
+
+  // AI Tools
+  aiToolBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: '#2a2f3e',
+  },
+  aiToolEmoji: { fontSize: 24 },
+  aiToolTitle: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  aiToolDesc: { fontSize: 11, color: '#888', marginTop: 2 },
+  aiToolArrow: { fontSize: 16, color: '#555', fontWeight: '700' },
+  aiResultBox: {
+    backgroundColor: '#141825', borderRadius: 12, padding: 16, marginTop: 8,
+    borderWidth: 1, borderColor: '#2a2f3e',
+  },
+  aiResultText: { fontSize: 13, color: '#d0d0d0', lineHeight: 20 },
+
+  // Snapshots
+  snapshotRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, marginBottom: 6,
+    borderWidth: 1, borderColor: '#2a2f3e',
+  },
+  snapshotLabel: { fontSize: 14, fontWeight: '700', color: '#e8e0d0' },
+  snapshotNet: { fontSize: 15, fontWeight: '800' },
+
+  // Break-even
+  breakEvenInput: {
+    backgroundColor: '#141825', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    color: '#f4c430', fontSize: 14, fontWeight: '700', width: 60, textAlign: 'right' as const,
+    borderWidth: 1, borderColor: '#2a2f3e',
+  },
 });
