@@ -11,7 +11,6 @@ export const config = {
 const JUPITER_REFERRAL_ACCOUNT = process.env.JUPITER_REFERRAL_ACCOUNT || '';
 const PLATFORM_FEE_BPS = parseInt(process.env.JUPITER_FEE_BPS || '50'); // 0.5% default
 const JUPITER_API_KEY = process.env.JUPITER_API_KEY || '';
-
 // ── Well-known Solana token mints ────────────────────────────
 const KNOWN_MINTS: Record<string, string> = {
   SOL:  'So11111111111111111111111111111111111111112',
@@ -68,7 +67,7 @@ export default async function handler(request: Request) {
     const resolvedInput = KNOWN_MINTS[inputMint.toUpperCase()] || inputMint;
     const resolvedOutput = KNOWN_MINTS[outputMint.toUpperCase()] || outputMint;
 
-    console.log(`[SWAP] ${action}: ${inputMint} → ${outputMint}, amount=${amount}, user=${userPublicKey}`);
+    console.log(`[SWAP] ${action}: ${inputMint} → ${outputMint}, amount=${amount}, fee=${applyFee}`);
 
     const apiHeaders: Record<string, string> = {
       'Accept': 'application/json',
@@ -130,97 +129,109 @@ export default async function handler(request: Request) {
     }
 
     // ── Full swap — quote then build transaction ────────────────
-    // Step 1: Get quote
-    const quoteParams = new URLSearchParams({
-      inputMint: resolvedInput,
-      outputMint: resolvedOutput,
-      amount: amount.toString(),
-      slippageBps: slippageBps.toString(),
-      ...(autoSlippage ? { autoSlippage: 'true', maxAutoSlippageBps: maxAutoSlippageBps.toString() } : {}),
-      ...(JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0
-        ? { platformFeeBps: PLATFORM_FEE_BPS.toString() }
-        : {}),
-    });
-
-    const quoteController = new AbortController();
-    const quoteTimeout = setTimeout(() => quoteController.abort(), 12000);
-
-    let quoteResponse: Response;
-    try {
-      quoteResponse = await fetch(
-        `https://api.jup.ag/swap/v1/quote?${quoteParams.toString()}`,
-        { signal: quoteController.signal, headers: apiHeaders }
-      );
-      clearTimeout(quoteTimeout);
-    } catch (err: any) {
-      clearTimeout(quoteTimeout);
-      console.error('[SWAP] Quote timeout:', err.message);
-      return jsonResponse({ error: 'Jupiter quote API timeout' }, 504);
-    }
-
-    if (!quoteResponse.ok) {
-      const errorText = await quoteResponse.text();
-      console.error('[SWAP] Quote error:', quoteResponse.status, errorText);
-      return jsonResponse({ error: 'Jupiter quote failed', details: errorText }, 502);
-    }
-
-    const quoteData = await quoteResponse.json();
-    console.log(`[SWAP] Quote: ${quoteData.inAmount} → ${quoteData.outAmount}`);
-
-    // Step 2: Build swap transaction
-    const swapBody: Record<string, any> = {
-      quoteResponse: quoteData,
-      userPublicKey,
-      wrapAndUnwrapSol: true,
-      dynamicComputeUnitLimit: true,
-      prioritizationFeeLamports: 'auto',
-    };
-
-    if (applyFee) {
-      swapBody.feeAccount = JUPITER_REFERRAL_ACCOUNT;
-    }
-
-    const swapController = new AbortController();
-    const swapTimeout = setTimeout(() => swapController.abort(), 12000);
-
-    let swapResponse: Response;
-    try {
-      swapResponse = await fetch('https://api.jup.ag/swap/v1/swap', {
-        method: 'POST',
-        signal: swapController.signal,
-        headers: apiHeaders,
-        body: JSON.stringify(swapBody),
+    // Helper to attempt quote + swap build with or without fee
+    async function buildSwap(withFee: boolean) {
+      const quoteParams = new URLSearchParams({
+        inputMint: resolvedInput,
+        outputMint: resolvedOutput,
+        amount: amount.toString(),
+        slippageBps: slippageBps.toString(),
+        ...(autoSlippage ? { autoSlippage: 'true', maxAutoSlippageBps: maxAutoSlippageBps.toString() } : {}),
+        ...(withFee ? { platformFeeBps: PLATFORM_FEE_BPS.toString() } : {}),
       });
-      clearTimeout(swapTimeout);
-    } catch (err: any) {
-      clearTimeout(swapTimeout);
-      console.error('[SWAP] Swap timeout:', err.message);
-      return jsonResponse({ error: 'Jupiter swap API timeout' }, 504);
+
+      const quoteController = new AbortController();
+      const quoteTimeout = setTimeout(() => quoteController.abort(), 12000);
+
+      let quoteResponse: Response;
+      try {
+        quoteResponse = await fetch(
+          `https://api.jup.ag/swap/v1/quote?${quoteParams.toString()}`,
+          { signal: quoteController.signal, headers: apiHeaders }
+        );
+        clearTimeout(quoteTimeout);
+      } catch (err: any) {
+        clearTimeout(quoteTimeout);
+        throw new Error('Jupiter quote API timeout');
+      }
+
+      if (!quoteResponse.ok) {
+        const errorText = await quoteResponse.text();
+        throw new Error(`Jupiter quote failed: ${errorText}`);
+      }
+
+      const quoteData = await quoteResponse.json();
+      console.log(`[SWAP] Quote (fee=${withFee}): ${quoteData.inAmount} → ${quoteData.outAmount}`);
+
+      // Build swap transaction
+      const swapBody: Record<string, any> = {
+        quoteResponse: quoteData,
+        userPublicKey,
+        wrapAndUnwrapSol: true,
+        dynamicComputeUnitLimit: true,
+        prioritizationFeeLamports: 'auto',
+      };
+
+      if (withFee && JUPITER_REFERRAL_ACCOUNT) {
+        swapBody.feeAccount = JUPITER_REFERRAL_ACCOUNT;
+      }
+
+      const swapController = new AbortController();
+      const swapTimeout = setTimeout(() => swapController.abort(), 12000);
+
+      let swapResponse: Response;
+      try {
+        swapResponse = await fetch('https://api.jup.ag/swap/v1/swap', {
+          method: 'POST',
+          signal: swapController.signal,
+          headers: apiHeaders,
+          body: JSON.stringify(swapBody),
+        });
+        clearTimeout(swapTimeout);
+      } catch (err: any) {
+        clearTimeout(swapTimeout);
+        throw new Error('Jupiter swap API timeout');
+      }
+
+      if (!swapResponse.ok) {
+        const errorText = await swapResponse.text();
+        throw new Error(`Jupiter swap build failed: ${errorText}`);
+      }
+
+      const swapData = await swapResponse.json();
+      return { quoteData, swapData, feeApplied: withFee };
     }
 
-    if (!swapResponse.ok) {
-      const errorText = await swapResponse.text();
-      console.error('[SWAP] Swap error:', swapResponse.status, errorText);
-      return jsonResponse({ error: 'Jupiter swap failed', details: errorText }, 502);
+    // Try with fee first, fallback to no fee if Jupiter rejects it
+    let result;
+    if (applyFee) {
+      try {
+        result = await buildSwap(true);
+        console.log('[SWAP] Transaction built with fee');
+      } catch (feeErr: any) {
+        console.warn(`[SWAP] Fee swap failed (${feeErr.message}), retrying without fee...`);
+        result = await buildSwap(false);
+        console.log('[SWAP] Transaction built without fee (fallback)');
+      }
+    } else {
+      result = await buildSwap(false);
+      console.log('[SWAP] Transaction built (no fee)');
     }
-
-    const swapData = await swapResponse.json();
-    console.log('[SWAP] Transaction built successfully');
 
     return jsonResponse({
-      swapTransaction: swapData.swapTransaction,
+      swapTransaction: result.swapData.swapTransaction,
       quote: {
         inputMint: resolvedInput,
         outputMint: resolvedOutput,
-        inAmount: quoteData.inAmount,
-        outAmount: quoteData.outAmount,
-        priceImpactPct: quoteData.priceImpactPct,
-        platformFee: applyFee ? {
+        inAmount: result.quoteData.inAmount,
+        outAmount: result.quoteData.outAmount,
+        priceImpactPct: result.quoteData.priceImpactPct,
+        platformFee: result.feeApplied ? {
           bps: PLATFORM_FEE_BPS,
           pct: (PLATFORM_FEE_BPS / 100).toFixed(2),
         } : null,
       },
-      lastValidBlockHeight: swapData.lastValidBlockHeight,
+      lastValidBlockHeight: result.swapData.lastValidBlockHeight,
     });
 
   } catch (error: any) {
