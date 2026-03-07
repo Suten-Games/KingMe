@@ -1,5 +1,5 @@
 // app/onboarding/obligations.tsx
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -175,53 +175,55 @@ export default function ObligationsScreen() {
       </View>
 
       <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
-        <View style={S.modalOverlay}>
+        <KeyboardAvoidingView style={S.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={S.modalContent}>
-            <Text style={S.modalTitle}>Add Obligation</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={S.modalTitle}>Add Obligation</Text>
 
-            <Text style={S.label}>Name</Text>
-            <TextInput style={S.modalInput} placeholder="e.g., Rent, Netflix, Car Payment"
-              placeholderTextColor={T.textDim} value={name} onChangeText={setName} />
+              <Text style={S.label}>Name</Text>
+              <TextInput style={S.modalInput} placeholder="e.g., Rent, Netflix, Car Payment"
+                placeholderTextColor={T.textDim} value={name} onChangeText={setName} />
 
-            <Text style={S.label}>Who are you paying?</Text>
-            <TextInput style={S.modalInput} placeholder="e.g., XYZ Financial, Comcast, Landlord"
-              placeholderTextColor={T.textDim} value={payee} onChangeText={setPayee} />
+              <Text style={S.label}>Who are you paying?</Text>
+              <TextInput style={S.modalInput} placeholder="e.g., XYZ Financial, Comcast, Landlord"
+                placeholderTextColor={T.textDim} value={payee} onChangeText={setPayee} />
 
-            <Text style={S.label}>Amount</Text>
-            <View style={S.inputContainer}>
-              <Text style={S.currencySymbol}>$</Text>
-              <TextInput style={S.input} placeholder="0" placeholderTextColor={T.textDim}
-                keyboardType="numeric" value={amount} onChangeText={setAmount} />
-            </View>
+              <Text style={S.label}>Amount</Text>
+              <View style={S.inputContainer}>
+                <Text style={S.currencySymbol}>$</Text>
+                <TextInput style={S.input} placeholder="0" placeholderTextColor={T.textDim}
+                  keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              </View>
 
-            <Text style={S.label}>Frequency</Text>
-            <View style={st.frequencyContainer}>
-              {(['monthly', 'weekly', 'yearly'] as const).map((f) => (
-                <TouchableOpacity key={f}
-                  style={[st.frequencyButton, frequency === f && st.frequencyButtonActive]}
-                  onPress={() => setFrequency(f)}>
-                  <Text style={[st.frequencyButtonText, frequency === f && st.frequencyButtonTextActive]}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </Text>
+              <Text style={S.label}>Frequency</Text>
+              <View style={st.frequencyContainer}>
+                {(['monthly', 'weekly', 'yearly'] as const).map((f) => (
+                  <TouchableOpacity key={f}
+                    style={[st.frequencyButton, frequency === f && st.frequencyButtonActive]}
+                    onPress={() => setFrequency(f)}>
+                    <Text style={[st.frequencyButtonText, frequency === f && st.frequencyButtonTextActive]}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <AccountPicker bankAccounts={bankAccounts} value={modalBankAccountId} onChange={setModalBankAccountId} />
+
+              <View style={S.modalButtons}>
+                <TouchableOpacity style={S.modalCancelButton}
+                  onPress={() => { setShowAddModal(false); setName(''); setPayee(''); setAmount(''); setModalBankAccountId(''); }}>
+                  <Text style={S.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <AccountPicker bankAccounts={bankAccounts} value={modalBankAccountId} onChange={setModalBankAccountId} />
-
-            <View style={S.modalButtons}>
-              <TouchableOpacity style={S.modalCancelButton}
-                onPress={() => { setShowAddModal(false); setName(''); setPayee(''); setAmount(''); setModalBankAccountId(''); }}>
-                <Text style={S.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[S.modalAddButton, (!name || !amount) && S.modalAddButtonDisabled]}
-                onPress={handleAddObligation} disabled={!name || !amount}>
-                <Text style={S.modalAddText}>Add</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity
+                  style={[S.modalAddButton, (!name || !amount) && S.modalAddButtonDisabled]}
+                  onPress={handleAddObligation} disabled={!name || !amount}>
+                  <Text style={S.modalAddText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
