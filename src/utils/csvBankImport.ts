@@ -180,18 +180,14 @@ interface ColumnMap {
 }
 
 export interface SavingsAccumulation {
-  totalDeposits: number;   // total USD moved to savings
-  totalWithdrawals: number; // total USD moved from savings
-  netBalance: number;      // deposits - withdrawals
+  totalVolume: number;     // total USD moved (direction unknown — Cash App doesn't differentiate)
   transactionCount: number;
   lastDate: string;
 }
 
 export interface DebtAccumulation {
   name: string;            // e.g. "Cash App Borrow", "Afterpay"
-  totalBorrowed: number;   // total USD borrowed
-  totalRepaid: number;     // total USD repaid
-  outstandingBalance: number; // borrowed - repaid
+  totalVolume: number;     // total USD in borrow/repayment activity
   transactionCount: number;
   lastDate: string;
 }
@@ -501,11 +497,11 @@ export function parseCSVTransactions(
   // Track crypto buys & sells (e.g. Cash App BTC round-ups, stock trades)
   const cryptoMap: Record<string, { totalBought: number; totalSold: number; totalSpent: number; totalProceeds: number; buyCount: number; sellCount: number; lastBuyDate: string }> = {};
 
-  // Track savings transfers
-  const savings = { deposits: 0, withdrawals: 0, count: 0, lastDate: '' };
+  // Track savings transfers (Cash App doesn't differentiate deposit vs withdrawal direction)
+  const savings = { totalVolume: 0, count: 0, lastDate: '' };
 
   // Track borrows and repayments
-  const debtMap: Record<string, { borrowed: number; repaid: number; count: number; lastDate: string }> = {};
+  const debtMap: Record<string, { totalVolume: number; count: number; lastDate: string }> = {};
 
   // Parse data rows
   for (let i = dataStartIndex; i < rows.length; i++) {
@@ -625,41 +621,28 @@ export function parseCSVTransactions(
         }
       }
 
-      // Track savings transfers
+      // Track savings transfers (Cash App shows both directions as negative — can't compute balance)
       const descLower = description.toLowerCase();
       if (descLower === 'savings' || descLower.includes('savings internal transfer') || descLower.includes('savings transfer')) {
-        const amt = Math.abs(rawAmount);
-        // Negative rawAmount = money leaving checking to savings = deposit into savings
-        if (rawAmount < 0) {
-          savings.deposits += amt;
-        } else {
-          savings.withdrawals += amt;
-        }
+        savings.totalVolume += Math.abs(rawAmount);
         savings.count += 1;
         const txDate = parseDate(dateStr);
         if (!savings.lastDate || txDate > savings.lastDate) savings.lastDate = txDate;
       }
 
-      // Track borrows and repayments
-      if (descLower.includes('borrowing in cash app') || descLower.includes('borrow')) {
+      // Track borrows, repayments, afterpay (Cash App shows all as negative — can't compute balance)
+      if (descLower.includes('borrowing in cash app') || descLower.includes('borrow') ||
+          descLower.includes('repayment') || descLower.includes('overdraft')) {
         const key = 'Cash App Borrow';
-        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
-        debtMap[key].borrowed += Math.abs(rawAmount);
-        debtMap[key].count += 1;
-        const txDate = parseDate(dateStr);
-        if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
-      } else if (descLower.includes('repayment') || (descLower.includes('overdraft') && rawAmount < 0)) {
-        const key = 'Cash App Borrow';
-        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
-        debtMap[key].repaid += Math.abs(rawAmount);
+        if (!debtMap[key]) debtMap[key] = { totalVolume: 0, count: 0, lastDate: '' };
+        debtMap[key].totalVolume += Math.abs(rawAmount);
         debtMap[key].count += 1;
         const txDate = parseDate(dateStr);
         if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
       } else if (descLower.includes('afterpay')) {
         const key = 'Afterpay';
-        if (!debtMap[key]) debtMap[key] = { borrowed: 0, repaid: 0, count: 0, lastDate: '' };
-        // Afterpay payments are repayments (money going out)
-        debtMap[key].repaid += Math.abs(rawAmount);
+        if (!debtMap[key]) debtMap[key] = { totalVolume: 0, count: 0, lastDate: '' };
+        debtMap[key].totalVolume += Math.abs(rawAmount);
         debtMap[key].count += 1;
         const txDate = parseDate(dateStr);
         if (!debtMap[key].lastDate || txDate > debtMap[key].lastDate) debtMap[key].lastDate = txDate;
@@ -707,30 +690,26 @@ export function parseCSVTransactions(
 
   // Build savings accumulation
   const savingsAccumulation: SavingsAccumulation | undefined = savings.count > 0 ? {
-    totalDeposits: savings.deposits,
-    totalWithdrawals: savings.withdrawals,
-    netBalance: savings.deposits - savings.withdrawals,
+    totalVolume: savings.totalVolume,
     transactionCount: savings.count,
     lastDate: savings.lastDate,
   } : undefined;
 
   if (savingsAccumulation) {
-    console.log(`[CSV_IMPORT] Savings detected: $${savingsAccumulation.totalDeposits.toFixed(2)} in, $${savingsAccumulation.totalWithdrawals.toFixed(2)} out, net $${savingsAccumulation.netBalance.toFixed(2)}`);
+    console.log(`[CSV_IMPORT] Savings detected: ${savings.count} transfers, $${savings.totalVolume.toFixed(2)} total volume`);
   }
 
   // Build debt accumulations
   const debtAccumulations: DebtAccumulation[] = Object.entries(debtMap).map(([name, data]) => ({
     name,
-    totalBorrowed: data.borrowed,
-    totalRepaid: data.repaid,
-    outstandingBalance: data.borrowed - data.repaid,
+    totalVolume: data.totalVolume,
     transactionCount: data.count,
     lastDate: data.lastDate,
   }));
 
   if (debtAccumulations.length > 0) {
     console.log('[CSV_IMPORT] Debts detected:', debtAccumulations.map(d =>
-      `${d.name}: borrowed $${d.totalBorrowed.toFixed(2)}, repaid $${d.totalRepaid.toFixed(2)}, outstanding $${d.outstandingBalance.toFixed(2)}`
+      `${d.name}: ${d.transactionCount} transactions, $${d.totalVolume.toFixed(2)} total volume`
     ).join(', '));
   }
 

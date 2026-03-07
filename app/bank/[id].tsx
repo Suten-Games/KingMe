@@ -645,7 +645,8 @@ export default function BankAccountDetailScreen() {
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        lines.push(`\nNet position: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
+        lines.push(`\nNet (buys - sells): ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
+        lines.push(`\nNote: Doesn't include transfers/sends. Update quantity in Assets if needed.`);
         Alert.alert(`${crypto.asset} Updated`, lines.join('\n'));
       } else {
         const currentValue = Math.max(0, netAmount) * currentPrice;
@@ -668,43 +669,45 @@ export default function BankAccountDetailScreen() {
             coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
           } as any,
         });
-        lines.push(`\nNet position: ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
+        lines.push(`\nNet (buys - sells): ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
+        lines.push(`\nNote: Doesn't include transfers/sends. Update quantity in Assets if needed.`);
         Alert.alert(`${crypto.asset} Asset Created`, lines.join('\n'));
       }
     }
   }, [assets, addAsset, updateAsset]);
 
   // ── Handle savings accumulation from CSV (e.g. Cash App Savings) ──
+  // Cash App doesn't differentiate deposit vs withdrawal direction in CSV,
+  // so we just detect savings activity and create the account — user sets balance manually.
   const handleSavingsAccumulation = useCallback((savingsData: NonNullable<typeof importPreview>['savingsAccumulation']) => {
     if (!savingsData) return;
     const savingsId = `cashapp_savings`;
     const existing = bankAccounts.find(a => a.id === savingsId);
 
     if (existing) {
-      // Update balance by adding net change
-      const newBalance = existing.currentBalance + savingsData.netBalance;
-      updateBankAccount(savingsId, { currentBalance: newBalance });
       Alert.alert(
-        'Cash App Savings Updated',
-        `Deposits: +$${savingsData.totalDeposits.toFixed(2)}\nWithdrawals: -$${savingsData.totalWithdrawals.toFixed(2)}\nNew balance: $${newBalance.toFixed(2)}`,
+        'Cash App Savings',
+        `${savingsData.transactionCount} savings transfers detected ($${savingsData.totalVolume.toFixed(2)} volume).\n\nYour current saved balance is $${existing.currentBalance.toFixed(2)}. Update it from the Savings account page if needed.`,
       );
     } else {
       addBankAccount({
         id: savingsId,
         name: 'Cash App Savings',
         type: 'savings',
-        currentBalance: savingsData.netBalance,
+        currentBalance: 0,
         institution: 'Cash App',
         isPrimaryIncome: false,
       });
       Alert.alert(
         'Cash App Savings Created',
-        `${savingsData.transactionCount} transfers detected.\nDeposits: +$${savingsData.totalDeposits.toFixed(2)}\nWithdrawals: -$${savingsData.totalWithdrawals.toFixed(2)}\nBalance: $${savingsData.netBalance.toFixed(2)}`,
+        `${savingsData.transactionCount} savings transfers detected ($${savingsData.totalVolume.toFixed(2)} volume).\n\nCash App doesn't export savings direction, so please set your actual balance on the Savings account page.`,
       );
     }
-  }, [bankAccounts, addBankAccount, updateBankAccount]);
+  }, [bankAccounts, addBankAccount]);
 
   // ── Handle debt accumulations from CSV (e.g. Cash App Borrow, Afterpay) ──
+  // Cash App doesn't differentiate borrow vs repayment direction in CSV,
+  // so we detect activity and create the debt — user sets balance manually.
   const handleDebtAccumulations = useCallback((debtData: NonNullable<typeof importPreview>['debtAccumulations']) => {
     if (!debtData || debtData.length === 0) return;
 
@@ -713,22 +716,16 @@ export default function BankAccountDetailScreen() {
       const existing = debts.find(d => d.id === debtId);
 
       if (existing) {
-        // Update: adjust balance based on new borrows and repayments
-        const newBalance = Math.max(0, (existing.balance ?? existing.principal) + debt.totalBorrowed - debt.totalRepaid);
-        updateDebt(debtId, {
-          balance: newBalance,
-          principal: existing.principal + debt.totalBorrowed,
-        });
         Alert.alert(
-          `${debt.name} Updated`,
-          `Borrowed: +$${debt.totalBorrowed.toFixed(2)}\nRepaid: -$${debt.totalRepaid.toFixed(2)}\nOutstanding: $${newBalance.toFixed(2)}`,
+          `${debt.name}`,
+          `${debt.transactionCount} transactions detected ($${debt.totalVolume.toFixed(2)} volume).\n\nCurrent balance: $${(existing.balance ?? 0).toFixed(2)}. Update from Debts if needed.`,
         );
       } else {
         addDebt({
           id: debtId,
           name: debt.name,
-          principal: debt.totalBorrowed,
-          balance: debt.outstandingBalance,
+          principal: 0,
+          balance: 0,
           interestRate: 0,
           monthlyPayment: 0,
           minimumPayment: 0,
@@ -738,11 +735,11 @@ export default function BankAccountDetailScreen() {
         });
         Alert.alert(
           `${debt.name} Debt Created`,
-          `Borrowed: $${debt.totalBorrowed.toFixed(2)}\nRepaid: $${debt.totalRepaid.toFixed(2)}\nOutstanding: $${debt.outstandingBalance.toFixed(2)}`,
+          `${debt.transactionCount} transactions detected ($${debt.totalVolume.toFixed(2)} volume).\n\nCash App doesn't export borrow/repayment direction, so please set your actual balance in Debts.`,
         );
       }
     }
-  }, [debts, addDebt, updateDebt, id]);
+  }, [debts, addDebt, id]);
 
   const handleConfirmImport = () => {
     if (!importPreview) return;
@@ -1618,16 +1615,11 @@ export default function BankAccountDetailScreen() {
                         <Text style={{ fontSize: 13, color: '#60a5fa', fontWeight: '700' }}>
                           Cash App Savings
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#4ade80' }}>
-                          Deposits: +${importPreview.savingsAccumulation.totalDeposits.toFixed(2)}
+                        <Text style={{ fontSize: 11, color: '#888' }}>
+                          {importPreview.savingsAccumulation.transactionCount} transfers (${importPreview.savingsAccumulation.totalVolume.toFixed(2)} volume)
                         </Text>
-                        {importPreview.savingsAccumulation.totalWithdrawals > 0 && (
-                          <Text style={{ fontSize: 11, color: '#f87171' }}>
-                            Withdrawals: -${importPreview.savingsAccumulation.totalWithdrawals.toFixed(2)}
-                          </Text>
-                        )}
-                        <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                          Net: ${importPreview.savingsAccumulation.netBalance.toFixed(2)} — will create/update savings account
+                        <Text style={{ fontSize: 11, color: '#60a5fa', marginTop: 2 }}>
+                          Will create savings account — set balance manually
                         </Text>
                       </View>
                     )}
@@ -1638,18 +1630,11 @@ export default function BankAccountDetailScreen() {
                             <Text style={{ fontSize: 13, color: '#f87171', fontWeight: '700' }}>
                               {d.name}
                             </Text>
-                            {d.totalBorrowed > 0 && (
-                              <Text style={{ fontSize: 11, color: '#f87171' }}>
-                                Borrowed: ${d.totalBorrowed.toFixed(2)}
-                              </Text>
-                            )}
-                            {d.totalRepaid > 0 && (
-                              <Text style={{ fontSize: 11, color: '#4ade80' }}>
-                                Repaid: ${d.totalRepaid.toFixed(2)}
-                              </Text>
-                            )}
-                            <Text style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                              Outstanding: ${d.outstandingBalance.toFixed(2)} — will create/update debt
+                            <Text style={{ fontSize: 11, color: '#888' }}>
+                              {d.transactionCount} transactions (${d.totalVolume.toFixed(2)} volume)
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>
+                              Will create debt — set balance manually
                             </Text>
                           </View>
                         ))}
