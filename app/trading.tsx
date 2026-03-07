@@ -618,8 +618,15 @@ export default function TradingScreen() {
             <Text style={pf.bannerSubtext}>This helps us tailor your trading journal experience.</Text>
 
             <TouchableOpacity style={pf.driftBtn} onPress={chooseDrift}>
-              <Text style={pf.driftBtnText}>Drift (Recommended)</Text>
-              <Text style={pf.driftBtnSub}>Decentralized perps on Solana — auto-sync trades on-chain</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#131A2A', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <Image source={{ uri: 'https://logo.clearbit.com/drift.trade' }} style={{ width: 24, height: 24, borderRadius: 4 }} resizeMode="contain" />
+                </View>
+                <View>
+                  <Text style={pf.driftBtnText}>Drift <Text style={{ color: '#888', fontWeight: '400', fontSize: 12 }}>(Recommended)</Text></Text>
+                  <Text style={pf.driftBtnSub}>Decentralized perps on Solana — auto-sync trades on-chain</Text>
+                </View>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={pf.otherBtn} onPress={() => setShowOtherInput(true)}>
@@ -1237,16 +1244,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   openDriftBtn: {
-    backgroundColor: '#60a5fa20',
+    backgroundColor: '#13B4AA20',
     borderWidth: 1,
-    borderColor: '#60a5fa40',
+    borderColor: '#13B4AA40',
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center' as const,
     marginTop: 10,
   },
   openDriftBtnText: {
-    color: '#60a5fa',
+    color: '#13B4AA',
     fontSize: 13,
     fontWeight: '700' as const,
     letterSpacing: 0.5,
@@ -1382,15 +1389,15 @@ const pf = StyleSheet.create({
   bannerTitle: { fontSize: 18, fontWeight: 'bold', color: '#f4c430', marginBottom: 6 },
   bannerSubtext: { fontSize: 13, color: '#a0a0a0', marginBottom: 16 },
   driftBtn: {
-    backgroundColor: '#4ade8015',
+    backgroundColor: '#13B4AA12',
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#4ade8030',
+    borderColor: '#13B4AA30',
   },
-  driftBtnText: { fontSize: 15, fontWeight: 'bold', color: '#4ade80' },
-  driftBtnSub: { fontSize: 12, color: '#a0a0a0', marginTop: 4 },
+  driftBtnText: { fontSize: 15, fontWeight: 'bold', color: '#13B4AA' },
+  driftBtnSub: { fontSize: 12, color: '#a0a0a0', marginTop: 2 },
   otherBtn: {
     backgroundColor: '#60a5fa10',
     borderRadius: 12,
@@ -1429,12 +1436,12 @@ const pf = StyleSheet.create({
   integrationText: { fontSize: 13, color: '#60a5fa', fontWeight: '600', marginBottom: 8 },
   switchText: { fontSize: 12, color: '#a0a0a0', textAlign: 'center', marginTop: 10, textDecorationLine: 'underline' },
   openDriftBtn: {
-    backgroundColor: '#4ade8015',
+    backgroundColor: '#13B4AA15',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#4ade8030',
+    borderColor: '#13B4AA30',
   },
-  openDriftText: { color: '#4ade80', fontWeight: 'bold', fontSize: 14 },
+  openDriftText: { color: '#13B4AA', fontWeight: 'bold', fontSize: 14 },
 });
