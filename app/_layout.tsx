@@ -17,7 +17,7 @@ import { useBadgeChecker } from '../src/hooks/useBadgeChecker';
 import { useAutoBackup } from '../src/hooks/useAutoBackup';
 import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
-import { inject } from '@vercel/analytics';
+// @vercel/analytics imported dynamically in useEffect below (crashes Android at import time)
 import { useStore } from '../src/store/useStore';
 
 /** Runs hooks that depend on WalletProvider context. */
@@ -48,8 +48,12 @@ export default function RootLayout() {
 
   useBadgeChecker();
 
-  // Inject Vercel Analytics on web only
-  useEffect(() => { if (Platform.OS === 'web') inject(); }, []);
+  // Inject Vercel Analytics on web only (dynamic import to avoid Android crash)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      import('@vercel/analytics').then(({ inject }) => inject());
+    }
+  }, []);
 
   // Show splash while fonts or store load
   if (!fontsLoaded || !isLoaded) {
