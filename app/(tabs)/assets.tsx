@@ -242,9 +242,25 @@ export default function AssetsScreen() {
     if (wallets.length === 0) return;
     for (const addr of wallets) {
       const h = await fetchSKRHolding(addr);
-      if (h) { setLiveSkrHolding(h); return; }
+      if (h) {
+        setLiveSkrHolding(h);
+        // Write live staking balance back to store so it survives manual edits
+        if (skrAsset) {
+          const meta = (skrAsset.metadata || {}) as any;
+          const price = meta.priceUSD || 0;
+          updateAsset(skrAsset.id, {
+            value: h.totalBalance * price,
+            metadata: {
+              ...meta,
+              balance: h.totalBalance,
+              quantity: h.totalBalance,
+            },
+          });
+        }
+        return;
+      }
     }
-  }, [wallets]);
+  }, [wallets, skrAsset, updateAsset]);
 
   useEffect(() => { refreshSkr(); }, [refreshSkr]);
 
