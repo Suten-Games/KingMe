@@ -151,6 +151,8 @@ export default function BankAccountDetailScreen() {
   // Import state
   const [csvText, setCsvText] = useState('');
   const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; summary: string; errors: string[] } | null>(null);
+  const [importCreateSavings, setImportCreateSavings] = useState(true);
+  const [importCreateDebts, setImportCreateDebts] = useState<Record<string, boolean>>({});
 
   // Balance edit state
   const [showBalanceEdit, setShowBalanceEdit] = useState(false);
@@ -598,18 +600,24 @@ export default function BankAccountDetailScreen() {
   const handleCryptoAccumulations = useCallback(async (accumulations: NonNullable<typeof importPreview>['cryptoAccumulations']) => {
     if (!accumulations || accumulations.length === 0) return;
 
+    const CRYPTO_SYMBOLS = new Set(['BTC', 'ETH', 'SOL', 'DOGE', 'LTC', 'XRP', 'ADA', 'DOT', 'AVAX', 'MATIC', 'LINK', 'UNI', 'SHIB']);
+
     for (const crypto of accumulations) {
+      const isCrypto = CRYPTO_SYMBOLS.has(crypto.asset);
+      const assetType = isCrypto ? 'crypto' : 'stocks';
       const assetId = `cashapp_${crypto.asset.toLowerCase()}`;
       const existing = assets.find(a => a.id === assetId);
 
-      // Fetch current price
+      // Fetch current price (only for crypto via CoinGecko)
       let currentPrice = crypto.avgPrice;
-      try {
-        const coingeckoId = crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset.toLowerCase();
-        const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`);
-        const data = await resp.json();
-        if (data[coingeckoId]?.usd) currentPrice = data[coingeckoId].usd;
-      } catch {}
+      if (isCrypto) {
+        try {
+          const coingeckoId = crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset === 'SOL' ? 'solana' : crypto.asset === 'DOGE' ? 'dogecoin' : crypto.asset.toLowerCase();
+          const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`);
+          const data = await resp.json();
+          if (data[coingeckoId]?.usd) currentPrice = data[coingeckoId].usd;
+        } catch {}
+      }
 
       // Build summary lines
       const lines: string[] = [];
@@ -635,7 +643,7 @@ export default function BankAccountDetailScreen() {
           value: Math.max(0, newQty) * currentPrice,
           metadata: {
             ...existing.metadata,
-            type: 'crypto',
+            type: assetType,
             symbol: crypto.asset,
             quantity: Math.max(0, newQty),
             priceUSD: currentPrice,
@@ -644,7 +652,7 @@ export default function BankAccountDetailScreen() {
             avgCost: newQty > 0 ? newSpent / (prevQty + crypto.totalBought) : 0,
             realizedPnL: newRealizedPnL,
             description: `Cash App ${crypto.asset}`,
-            coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
+            ...(isCrypto ? { coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset === 'SOL' ? 'solana' : crypto.asset.toLowerCase() } : { ticker: crypto.asset }),
           } as any,
         });
         lines.push(`\nNet position: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
@@ -654,12 +662,12 @@ export default function BankAccountDetailScreen() {
         const currentValue = Math.max(0, netAmount) * currentPrice;
         addAsset({
           id: assetId,
-          type: 'crypto',
+          type: assetType,
           name: `Cash App ${crypto.asset}`,
           value: currentValue,
           annualIncome: 0,
           metadata: {
-            type: 'crypto',
+            type: assetType,
             symbol: crypto.asset,
             quantity: Math.max(0, netAmount),
             priceUSD: currentPrice,
@@ -668,7 +676,7 @@ export default function BankAccountDetailScreen() {
             avgCost: crypto.avgPrice,
             realizedPnL: crypto.realizedPnL,
             description: `Cash App ${crypto.asset}`,
-            coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset.toLowerCase(),
+            ...(isCrypto ? { coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset === 'SOL' ? 'solana' : crypto.asset.toLowerCase() } : { ticker: crypto.asset }),
           } as any,
         });
         lines.push(`\nNet position: ${Math.max(0, netAmount).toFixed(8)} ${crypto.asset} ($${currentValue.toFixed(2)})`);
@@ -752,14 +760,17 @@ export default function BankAccountDetailScreen() {
       handleCryptoAccumulations(importPreview.cryptoAccumulations);
     }
 
-    // Handle savings accumulation (Cash App Savings)
-    if (importPreview.savingsAccumulation) {
+    // Handle savings accumulation (Cash App Savings) — only if toggled on
+    if (importPreview.savingsAccumulation && importCreateSavings) {
       handleSavingsAccumulation(importPreview.savingsAccumulation);
     }
 
-    // Handle debt accumulations (Cash App Borrow, Afterpay)
+    // Handle debt accumulations (Cash App Borrow, Afterpay) — only if toggled on
     if (importPreview.debtAccumulations) {
-      handleDebtAccumulations(importPreview.debtAccumulations);
+      const enabledDebts = importPreview.debtAccumulations.filter(d => importCreateDebts[d.name]);
+      if (enabledDebts.length > 0) {
+        handleDebtAccumulations(enabledDebts);
+      }
     }
 
     setCsvText('');
@@ -1623,32 +1634,41 @@ export default function BankAccountDetailScreen() {
                       </View>
                     )}
                     {importPreview.savingsAccumulation && (
-                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
-                        <Text style={{ fontSize: 13, color: '#60a5fa', fontWeight: '700' }}>
-                          Cash App Savings
-                        </Text>
-                        <Text style={{ fontSize: 11, color: '#888' }}>
+                      <TouchableOpacity
+                        style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}
+                        activeOpacity={0.7}
+                        onPress={() => setImportCreateSavings(!importCreateSavings)}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 16 }}>{importCreateSavings ? '☑' : '☐'}</Text>
+                          <Text style={{ fontSize: 13, color: importCreateSavings ? '#60a5fa' : '#555', fontWeight: '700' }}>
+                            Cash App Savings
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#888', marginLeft: 24 }}>
                           {importPreview.savingsAccumulation.transactionCount} transfers (${importPreview.savingsAccumulation.totalVolume.toFixed(2)} volume)
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#60a5fa', marginTop: 2 }}>
-                          Will create savings account — set balance manually
-                        </Text>
-                      </View>
+                      </TouchableOpacity>
                     )}
                     {importPreview.debtAccumulations && importPreview.debtAccumulations.length > 0 && (
                       <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#2a2f3e' }}>
                         {importPreview.debtAccumulations.map((d, i) => (
-                          <View key={i} style={{ marginBottom: 6 }}>
-                            <Text style={{ fontSize: 13, color: '#f87171', fontWeight: '700' }}>
-                              {d.name}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: '#888' }}>
+                          <TouchableOpacity
+                            key={i}
+                            style={{ marginBottom: 6 }}
+                            activeOpacity={0.7}
+                            onPress={() => setImportCreateDebts(prev => ({ ...prev, [d.name]: !prev[d.name] }))}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 16 }}>{importCreateDebts[d.name] ? '☑' : '☐'}</Text>
+                              <Text style={{ fontSize: 13, color: importCreateDebts[d.name] ? '#f87171' : '#555', fontWeight: '700' }}>
+                                {d.name}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 11, color: '#888', marginLeft: 24 }}>
                               {d.transactionCount} transactions (${d.totalVolume.toFixed(2)} volume)
                             </Text>
-                            <Text style={{ fontSize: 11, color: '#f87171', marginTop: 2 }}>
-                              Will create debt — set balance manually
-                            </Text>
-                          </View>
+                          </TouchableOpacity>
                         ))}
                       </View>
                     )}
