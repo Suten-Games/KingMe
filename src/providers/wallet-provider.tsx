@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { PublicKey } from '@solana/web3.js';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -175,13 +176,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (Platform.OS !== 'web' || !activeAdapter) return;
 
     const onConnect = (pk: any) => {
-      console.log(`[Wallet] ${walletName} connected:`, pk?.toString());
+      log(`[Wallet] ${walletName} connected:`, pk?.toString());
       setConnected(true);
       if (pk) setPublicKey(new PublicKey(pk.toString()));
     };
 
     const onDisconnect = () => {
-      console.log(`[Wallet] ${walletName} disconnected`);
+      log(`[Wallet] ${walletName} disconnected`);
       setConnected(false);
       setPublicKey(null);
       setActiveAdapter(null);
@@ -242,10 +243,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setWalletName(wallet.name);
         setShowPicker(false);
 
-        console.log(`[Wallet] Connected to ${wallet.name}:`, pk.toString());
+        log(`[Wallet] Connected to ${wallet.name}:`, pk.toString());
       }
     } catch (error: any) {
-      console.error('[Wallet] Connection failed:', error);
+      logError('[Wallet] Connection failed:', error);
       throw error;
     } finally {
       setConnecting(false);
@@ -262,7 +263,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setPublicKey(null);
     setActiveAdapter(null);
     setWalletName(null);
-    console.log('[Wallet] Disconnected');
+    log('[Wallet] Disconnected');
   }, [activeAdapter]);
 
   // ── Sign Message ───────────────────────────────────────────────────────────
@@ -275,7 +276,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const result = await activeAdapter.signMessage(message, 'utf8');
       return result.signature || result;
     } catch (error: any) {
-      console.error('[Wallet] Signing failed:', error);
+      logError('[Wallet] Signing failed:', error);
       throw error;
     }
   }, [connected, publicKey, activeAdapter]);
@@ -289,7 +290,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       return await activeAdapter.signTransaction(transaction);
     } catch (error: any) {
-      console.error('[Wallet] Transaction signing failed:', error);
+      logError('[Wallet] Transaction signing failed:', error);
       throw error;
     }
   }, [connected, publicKey, activeAdapter]);
@@ -313,7 +314,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const signed = await activeAdapter.signTransaction(transaction);
       throw new Error('signAndSendTransaction not supported — use signTransaction fallback');
     } catch (error: any) {
-      console.error('[Wallet] signAndSendTransaction failed:', error);
+      logError('[Wallet] signAndSendTransaction failed:', error);
       throw error;
     }
   }, [connected, publicKey, activeAdapter]);

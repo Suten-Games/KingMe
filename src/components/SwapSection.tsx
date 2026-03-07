@@ -17,6 +17,7 @@ import {
 import type { Asset } from '../types';
 import { postSwapUpdate } from '../utils/postSwapUpdate';
 import { useSwapToast } from './SwapToast';
+import { log, warn, error } from '../utils/logger';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -101,7 +102,7 @@ export default function SwapSection({ asset }: Props) {
     try {
       const decimals = meta?.decimals ?? await fetchMintDecimals(mint);
 
-      console.log(`[SWAP] ${symbol}: ${tokenAmount} tokens → ${output.label}, decimals=${decimals}`);
+      log(`[SWAP] ${symbol}: ${tokenAmount} tokens → ${output.label}, decimals=${decimals}`);
 
       const result = await executeSwap(
         {

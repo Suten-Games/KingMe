@@ -26,6 +26,7 @@ import WindfallAlertCard from '@/components/WindfallAlertCard';
 import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 import TradeInsightCards from '@/components/TradeInsightCards';
 import WatchlistAlerts from '@/components/WatchlistAlerts';
+import { log, warn, error } from '@/utils/logger';
 import TargetIcon from '@/components/icons/TargetIcon';
 import { getUnlockedAddOns } from '../../src/services/addOnPayment';
 
@@ -141,7 +142,7 @@ export default function HomeScreen() {
   useEffect(() => {
     const STALE_MS = 5 * 60 * 1000;
     const isStale = !lastPriceRefresh || (Date.now() - new Date(lastPriceRefresh).getTime() > STALE_MS);
-    if (isStale) refreshMarketPrices().catch(console.error);
+    if (isStale) refreshMarketPrices().catch(error);
   }, []);
 
   // Auto-sync wallet tokens if stale (>5min) or never synced
@@ -150,8 +151,8 @@ export default function HomeScreen() {
     const STALE_MS = 5 * 60 * 1000;
     const isStale = !lastAssetSync || (Date.now() - new Date(lastAssetSync).getTime() > STALE_MS);
     if (isStale) {
-      console.log('[AUTO-SYNC] Wallet sync triggered (stale or first run)');
-      syncWalletAssets(wallets[0]).catch(console.error);
+      log('[AUTO-SYNC] Wallet sync triggered (stale or first run)');
+      syncWalletAssets(wallets[0]).catch(error);
     }
   }, []);
 

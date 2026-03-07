@@ -31,6 +31,7 @@ import {
   SetupModal, WalletModal, BankModal, ExpenseModal,
   DistributionModal, ContributionModal, InfoModal, ImportModal, ReassignModal, AIModal,
 } from '../src/components/business/BusinessModals';
+import { log, warn, error as logError } from '@/utils/logger';
 
 const STORAGE_KEY = 'business_dashboard_data';
 const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
@@ -65,7 +66,7 @@ function syncBusinessAsset(data: BusinessData) {
           lastSynced: new Date().toISOString(),
         },
       });
-      console.log(`[BIZ] Updated ${data.businessName} asset: $${netValue}`);
+      log(`[BIZ] Updated ${data.businessName} asset: $${netValue}`);
     }
   } else {
     // Create new asset
@@ -83,7 +84,7 @@ function syncBusinessAsset(data: BusinessData) {
         lastSynced: new Date().toISOString(),
       } as any,
     });
-    console.log(`[BIZ] Created ${data.businessName} asset: $${netValue}`);
+    log(`[BIZ] Created ${data.businessName} asset: $${netValue}`);
   }
 }
 
@@ -210,7 +211,7 @@ export default function BusinessDashboard() {
         referralBalance: { sol: solBalance, usdc: usdcBalance, other: otherWithValue, totalUSD, lastFetched: new Date().toISOString() },
       });
     } catch (err: any) {
-      console.error('Referral sync error:', err);
+      logError('Referral sync error:', err);
       Alert.alert('Sync Failed', 'Could not sync referral data. Please check your connection and try again.');
     } finally {
       setSyncing(false);

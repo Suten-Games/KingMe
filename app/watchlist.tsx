@@ -31,6 +31,7 @@ import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
   type TokenPriceData, type WatchlistToken,
 } from '../src/services/priceTracker';
+import { log, warn, error as logError } from '@/utils/logger';
 
 // ── Cross-platform alert ──────────────────────────────────────────
 function alert(title: string, msg?: string) {
@@ -308,7 +309,7 @@ export default function WatchlistScreen() {
       }
       added++;
     }
-    if (added > 0) console.log(`[WATCHLIST] Auto-added ${added} held coins to watchlist`);
+    if (added > 0) log(`[WATCHLIST] Auto-added ${added} held coins to watchlist`);
     return added;
   }, [assets]);
 
@@ -325,7 +326,7 @@ export default function WatchlistScreen() {
       let fixedAny = false;
       for (const token of wl) {
         if (MINT_FIXES[token.mint]) {
-          console.log(`[WATCHLIST] Fixing stale mint for ${token.symbol}: ${token.mint.slice(0, 8)} → ${MINT_FIXES[token.mint].slice(0, 8)}`);
+          log(`[WATCHLIST] Fixing stale mint for ${token.symbol}: ${token.mint.slice(0, 8)} → ${MINT_FIXES[token.mint].slice(0, 8)}`);
           await removeFromWatchlist(token.mint);
           await addToWatchlist(MINT_FIXES[token.mint], token.symbol);
           fixedAny = true;
@@ -380,7 +381,7 @@ export default function WatchlistScreen() {
         setPriceData(pd);
       }
     } catch (err) {
-      console.error('Watchlist load failed:', err);
+      logError('Watchlist load failed:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);

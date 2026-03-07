@@ -19,6 +19,7 @@ import { restoreAsyncData } from '../../src/services/fullBackup';
 import { useStore } from '../../src/store/useStore';
 import WalletPickerModal from '../../src/components/WalletPickerModal';
 import { T } from '../../src/theme';
+import { log, warn, error as logError } from '@/utils/logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_WIDTH = Platform.OS === 'web' ? Math.min(SCREEN_WIDTH, 480) : SCREEN_WIDTH;
@@ -88,7 +89,7 @@ export default function OnboardingIntro() {
 
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.error('Restore failed:', err);
+      logError('Restore failed:', err);
       setRestoreError(err.message || 'No backup found for this wallet');
       setRestoring(false);
     }

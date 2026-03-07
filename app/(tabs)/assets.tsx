@@ -26,6 +26,7 @@ import { loadAllPlans, createPlan, getPlan, type AccumulationPlan } from '@/serv
 import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 import { useSwapToast } from '@/components/SwapToast';
+import { log, warn, error as logError } from '@/utils/logger';
 
 // ── Build SKRCard props from a store asset ─────────────────
 function buildSkrFromAsset(
@@ -231,7 +232,7 @@ export default function AssetsScreen() {
       const now = new Date();
       const diffMinutes = (now.getTime() - lastSync.getTime()) / 60000;
       if (diffMinutes > 5) {
-        syncWalletAssets(wallets[0]).catch(console.error);
+        syncWalletAssets(wallets[0]).catch(logError);
       }
     }
   }, []);

@@ -10,6 +10,7 @@ import {
 } from './walletStorage';
 
 import { getApiBase } from './apiBase';
+import { log, warn, error as logError } from '../utils/logger';
 
 const BACKUP_API = `${getApiBase()}/api/backup`;
 
@@ -40,7 +41,7 @@ export async function saveBackup(
 
     return backupId;
   } catch (error) {
-    console.error('Backup failed:', error);
+    logError('Backup failed:', error);
     throw error;
   }
 }
@@ -74,7 +75,7 @@ export async function loadBackup(
 
     return profileData;
   } catch (error) {
-    console.error('Load backup failed:', error);
+    logError('Load backup failed:', error);
     throw error;
   }
 }

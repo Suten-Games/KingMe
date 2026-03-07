@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import type { UserProfile } from '../types';
 import { STORAGE_KEYS, DEFAULT_USER_PROFILE } from '../utils/constants';
+import { log, warn, error as logError } from '../utils/logger';
 
 /**
  * Derive encryption key from wallet signature
@@ -55,9 +56,9 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     // Update last sync timestamp
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
     
-    console.log('User profile saved successfully');
+    log('User profile saved successfully');
   } catch (error) {
-    console.error('Failed to save user profile:', error);
+    logError('Failed to save user profile:', error);
     throw error;
   }
 }
@@ -71,7 +72,7 @@ export async function loadUserProfile(walletAddress: string): Promise<UserProfil
     const encryptedProfile = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
     
     if (!encryptedProfile) {
-      console.log('No saved profile found');
+      log('No saved profile found');
       return null;
     }
 
@@ -82,10 +83,10 @@ export async function loadUserProfile(walletAddress: string): Promise<UserProfil
     const profileJson = decrypt(encryptedProfile, encryptionKey);
     const profile: UserProfile = JSON.parse(profileJson);
 
-    console.log('User profile loaded successfully');
+    log('User profile loaded successfully');
     return profile;
   } catch (error) {
-    console.error('Failed to load user profile:', error);
+    logError('Failed to load user profile:', error);
     return null;
   }
 }
@@ -114,9 +115,9 @@ export async function clearStorage(): Promise<void> {
       STORAGE_KEYS.ENCRYPTION_KEY,
       STORAGE_KEYS.LAST_SYNC,
     ]);
-    console.log('Storage cleared successfully');
+    log('Storage cleared successfully');
   } catch (error) {
-    console.error('Failed to clear storage:', error);
+    logError('Failed to clear storage:', error);
     throw error;
   }
 }
@@ -129,7 +130,7 @@ export async function getLastSync(): Promise<Date | null> {
     const lastSync = await AsyncStorage.getItem(STORAGE_KEYS.LAST_SYNC);
     return lastSync ? new Date(lastSync) : null;
   } catch (error) {
-    console.error('Failed to get last sync:', error);
+    logError('Failed to get last sync:', error);
     return null;
   }
 }
@@ -150,7 +151,7 @@ export async function importUserData(jsonData: string): Promise<UserProfile> {
     await saveUserProfile(profile);
     return profile;
   } catch (error) {
-    console.error('Failed to import user data:', error);
+    logError('Failed to import user data:', error);
     throw new Error('Invalid backup data');
   }
 }

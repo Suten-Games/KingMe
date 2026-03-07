@@ -9,6 +9,7 @@ import { useStore } from '../store/useStore';
 import { evaluateBadges, getISODate, getISOWeek } from '../services/badgeEngine';
 import { calculateFreedom } from '../utils/calculations';
 import { obligationMonthlyAmount } from '../types';
+import { log, warn, error } from '../utils/logger';
 
 export function useBadgeChecker() {
   const wallets = useStore(s => s.wallets);
@@ -72,7 +73,7 @@ export function useBadgeChecker() {
 
     // Award any new badges
     for (const badgeId of result.newBadges) {
-      console.log(`🏅 Badge earned: ${badgeId}`);
+      log(`🏅 Badge earned: ${badgeId}`);
       awardBadge(badgeId);
     }
   }, [

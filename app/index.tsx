@@ -4,6 +4,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useStore } from '../src/store/useStore';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log, warn, error as logError } from '@/utils/logger';
 
 export default function Index() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function Index() {
     };
     
     initApp().catch((err) => {
-      console.error('[Init] Failed to load app:', err);
+      logError('[Init] Failed to load app:', err);
       setIsLoading(false); // Let routing proceed even on error
     });
   }, []);

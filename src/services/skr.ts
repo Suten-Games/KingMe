@@ -1,5 +1,7 @@
 // src/services/skr.ts — SKR staking via KingMe API
 
+import { log, warn, error as logError } from '../utils/logger';
+
 const API_BASE = 'https://kingme-api.vercel.app/api/skr';
 
 export interface SKRHolding {
@@ -28,11 +30,11 @@ const SKR_APY = 0.209; // 20.9% APY from Guardian staking
  */
 export async function fetchSKRHolding(walletAddress: string): Promise<SKRHolding | null> {
   try {
-    console.log('[SKR] Fetching balances for', walletAddress.slice(0, 8));
+    log('[SKR] Fetching balances for', walletAddress.slice(0, 8));
 
     const res = await fetch(`${API_BASE}/balances?wallet=${walletAddress}`);
     if (!res.ok) {
-      console.error('[SKR] API error:', res.status);
+      logError('[SKR] API error:', res.status);
       return null;
     }
 
@@ -44,7 +46,7 @@ export async function fetchSKRHolding(walletAddress: string): Promise<SKRHolding
 
     const unstakeTs = stakes?.[0]?.unstakeTimestamp || 0;
 
-    console.log(`[SKR] wallet=${walletBalance} staked=${totalStaked} unstaking=${totalUnstaking}`);
+    log(`[SKR] wallet=${walletBalance} staked=${totalStaked} unstaking=${totalUnstaking}`);
 
     return {
       totalBalance,
@@ -57,7 +59,7 @@ export async function fetchSKRHolding(walletAddress: string): Promise<SKRHolding
       apy: totalStaked > 0 ? SKR_APY : 0,
     };
   } catch (error) {
-    console.error('[SKR] fetchSKRHolding error:', error);
+    logError('[SKR] fetchSKRHolding error:', error);
     return null;
   }
 }

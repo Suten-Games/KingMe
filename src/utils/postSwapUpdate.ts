@@ -9,6 +9,7 @@ import { addEntry, getPlan } from '@/services/accumulationPlan';
 import { useStore } from '@/store/useStore';
 import type { CryptoAsset } from '@/types';
 import { SwapEvents } from './swapEvents';
+import { log, warn, error } from './logger';
 
 interface PostSwapParams {
   fromMint: string;
@@ -34,10 +35,10 @@ export async function postSwapUpdate(params: PostSwapParams): Promise<void> {
         totalUSD: usdReceived,
         notes: `Trimmed via KingMe swap · tx ${signature.slice(0, 8)}...`,
       });
-      console.log(`[POST_SWAP] Logged sell entry for ${fromSymbol}: ${tokenAmountSold} tokens @ $${pricePerToken.toFixed(6)}`);
+      log(`[POST_SWAP] Logged sell entry for ${fromSymbol}: ${tokenAmountSold} tokens @ $${pricePerToken.toFixed(6)}`);
     }
   } catch (err) {
-    console.warn('[POST_SWAP] Failed to log accumulation entry:', err);
+    warn('[POST_SWAP] Failed to log accumulation entry:', err);
   }
 
   // ── 2. Update Zustand store asset balance immediately ──
@@ -63,13 +64,13 @@ export async function postSwapUpdate(params: PostSwapParams): Promise<void> {
         } as any,
       });
 
-      console.log(
+      log(
         `[POST_SWAP] Store updated: ${fromSymbol} qty ${oldQty.toFixed(0)} → ${newQty.toFixed(0)}, ` +
         `value $${asset.value.toFixed(2)} → $${newValue.toFixed(2)}`
       );
     }
   } catch (err) {
-    console.warn('[POST_SWAP] Failed to update store asset:', err);
+    warn('[POST_SWAP] Failed to update store asset:', err);
   }
 
   // ── 3. Emit event so subscribers (AccumulationAlerts, etc.) can reload ──

@@ -16,6 +16,7 @@ import {
   type GoalWithProgress,
 } from '../services/goals';
 import { obligationMonthlyAmount } from '../types';
+import { log, warn, error } from '../utils/logger';
 
 function progressColor(pct: number): string {
   if (pct >= 100) return '#f4c430';
@@ -45,7 +46,7 @@ export default function GoalsStrip() {
           assets,
         });
         if (autoResult.created > 0) {
-          console.log(`[GOALS] Auto-populated ${autoResult.created} goals:`, autoResult.goalNames);
+          log(`[GOALS] Auto-populated ${autoResult.created} goals:`, autoResult.goalNames);
         }
 
         let raw = await loadGoals();
@@ -62,7 +63,7 @@ export default function GoalsStrip() {
           setLoaded(true);
         }
       } catch (err) {
-        console.error('[GOALS_STRIP] Error:', err);
+        error('[GOALS_STRIP] Error:', err);
         if (!cancelled) setLoaded(true);
       }
     }

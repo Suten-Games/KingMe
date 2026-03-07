@@ -7,6 +7,7 @@
 // ══════════════════════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log, warn, error } from '../utils/logger';
 
 // ── All known AsyncStorage keys used by the app ─────────────────────
 const ASYNC_KEYS = [
@@ -53,7 +54,7 @@ export async function collectAsyncData(): Promise<Record<string, string>> {
     }
   }
 
-  console.log(`[BACKUP] Collected ${Object.keys(result).length} AsyncStorage keys`);
+  log(`[BACKUP] Collected ${Object.keys(result).length} AsyncStorage keys`);
   return result;
 }
 
@@ -86,7 +87,7 @@ export async function restoreAsyncData(asyncStorage: Record<string, string>): Pr
   // Multi-set is more efficient
   await AsyncStorage.multiSet(entries);
 
-  console.log(`[BACKUP] Restored ${entries.length} AsyncStorage keys:`,
+  log(`[BACKUP] Restored ${entries.length} AsyncStorage keys:`,
     entries.map(([k]) => k).join(', '));
   return entries.length;
 }

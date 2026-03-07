@@ -1,5 +1,6 @@
 // src/utils/csvBankImport.ts
 import { BankTransaction, BankTransactionCategory } from "@/types/bankTransactionTypes";
+import { log, warn, error } from './logger';
 
 /**
  * Auto-categorization rules based on transaction description keywords.
@@ -495,16 +496,16 @@ export function parseCSVTransactions(
     // Headerless (Wells Fargo, some other banks)
     columns = headerlessResult.columns;
     dataStartIndex = 0; // All rows are data
-    console.log('[CSV_IMPORT] Headerless format detected (e.g., Wells Fargo)');
+    log('[CSV_IMPORT] Headerless format detected (e.g., Wells Fargo)');
   } else {
     // Has headers (SoFi, Chase, etc.)
     columns = detectColumns(rows[0]);
     dataStartIndex = 1; // Skip header row
-    console.log('[CSV_IMPORT] Headers detected:', rows[0]);
+    log('[CSV_IMPORT] Headers detected:', rows[0]);
   }
 
-  console.log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
-  console.log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
+  log('[CSV_IMPORT] Column map:', JSON.stringify(columns));
+  log('[CSV_IMPORT] Total rows:', rows.length, '| Data starts at row:', dataStartIndex);
 
   // Track crypto buys, sells & transfers (e.g. Cash App BTC round-ups, stock trades)
   const cryptoMap: Record<string, { totalBought: number; totalSold: number; totalTransferIn: number; totalTransferOut: number; totalSpent: number; totalProceeds: number; buyCount: number; sellCount: number; transferCount: number; unknownQtyBuys: number; unknownQtySpent: number; lastBuyDate: string }> = {};
@@ -737,7 +738,7 @@ export function parseCSVTransactions(
   });
 
   if (cryptoAccumulations.length > 0) {
-    console.log('[CSV_IMPORT] Assets detected:', cryptoAccumulations.map(c => {
+    log('[CSV_IMPORT] Assets detected:', cryptoAccumulations.map(c => {
       let s = `${c.asset}: bought ${c.totalBought.toFixed(8)} ($${c.totalSpent.toFixed(2)}), sold ${c.totalSold.toFixed(8)} ($${c.totalProceeds.toFixed(2)})`;
       if (c.transferCount > 0) s += `, transfers: +${c.totalTransferIn.toFixed(8)} -${c.totalTransferOut.toFixed(8)}`;
       if (c.unknownQtyBuys > 0) s += `, ${c.unknownQtyBuys} recurring buys ($${c.unknownQtySpent.toFixed(2)}) qty unknown`;
@@ -754,7 +755,7 @@ export function parseCSVTransactions(
   } : undefined;
 
   if (savingsAccumulation) {
-    console.log(`[CSV_IMPORT] Savings detected: ${savings.count} transfers, $${savings.totalVolume.toFixed(2)} total volume`);
+    log(`[CSV_IMPORT] Savings detected: ${savings.count} transfers, $${savings.totalVolume.toFixed(2)} total volume`);
   }
 
   // Build debt accumulations
@@ -766,7 +767,7 @@ export function parseCSVTransactions(
   }));
 
   if (debtAccumulations.length > 0) {
-    console.log('[CSV_IMPORT] Debts detected:', debtAccumulations.map(d =>
+    log('[CSV_IMPORT] Debts detected:', debtAccumulations.map(d =>
       `${d.name}: ${d.transactionCount} transactions, $${d.totalVolume.toFixed(2)} total volume`
     ).join(', '));
   }

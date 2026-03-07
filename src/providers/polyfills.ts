@@ -1,6 +1,7 @@
 // src/polyfills.ts - COMPREHENSIVE POLYFILLS FOR WEB
 
 import { Platform } from 'react-native';
+import { log, warn, error } from '../utils/logger';
 
 if (Platform.OS === 'web') {
   // Buffer polyfill
@@ -23,7 +24,7 @@ if (Platform.OS === 'web') {
     global.stream = require('stream-browserify');
   }
 
-  console.log('[POLYFILLS] Web polyfills loaded successfully');
+  log('[POLYFILLS] Web polyfills loaded successfully');
 }
 
 export {};

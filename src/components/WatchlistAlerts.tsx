@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getWatchlist, getTokenPriceData, addToWatchlist, fetchPrices } from '../services/priceTracker';
 import type { WatchlistToken, TokenPriceData } from '../services/priceTracker';
 import { useStore } from '../store/useStore';
+import { log, warn, error } from '../utils/logger';
 
 const WATCHLIST_EXT_KEY = 'watchlist_extended';
 const DISMISSED_KEY = '@kingme:watchlist_alerts_dismissed';
@@ -163,7 +164,7 @@ export default function WatchlistAlerts() {
 
       setAlerts(newAlerts);
     } catch (err) {
-      console.warn('[WATCHLIST-ALERTS]', err);
+      warn('[WATCHLIST-ALERTS]', err);
     }
   }, [autoTrackHeldCoins]);
 

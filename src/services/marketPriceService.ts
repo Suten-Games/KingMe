@@ -3,6 +3,7 @@
 // Solana tokens with a mint address are priced via Jupiter/DexScreener during wallet sync — not here.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log, warn, error } from '../utils/logger';
 
 const CACHE_KEY = 'market_price_cache';
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
@@ -50,9 +51,9 @@ export async function fetchStockPrices(tickers: string[]): Promise<Record<string
       }
     }
 
-    console.log(`[MARKET] Stock quotes: ${Object.keys(prices).length}/${tickers.length}`);
+    log(`[MARKET] Stock quotes: ${Object.keys(prices).length}/${tickers.length}`);
   } catch (err) {
-    console.warn('[MARKET] Stock quotes failed:', err);
+    warn('[MARKET] Stock quotes failed:', err);
   }
 
   return prices;
@@ -81,9 +82,9 @@ export async function fetchCoinGeckoPrices(ids: string[]): Promise<Record<string
       }
     }
 
-    console.log(`[MARKET] CoinGecko: ${Object.keys(prices).length}/${ids.length}`);
+    log(`[MARKET] CoinGecko: ${Object.keys(prices).length}/${ids.length}`);
   } catch (err) {
-    console.warn('[MARKET] CoinGecko failed:', err);
+    warn('[MARKET] CoinGecko failed:', err);
   }
 
   return prices;
@@ -113,7 +114,7 @@ export async function fetchAllMarketPrices({
   try {
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cache));
   } catch (err) {
-    console.warn('[MARKET] Failed to cache prices:', err);
+    warn('[MARKET] Failed to cache prices:', err);
   }
 
   return cache;

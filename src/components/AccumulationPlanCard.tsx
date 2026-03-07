@@ -19,6 +19,7 @@ import {
 import { fetchPrices } from '../services/priceTracker';
 import ConfirmModal from './ConfirmModal';
 import TargetIcon from './icons/TargetIcon';
+import { log, warn, error } from '../utils/logger';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -91,7 +92,7 @@ export default function AccumulationPlanCard({
         setSignals(sigs);
       }
     } catch (err) {
-      console.error('[ACC_PLAN] Load error:', err);
+      error('[ACC_PLAN] Load error:', err);
     } finally {
       setLoading(false);
     }

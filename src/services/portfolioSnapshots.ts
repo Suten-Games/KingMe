@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log, warn, error } from '../utils/logger';
 
 const SNAPSHOT_KEY = 'portfolio_snapshots';
 const MAX_SNAPSHOTS = 730; // ~2 years of daily
@@ -111,7 +112,7 @@ export async function recordPortfolioSnapshot(input: SnapshotInput): Promise<voi
   withoutToday.sort((a, b) => a.date.localeCompare(b.date));
 
   await saveSnapshots(withoutToday);
-  console.log(`📸 Portfolio snapshot: $${totalAssets.toLocaleString()} assets, $${(totalAssets - totalDebts).toLocaleString()} net worth`);
+  log(`📸 Portfolio snapshot: $${totalAssets.toLocaleString()} assets, $${(totalAssets - totalDebts).toLocaleString()} net worth`);
 }
 
 // ─── Compute Trends ──────────────────────────────────────────────────────────

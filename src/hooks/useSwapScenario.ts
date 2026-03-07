@@ -26,6 +26,7 @@ import { executeDriftWithdraw, type DriftWithdrawResult } from '../services/drif
 import { updateGoal } from '../services/goals';
 import type { WhatIfScenario } from '../types';
 import { useWallet } from '@/providers/wallet-provider';
+import { log, warn, error as logError } from '../utils/logger';
 
 export type SwapState =
   | 'idle'
@@ -145,7 +146,7 @@ export function useSwapScenario() {
         isOnChain: true,
       });
     } catch (error: any) {
-      console.error('[SWAP_HOOK] Quote error:', error);
+      logError('[SWAP_HOOK] Quote error:', error);
       setSwapState({
         state: 'error',
         quote: null,
@@ -220,7 +221,7 @@ export function useSwapScenario() {
       }
 
       setSwapState((prev) => ({ ...prev, state: 'submitting' }));
-      console.log(`[SWAP_HOOK] Drift withdrawal confirmed: ${withdrawResult.signature}`);
+      log(`[SWAP_HOOK] Drift withdrawal confirmed: ${withdrawResult.signature}`);
 
       // Re-sync balances
       try {
@@ -228,13 +229,13 @@ export function useSwapScenario() {
           await syncWalletAssets(wallets[0]);
         }
       } catch (err) {
-        console.warn('[SWAP_HOOK] Post-withdraw sync failed (non-critical):', err);
+        warn('[SWAP_HOOK] Post-withdraw sync failed (non-critical):', err);
       }
 
       try {
         await applyScenario(scenario);
       } catch (err) {
-        console.warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
+        warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
       }
 
       setSwapState({
@@ -303,7 +304,7 @@ export function useSwapScenario() {
       }
 
       setSwapState((prev) => ({ ...prev, state: 'submitting' }));
-      console.log(`[SWAP_HOOK] Drift swap confirmed: ${driftResult.signature}`);
+      log(`[SWAP_HOOK] Drift swap confirmed: ${driftResult.signature}`);
 
       // Update goal if this is a goal_upgrade scenario
       if (upgrade?.goalId) {
@@ -313,9 +314,9 @@ export function useSwapScenario() {
             name: `${upgrade.toSymbol} Accumulation`,
             targetUnit: upgrade.toSymbol,
           });
-          console.log(`[SWAP_HOOK] Updated goal ${upgrade.goalId} to ${upgrade.toSymbol}`);
+          log(`[SWAP_HOOK] Updated goal ${upgrade.goalId} to ${upgrade.toSymbol}`);
         } catch (err) {
-          console.warn('[SWAP_HOOK] Goal update failed (non-critical):', err);
+          warn('[SWAP_HOOK] Goal update failed (non-critical):', err);
         }
       }
 
@@ -325,13 +326,13 @@ export function useSwapScenario() {
           await syncWalletAssets(wallets[0]);
         }
       } catch (err) {
-        console.warn('[SWAP_HOOK] Post-swap sync failed (non-critical):', err);
+        warn('[SWAP_HOOK] Post-swap sync failed (non-critical):', err);
       }
 
       try {
         await applyScenario(scenario);
       } catch (err) {
-        console.warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
+        warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
       }
 
       setSwapState({
@@ -391,23 +392,23 @@ export function useSwapScenario() {
     // ── Swap succeeded ──────────────────────────────────────
     setSwapState((prev) => ({ ...prev, state: 'submitting', result }));
 
-    console.log(`[SWAP_HOOK] Swap confirmed: ${result.signature}`);
+    log(`[SWAP_HOOK] Swap confirmed: ${result.signature}`);
 
     // Sync wallet to pick up new balances
     try {
       if (wallets.length > 0) {
-        console.log('[SWAP_HOOK] Syncing wallet after swap...');
+        log('[SWAP_HOOK] Syncing wallet after swap...');
         await syncWalletAssets(wallets[0]);
       }
     } catch (err) {
-      console.warn('[SWAP_HOOK] Post-swap sync failed (non-critical):', err);
+      warn('[SWAP_HOOK] Post-swap sync failed (non-critical):', err);
     }
 
     // Apply local state changes (update freedom score, scenarios, etc.)
     try {
       await applyScenario(scenario);
     } catch (err) {
-      console.warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
+      warn('[SWAP_HOOK] Local state update failed (non-critical):', err);
     }
 
     setSwapState({

@@ -7,6 +7,8 @@
 //   const userId = await requireAuth(request);
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { log, warn, error as logError } from '../utils/logger';
+
 const PRIVY_APP_ID = process.env.PRIVY_APP_ID!;
 const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET!;
 
@@ -57,7 +59,7 @@ export async function requireAuth(request: Request): Promise<string> {
     return userId;
   } catch (err: any) {
     if (err instanceof AuthError) throw err;
-    console.error('[AUTH] Token verification failed:', err);
+    logError('[AUTH] Token verification failed:', err);
     throw new AuthError('Token verification failed', 401);
   }
 }

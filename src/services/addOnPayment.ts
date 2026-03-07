@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { getAuthParams } from './walletStorage';
 import { getApiBase } from './apiBase';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
@@ -131,9 +132,9 @@ export async function payForAddOn(
     const treasuryAta = getAssociatedTokenAddress(TREASURY_WALLET, USDC_MINT);
     const amountSmallest = BigInt(Math.round(priceUsd * 10 ** USDC_DECIMALS));
 
-    console.log(`[PAYMENT] ${addonId}: ${priceUsd} USDC from ${userPublicKey.slice(0, 8)}...`);
-    console.log(`[PAYMENT] Payer ATA: ${payerAta.toBase58()}`);
-    console.log(`[PAYMENT] Treasury ATA: ${treasuryAta.toBase58()}`);
+    log(`[PAYMENT] ${addonId}: ${priceUsd} USDC from ${userPublicKey.slice(0, 8)}...`);
+    log(`[PAYMENT] Payer ATA: ${payerAta.toBase58()}`);
+    log(`[PAYMENT] Treasury ATA: ${treasuryAta.toBase58()}`);
 
     // Get recent blockhash via RPC proxy (public RPC 403s from browsers)
     const bhRes = await fetch(RPC_PROXY, {
@@ -167,11 +168,11 @@ export async function payForAddOn(
     let signature: string;
 
     if (isWeb && signAndSendTransaction) {
-      console.log('[PAYMENT] Using signAndSendTransaction (web)...');
+      log('[PAYMENT] Using signAndSendTransaction (web)...');
       const result = await signAndSendTransaction(tx);
       signature = result.signature;
     } else {
-      console.log('[PAYMENT] Using signTransaction + manual submit...');
+      log('[PAYMENT] Using signTransaction + manual submit...');
       const signed = await signTransaction(tx);
       const raw = signed.serialize ? signed.serialize() : signed;
       const rawBase64 = Buffer.from(raw).toString('base64');
@@ -210,12 +211,12 @@ export async function payForAddOn(
           break;
         }
         if (i === maxAttempts - 1) {
-          console.warn('[PAYMENT] Confirmation timeout, tx may still confirm');
+          warn('[PAYMENT] Confirmation timeout, tx may still confirm');
         }
       }
     }
 
-    console.log(`[PAYMENT] Confirmed: ${signature}`);
+    log(`[PAYMENT] Confirmed: ${signature}`);
 
     // Verify on-chain via API
     try {
@@ -231,10 +232,10 @@ export async function payForAddOn(
       });
       const verifyData = await verifyRes.json();
       if (!verifyData.verified) {
-        console.warn('[PAYMENT] API verification failed, but tx confirmed on-chain. Unlocking anyway.');
+        warn('[PAYMENT] API verification failed, but tx confirmed on-chain. Unlocking anyway.');
       }
     } catch (verifyErr) {
-      console.warn('[PAYMENT] Could not reach verify API, unlocking based on on-chain confirmation:', verifyErr);
+      warn('[PAYMENT] Could not reach verify API, unlocking based on on-chain confirmation:', verifyErr);
     }
 
     // Store unlock locally
@@ -258,15 +259,15 @@ export async function payForAddOn(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addonId, signature, amount: priceUsd }),
       });
-      console.log(`[PAYMENT] Purchase stored server-side for ${addonId}`);
+      log(`[PAYMENT] Purchase stored server-side for ${addonId}`);
     } catch (err) {
-      console.warn('[PAYMENT] Failed to persist purchase server-side:', err);
+      warn('[PAYMENT] Failed to persist purchase server-side:', err);
     }
 
     return { success: true, signature };
 
   } catch (error: any) {
-    console.error('[PAYMENT] Error:', error);
+    logError('[PAYMENT] Error:', error);
 
     let message = error.message || 'Payment failed';
     if (message.includes('User rejected') || message.includes('cancelled')) {
@@ -297,7 +298,7 @@ export async function payForAddOnWithSKR(
     const treasuryAta = getAssociatedTokenAddress(TREASURY_WALLET, SKR_MINT);
     const amountSmallest = BigInt(Math.round(skrAmount * 10 ** SKR_DECIMALS));
 
-    console.log(`[PAYMENT-SKR] ${addonId}: ${skrAmount} SKR (~$${priceUsd}) from ${userPublicKey.slice(0, 8)}...`);
+    log(`[PAYMENT-SKR] ${addonId}: ${skrAmount} SKR (~$${priceUsd}) from ${userPublicKey.slice(0, 8)}...`);
 
     // Get recent blockhash
     const bhRes = await fetch(RPC_PROXY, {
@@ -370,12 +371,12 @@ export async function payForAddOnWithSKR(
           break;
         }
         if (i === maxAttempts - 1) {
-          console.warn('[PAYMENT-SKR] Confirmation timeout, tx may still confirm');
+          warn('[PAYMENT-SKR] Confirmation timeout, tx may still confirm');
         }
       }
     }
 
-    console.log(`[PAYMENT-SKR] Confirmed: ${signature}`);
+    log(`[PAYMENT-SKR] Confirmed: ${signature}`);
 
     // Store unlock locally
     await unlockAddOn(addonId);
@@ -399,13 +400,13 @@ export async function payForAddOnWithSKR(
         body: JSON.stringify({ addonId, signature, amount: priceUsd, token: 'SKR', skrAmount }),
       });
     } catch (err) {
-      console.warn('[PAYMENT-SKR] Failed to persist purchase server-side:', err);
+      warn('[PAYMENT-SKR] Failed to persist purchase server-side:', err);
     }
 
     return { success: true, signature };
 
   } catch (error: any) {
-    console.error('[PAYMENT-SKR] Error:', error);
+    logError('[PAYMENT-SKR] Error:', error);
 
     let message = error.message || 'Payment failed';
     if (message.includes('User rejected') || message.includes('cancelled')) {
@@ -473,10 +474,10 @@ export async function restorePurchases(
     const merged = new Set([...local, ...purchases.map((p: any) => p.addonId)]);
     await AsyncStorage.setItem(UNLOCKED_KEY, JSON.stringify([...merged]));
 
-    console.log(`[PAYMENT] Restored ${purchases.length} purchases from server`);
+    log(`[PAYMENT] Restored ${purchases.length} purchases from server`);
     return merged;
   } catch (err) {
-    console.warn('[PAYMENT] Failed to restore purchases from server:', err);
+    warn('[PAYMENT] Failed to restore purchases from server:', err);
     return await getUnlockedAddOns();
   }
 }

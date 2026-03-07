@@ -7,6 +7,7 @@ import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import { buildFullBackup } from '../services/fullBackup';
 import { saveBackup } from '../services/encryptedBackup';
+import { log, warn, error } from '../utils/logger';
 
 const BACKUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const CHECK_INTERVAL_MS = 60 * 1000;        // Check every 60 seconds
@@ -42,18 +43,18 @@ export function useAutoBackup() {
           || (storeData.wallets?.length > 0 && storeData.obligations?.length > 0)
           || (storeData.income?.salary > 0);
         if (!hasData) {
-          console.log('[AUTO-BACKUP] Skipped — store looks empty, not overwriting cloud backup');
+          log('[AUTO-BACKUP] Skipped — store looks empty, not overwriting cloud backup');
           return;
         }
 
-        console.log('[AUTO-BACKUP] Starting hourly backup...');
+        log('[AUTO-BACKUP] Starting hourly backup...');
         const fullBackup = await buildFullBackup(storeData);
         await saveBackup(fullBackup, signMessage, walletAddress);
 
         await AsyncStorage.setItem(ASYNC_KEY, Date.now().toString());
-        console.log('[AUTO-BACKUP] Backup complete');
+        log('[AUTO-BACKUP] Backup complete');
       } catch (e: any) {
-        console.warn('[AUTO-BACKUP] Failed (will retry next cycle):', e.message);
+        warn('[AUTO-BACKUP] Failed (will retry next cycle):', e.message);
       } finally {
         runningRef.current = false;
       }

@@ -3,6 +3,7 @@
 // Works with any MWA-compatible wallet on Android (Phantom, Solflare, etc.)
 import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol-web3js';
 import { PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { log, warn, error } from '../utils/logger';
 
 const APP_IDENTITY = {
   name: 'KingMe',
@@ -36,7 +37,7 @@ export async function connect(): Promise<{ publicKey: PublicKey }> {
   walletPublicKey = new PublicKey(pubkeyBytes);
   walletAccount = { address: account.address, label: account.label };
 
-  console.log('[MWA] Connected:', walletPublicKey.toBase58());
+  log('[MWA] Connected:', walletPublicKey.toBase58());
   return { publicKey: walletPublicKey };
 }
 
@@ -78,7 +79,7 @@ export async function signAndSendTransaction(
     });
   });
 
-  console.log('[MWA] Signed & sent:', signature);
+  log('[MWA] Signed & sent:', signature);
   return signature;
 }
 
@@ -110,13 +111,13 @@ export async function disconnect(): Promise<void> {
         await wallet.deauthorize({ auth_token: authToken! });
       });
     } catch (e) {
-      console.warn('[MWA] Deauthorize failed (non-blocking):', e);
+      warn('[MWA] Deauthorize failed (non-blocking):', e);
     }
   }
   authToken = null;
   walletPublicKey = null;
   walletAccount = null;
-  console.log('[MWA] Disconnected');
+  log('[MWA] Disconnected');
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

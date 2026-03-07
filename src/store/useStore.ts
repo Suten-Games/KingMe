@@ -26,6 +26,7 @@ import { loadGoals } from '../services/goals';
 import { fetchAllMarketPrices } from '../services/marketPriceService';
 import { lookupToken } from '../utils/tokenRegistry';
 import type { CryptoAsset, StockAsset, DriftPerpPosition, DriftOpenOrder } from '../types';
+import { log, warn, error as logError } from '../utils/logger';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -273,8 +274,8 @@ export const useStore = create<AppState>((set, get) => ({
       }));
 
       get().saveProfile();
-      console.log(`[WINDFALL] Detected $${increase.toFixed(0)} increase in ${account.name}`);
-    }).catch(console.error);
+      log(`[WINDFALL] Detected $${increase.toFixed(0)} increase in ${account.name}`);
+    }).catch(logError);
   },
 
   dismissWindfallAlert: (alertId: string) => {
@@ -313,7 +314,7 @@ export const useStore = create<AppState>((set, get) => ({
       investmentTheses: [...state.investmentTheses, thesis],
     }));
 
-    console.log('[THESIS] Created:', thesis.bullCase.substring(0, 50) + '...');
+    log('[THESIS] Created:', thesis.bullCase.substring(0, 50) + '...');
 
     // Auto-save
     get().saveProfile();
@@ -331,7 +332,7 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    console.log('[THESIS] Updated:', thesisId);
+    log('[THESIS] Updated:', thesisId);
 
     get().saveProfile();
     get().checkThesisAlerts();
@@ -343,7 +344,7 @@ export const useStore = create<AppState>((set, get) => ({
       thesisAlerts: state.thesisAlerts.filter((a) => a.thesisId !== thesisId),
     }));
 
-    console.log('[THESIS] Removed:', thesisId);
+    log('[THESIS] Removed:', thesisId);
     get().saveProfile();
   },
 
@@ -360,7 +361,7 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    console.log('[THESIS] Marked reviewed:', thesisId);
+    log('[THESIS] Marked reviewed:', thesisId);
     get().saveProfile();
   },
 
@@ -369,13 +370,13 @@ export const useStore = create<AppState>((set, get) => ({
     const alerts: ThesisAlert[] = [];
     const now = new Date();
 
-    console.log('[THESIS] Checking alerts for', state.investmentTheses.length, 'theses');
+    log('[THESIS] Checking alerts for', state.investmentTheses.length, 'theses');
 
     for (const thesis of state.investmentTheses) {
       // Find the asset
       const asset = state.assets.find((a) => a.id === thesis.assetId);
       if (!asset) {
-        console.log('[THESIS] Asset not found for thesis:', thesis.id);
+        log('[THESIS] Asset not found for thesis:', thesis.id);
         continue;
       }
 
@@ -531,7 +532,7 @@ export const useStore = create<AppState>((set, get) => ({
         !existingAlerts.some((existing) => existing.message === newAlert.message)
     );
 
-    console.log('[THESIS] Generated', newAlerts.length, 'new alerts');
+    log('[THESIS] Generated', newAlerts.length, 'new alerts');
 
     set({ thesisAlerts: [...existingAlerts, ...newAlerts] });
 
@@ -549,7 +550,7 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    console.log('[THESIS] Dismissed alert:', alertId);
+    log('[THESIS] Dismissed alert:', alertId);
     get().saveProfile();
   },
 
@@ -662,10 +663,10 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     if (oblMatched > 0 || debtMatched > 0) {
-      console.log(`[RECONCILE] Matched ${oblMatched} obligations, ${debtMatched} debts`);
+      log(`[RECONCILE] Matched ${oblMatched} obligations, ${debtMatched} debts`);
       set({ obligations: updatedObligations, debts: updatedDebts });
     } else {
-      console.log('[RECONCILE] No new matches found');
+      log('[RECONCILE] No new matches found');
     }
   },
 
@@ -1188,7 +1189,7 @@ export const useStore = create<AppState>((set, get) => ({
         t => !existingKeys.has(`${t.bankAccountId}|${t.date}|${t.amount}|${t.description}`)
       );
 
-      console.log(`[IMPORT] ${transactions.length} parsed, ${newOnly.length} new (${transactions.length - newOnly.length} duplicates skipped)`);
+      log(`[IMPORT] ${transactions.length} parsed, ${newOnly.length} new (${transactions.length - newOnly.length} duplicates skipped)`);
 
       // Record this week for streak tracking
       const week = getISOWeek();
@@ -1265,7 +1266,7 @@ export const useStore = create<AppState>((set, get) => ({
     });
 
     if (oblMatched > 0 || debtMatched > 0) {
-      console.log(`[AUTO-MATCH] Matched ${oblMatched} obligations, ${debtMatched} debts from bank transactions`);
+      log(`[AUTO-MATCH] Matched ${oblMatched} obligations, ${debtMatched} debts from bank transactions`);
       set({ obligations: updatedObligations, debts: updatedDebts });
     }
   },
@@ -1332,7 +1333,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Save to storage
     await get().saveProfile();
-    console.log('Onboarding completed and saved');
+    log('Onboarding completed and saved');
   },
 
   loadProfile: async (walletAddress: string) => {
@@ -1395,7 +1396,7 @@ export const useStore = create<AppState>((set, get) => ({
             const { custom_hoes: _, ...restCats } = merged.customCategories;
             merged.customCategories = restCats;
           }
-          console.log('[MIGRATE] Recategorized custom_hoes → personal_companion');
+          log('[MIGRATE] Recategorized custom_hoes → personal_companion');
         }
 
         // One-time migration: re-run autoCategorize on 'other' transactions
@@ -1412,16 +1413,16 @@ export const useStore = create<AppState>((set, get) => ({
             return t;
           });
           merged._migratedAutoCategV2 = true;
-          if (changed > 0) console.log(`[MIGRATE] Re-categorized ${changed} transactions from 'other'`);
+          if (changed > 0) log(`[MIGRATE] Re-categorized ${changed} transactions from 'other'`);
         }
 
         set(merged);
-        console.log('Profile loaded successfully');
+        log('Profile loaded successfully');
       }
       // Mark as loaded so auto-save can now fire
       set({ _isLoaded: true });
     } catch (error) {
-      console.error('Failed to load profile:', error);
+      logError('Failed to load profile:', error);
       set({ _isLoaded: true }); // still mark loaded so saves aren't permanently blocked
     }
   },
@@ -1465,9 +1466,9 @@ export const useStore = create<AppState>((set, get) => ({
       // For now, save unencrypted until we add wallet
       const profileJson = JSON.stringify(profile);
       await AsyncStorage.setItem('kingme_profile', profileJson);
-      console.log('Profile saved successfully', { onboardingComplete: state.onboardingComplete });
+      log('Profile saved successfully', { onboardingComplete: state.onboardingComplete });
     } catch (error) {
-      console.error('Failed to save profile:', error);
+      logError('Failed to save profile:', error);
     }
   },
 
@@ -1517,9 +1518,9 @@ export const useStore = create<AppState>((set, get) => ({
           get().saveProfile();
         }
       });
-      console.log('Backup imported successfully');
+      log('Backup imported successfully');
     } catch (error) {
-      console.error('Failed to import backup:', error);
+      logError('Failed to import backup:', error);
       throw error;
     }
   },
@@ -1543,7 +1544,7 @@ export const useStore = create<AppState>((set, get) => ({
     const scenarios = generateSmartScenarios(profile);
     set({ whatIfScenarios: scenarios });
 
-    console.log(`[SCENARIOS] Generated ${scenarios.length} scenarios`);
+    log(`[SCENARIOS] Generated ${scenarios.length} scenarios`);
   },
 
   applyScenario: async (scenario: WhatIfScenario) => {
@@ -1565,7 +1566,7 @@ export const useStore = create<AppState>((set, get) => ({
           metadata: partialAsset.metadata || { type: 'other', description: '' },
         };
         newAssets.push(newAsset);
-        console.log(`[SCENARIO] Added asset: ${newAsset.name}`);
+        log(`[SCENARIO] Added asset: ${newAsset.name}`);
       });
     }
 
@@ -1575,7 +1576,7 @@ export const useStore = create<AppState>((set, get) => ({
         const index = newAssets.findIndex(a => a.id === id);
         if (index !== -1) {
           newAssets[index] = { ...newAssets[index], ...updates };
-          console.log(`[SCENARIO] Updated asset: ${newAssets[index].name}`);
+          log(`[SCENARIO] Updated asset: ${newAssets[index].name}`);
         }
       });
     }
@@ -1586,7 +1587,7 @@ export const useStore = create<AppState>((set, get) => ({
       newAssets = newAssets.filter(a =>
         !scenario.changes.removeAssets!.includes(a.id)
       );
-      console.log(`[SCENARIO] Removed ${beforeCount - newAssets.length} assets`);
+      log(`[SCENARIO] Removed ${beforeCount - newAssets.length} assets`);
     }
 
     // Apply obligation reductions
@@ -1599,7 +1600,7 @@ export const useStore = create<AppState>((set, get) => ({
             ...newObligations[index],
             amount: newAmount
           };
-          console.log(`[SCENARIO] Reduced ${newObligations[index].name} from $${oldAmount} to $${newAmount}`);
+          log(`[SCENARIO] Reduced ${newObligations[index].name} from $${oldAmount} to $${newAmount}`);
         }
       });
     }
@@ -1616,7 +1617,7 @@ export const useStore = create<AppState>((set, get) => ({
           bankAccountId: partialSource.bankAccountId || state.bankAccounts[0]?.id || '',
         };
         newIncomeSources.push(newSource);
-        console.log(`[SCENARIO] Added income source: ${newSource.name}`);
+        log(`[SCENARIO] Added income source: ${newSource.name}`);
       });
     }
 
@@ -1630,7 +1631,7 @@ export const useStore = create<AppState>((set, get) => ({
       },
     });
 
-    console.log(`[SCENARIO] Applied scenario: ${scenario.title}`);
+    log(`[SCENARIO] Applied scenario: ${scenario.title}`);
 
     // Save immediately
     await get().saveProfile();
@@ -1654,7 +1655,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ isLoadingAssets: true });
 
     try {
-      console.log('[SYNC] Starting wallet sync for', walletAddress);
+      log('[SYNC] Starting wallet sync for', walletAddress);
 
       // Collect mints from manual assets for price lookup
       const currentAssets = get().assets;
@@ -1664,7 +1665,7 @@ export const useStore = create<AppState>((set, get) => ({
         .filter((m: string) => m && m.length > 10);
 
       if (manualMints.length > 0) {
-        console.log(`[SYNC] Requesting prices for ${manualMints.length} manual asset mints`);
+        log(`[SYNC] Requesting prices for ${manualMints.length} manual asset mints`);
       }
 
       // Call your Vercel API
@@ -1680,9 +1681,9 @@ export const useStore = create<AppState>((set, get) => ({
 
       const { assets: syncedAssets, totalValue, manualPrices } = await response.json();
 
-      console.log(`[SYNC] Synced ${syncedAssets.length} assets worth $${(totalValue || 0).toFixed(2)}`);
+      log(`[SYNC] Synced ${syncedAssets.length} assets worth $${(totalValue || 0).toFixed(2)}`);
       if (manualPrices && Object.keys(manualPrices).length > 0) {
-        console.log(`[SYNC] Got ${Object.keys(manualPrices).length} manual asset prices from Jupiter`);
+        log(`[SYNC] Got ${Object.keys(manualPrices).length} manual asset prices from Jupiter`);
       }
 
 
@@ -1701,7 +1702,7 @@ export const useStore = create<AppState>((set, get) => ({
       // Filter out NFTs (decimals 0 with balance 1 or less, and no meaningful USD value)
       const filteredSyncedAssets = syncedAssets.filter((sa: any) => {
         if (sa.decimals === 0 && (sa.balance || 0) <= 1 && (sa.valueUSD || 0) < 1) {
-          console.log(`[SYNC] 🚫 Filtering NFT: ${sa.name || sa.symbol} (decimals=0, balance=${sa.balance})`);
+          log(`[SYNC] 🚫 Filtering NFT: ${sa.name || sa.symbol} (decimals=0, balance=${sa.balance})`);
           return false;
         }
         return true;
@@ -1745,7 +1746,7 @@ export const useStore = create<AppState>((set, get) => ({
           : (effectiveExisting?.annualIncome || 0);
 
         if (safeValue === 0 && effectiveExisting?.value && effectiveExisting.value > 0) {
-          console.log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${effectiveExisting.value.toFixed(2)} — preserving`);
+          log(`[SYNC] ⚠️ ${sa.symbol}: API returned $0 but had $${effectiveExisting.value.toFixed(2)} — preserving`);
         }
 
         // USER-PRESERVED FIELDS: type, name, protocol, positionType, leverage, etc.
@@ -1760,9 +1761,9 @@ export const useStore = create<AppState>((set, get) => ({
         const preservedName = effectiveExisting
           ? effectiveExisting.name                         // keep user's rename
           : sa.name;                                       // new token: use Helius name
-        if (wasDrift) console.log(`[SYNC] 🔄 ${sa.symbol}: was Drift position, resetting to wallet token`);
+        if (wasDrift) log(`[SYNC] 🔄 ${sa.symbol}: was Drift position, resetting to wallet token`);
 
-        console.log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apy=${preservedApy} | type=${preservedType} | ${existing ? 'EXISTING' : 'NEW'}`);
+        log(`[SYNC] Asset: ${sa.symbol} | val=$${preservedValue.toFixed(2)} | apy=${preservedApy} | type=${preservedType} | ${existing ? 'EXISTING' : 'NEW'}`);
 
         return {
           // Use auto_ ID for wallet-synced assets. If existing asset had a
@@ -1815,7 +1816,7 @@ export const useStore = create<AppState>((set, get) => ({
           const newPrice = manualPrices[mint].price;
           if (newPrice > 0 && balance > 0) {
             const newValue = balance * newPrice;
-            console.log(`[SYNC] 📌 Manual "${asset.name}": ${balance} × $${newPrice.toFixed(6)} = $${newValue.toFixed(2)} (was $${asset.value.toFixed(2)})`);
+            log(`[SYNC] 📌 Manual "${asset.name}": ${balance} × $${newPrice.toFixed(6)} = $${newValue.toFixed(2)} (was $${asset.value.toFixed(2)})`);
 
             // Recalculate annual income if APY is set
             const apy = meta.apy || 0;
@@ -1843,7 +1844,7 @@ export const useStore = create<AppState>((set, get) => ({
           const newValue = matched.valueUSD || 0;
           const newPrice = matched.priceUSD || 0;
           if (newValue > 0 || newPrice > 0) {
-            console.log(`[SYNC] 📌 Manual "${asset.name}" matched wallet asset: $${asset.value.toFixed(2)} → $${newValue.toFixed(2)}`);
+            log(`[SYNC] 📌 Manual "${asset.name}" matched wallet asset: $${asset.value.toFixed(2)} → $${newValue.toFixed(2)}`);
             return {
               ...asset,
               value: newValue > 0 ? newValue : asset.value,
@@ -1880,7 +1881,7 @@ export const useStore = create<AppState>((set, get) => ({
         const sym = (a.metadata?.symbol || '').toUpperCase();
         const mint = a.metadata?.mint || '';
         if (manualMatchedMints.has(mint) || manualMatchedSymbols.has(sym)) {
-          console.log(`[SYNC] Skipping auto "${a.name}" — manual asset exists`);
+          log(`[SYNC] Skipping auto "${a.name}" — manual asset exists`);
           return false;
         }
         return true;
@@ -1898,29 +1899,29 @@ export const useStore = create<AppState>((set, get) => ({
 
       const manualUpdatedCount = updatedManualAssets.filter((a, i) => a !== manualAssets[i]).length;
       const dedupCount = newAutoAssets.length - dedupedAutoAssets.length;
-      console.log(`[SYNC] Complete: ${updatedManualAssets.length} manual (${manualUpdatedCount} price-updated) + ${dedupedAutoAssets.length} synced (${dedupCount} deduped)`);
+      log(`[SYNC] Complete: ${updatedManualAssets.length} manual (${manualUpdatedCount} price-updated) + ${dedupedAutoAssets.length} synced (${dedupCount} deduped)`);
 
       // Save immediately
       await get().saveProfile();
 
       // Chain: refresh stock/exchange crypto prices after wallet sync
-      get().refreshMarketPrices().catch(console.error);
+      get().refreshMarketPrices().catch(logError);
 
       // Chain: sync Drift balances + active positions after wallet sync
       get().syncDriftAssets(walletAddress).catch(err =>
-        console.warn('[DRIFT-SYNC] Drift sync failed (non-blocking):', err.message)
+        warn('[DRIFT-SYNC] Drift sync failed (non-blocking):', err.message)
       );
       get().syncDriftPositions(walletAddress).catch(err =>
-        console.warn('[DRIFT-POS] Drift positions sync failed (non-blocking):', err.message)
+        warn('[DRIFT-POS] Drift positions sync failed (non-blocking):', err.message)
       );
 
       // Chain: sync Kamino lending positions after wallet sync
       get().syncKaminoAssets(walletAddress).catch(err =>
-        console.warn('[KAMINO-SYNC] Kamino sync failed (non-blocking):', err.message)
+        warn('[KAMINO-SYNC] Kamino sync failed (non-blocking):', err.message)
       );
 
     } catch (error: any) {
-      console.error('[SYNC] Error:', error);
+      logError('[SYNC] Error:', error);
       set({ isLoadingAssets: false });
       throw error;
     }
@@ -1951,7 +1952,7 @@ export const useStore = create<AppState>((set, get) => ({
       bSOL: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
     };
 
-    console.log(`[DRIFT-SYNC] Starting Drift balance sync for ${walletAddress.slice(0, 8)}... rpcUrl=${rpcUrl ? 'SET' : 'MISSING'}`);
+    log(`[DRIFT-SYNC] Starting Drift balance sync for ${walletAddress.slice(0, 8)}... rpcUrl=${rpcUrl ? 'SET' : 'MISSING'}`);
 
     try {
       // 1. Fetch Drift balances and rates in parallel
@@ -1960,7 +1961,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       const balancesUrl = `${DRIFT_API_BASE}/balances?wallet=${walletAddress}&subAccount=1`;
       const ratesUrl = `${DRIFT_API_BASE}/rates`;
-      console.log(`[DRIFT-SYNC] Fetching balances + rates...`);
+      log(`[DRIFT-SYNC] Fetching balances + rates...`);
 
       const [response, ratesRes] = await Promise.all([
         fetch(balancesUrl, { headers: fetchHeaders }),
@@ -1973,14 +1974,14 @@ export const useStore = create<AppState>((set, get) => ({
         const ratesData = await ratesRes.json();
         driftRates = ratesData.rates || {};
         set({ driftRates });
-        console.log(`[DRIFT-SYNC] Got rates for ${Object.keys(driftRates).length} markets`);
+        log(`[DRIFT-SYNC] Got rates for ${Object.keys(driftRates).length} markets`);
       } else {
-        console.warn('[DRIFT-SYNC] Rates fetch failed, APY will use existing values');
+        warn('[DRIFT-SYNC] Rates fetch failed, APY will use existing values');
       }
 
       if (!response.ok) {
         if (response.status === 404) {
-          console.log('[DRIFT-SYNC] No Drift account found, skipping');
+          log('[DRIFT-SYNC] No Drift account found, skipping');
           return;
         }
         throw new Error(`Drift API error: ${response.status}`);
@@ -1991,7 +1992,7 @@ export const useStore = create<AppState>((set, get) => ({
 
       // Populate perp positions from balances endpoint (includes oracle-based PnL)
       if (rawPerps && rawPerps.length > 0) {
-        console.log(`[DRIFT-SYNC] Got ${rawPerps.length} perp positions from balances endpoint`);
+        log(`[DRIFT-SYNC] Got ${rawPerps.length} perp positions from balances endpoint`);
         const existingPositions = get().driftPositions;
         const perps = rawPerps.map((p: any) => ({
           marketIndex: p.marketIndex,
@@ -2004,15 +2005,15 @@ export const useStore = create<AppState>((set, get) => ({
           breakEvenPrice: p.breakEvenPrice ?? 0,
         }));
         set({ driftPositions: { perpPositions: perps, openOrders: existingPositions?.openOrders || [] } });
-        console.log(`[DRIFT-SYNC] Set ${perps.length} perp positions (PnL via oracle)`);
+        log(`[DRIFT-SYNC] Set ${perps.length} perp positions (PnL via oracle)`);
       }
 
       if (!spotBalances || spotBalances.length === 0) {
-        console.log('[DRIFT-SYNC] No spot balances, skipping');
+        log('[DRIFT-SYNC] No spot balances, skipping');
         return;
       }
 
-      console.log(`[DRIFT-SYNC] Got ${spotBalances.length} spot positions`);
+      log(`[DRIFT-SYNC] Got ${spotBalances.length} spot positions`);
 
       // 2. Build price map from existing assets (wallet sync already fetched prices)
       const currentAssets = get().assets;
@@ -2030,9 +2031,9 @@ export const useStore = create<AppState>((set, get) => ({
       // dSOL tracks ~1.19x SOL price (staking premium); derive if missing
       if (!prices['DSOL'] && prices['SOL']) {
         prices['DSOL'] = prices['SOL'] * 1.19;
-        console.log(`[DRIFT-SYNC] dSOL price derived from SOL: $${prices['DSOL'].toFixed(2)}`);
+        log(`[DRIFT-SYNC] dSOL price derived from SOL: $${prices['DSOL'].toFixed(2)}`);
       }
-      console.log(`[DRIFT-SYNC] Prices from store: ${Object.entries(prices).map(([s,p]) => `${s}=$${(p as number).toFixed(2)}`).join(', ')}`);
+      log(`[DRIFT-SYNC] Prices from store: ${Object.entries(prices).map(([s,p]) => `${s}=$${(p as number).toFixed(2)}`).join(', ')}`);
 
       // Fetch missing prices from Jupiter for Drift tokens we have balances for
       const missingMints: { symbol: string; mint: string }[] = [];
@@ -2049,11 +2050,11 @@ export const useStore = create<AppState>((set, get) => ({
           for (const { symbol, mint } of missingMints) {
             if (fetched[mint]) {
               prices[symbol.toUpperCase()] = fetched[mint];
-              console.log(`[DRIFT-SYNC] Fetched ${symbol} price: $${fetched[mint].toFixed(4)}`);
+              log(`[DRIFT-SYNC] Fetched ${symbol} price: $${fetched[mint].toFixed(4)}`);
             }
           }
         } catch (err) {
-          console.warn('[DRIFT-SYNC] Failed to fetch missing prices:', err);
+          warn('[DRIFT-SYNC] Failed to fetch missing prices:', err);
         }
       }
 
@@ -2100,7 +2101,7 @@ export const useStore = create<AppState>((set, get) => ({
             ? (value * preservedApy) / 100
             : (existing?.annualIncome || 0);
 
-          console.log(`[DRIFT-SYNC] ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} ${existing ? '(UPDATE)' : '(NEW)'}`);
+          log(`[DRIFT-SYNC] ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} ${existing ? '(UPDATE)' : '(NEW)'}`);
 
           return {
             id: existing?.id || assetId,
@@ -2147,7 +2148,7 @@ export const useStore = create<AppState>((set, get) => ({
         const meta = a.metadata as any;
         const sym = (meta?.symbol || '').toUpperCase();
         if (meta?.protocol?.toLowerCase() === 'drift' && !a.id.startsWith('auto_') && driftAssetIds.has(`drift_${sym}`)) {
-          console.log(`[DRIFT-SYNC] Replacing manual "${a.name}" with auto-synced`);
+          log(`[DRIFT-SYNC] Replacing manual "${a.name}" with auto-synced`);
           return false;
         }
         return true;
@@ -2156,13 +2157,13 @@ export const useStore = create<AppState>((set, get) => ({
       const mergedAssets = [...nonDriftAssets, ...newDriftAssets];
       set({ assets: mergedAssets });
 
-      console.log(`[DRIFT-SYNC] Complete: ${newDriftAssets.length} Drift positions synced`);
+      log(`[DRIFT-SYNC] Complete: ${newDriftAssets.length} Drift positions synced`);
 
       // Save
       await get().saveProfile();
 
     } catch (error: any) {
-      console.error('[DRIFT-SYNC] Error:', error.message);
+      logError('[DRIFT-SYNC] Error:', error.message);
     }
   },
 
@@ -2176,7 +2177,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (rpcUrl) headers['X-RPC-URL'] = rpcUrl;
 
       const url = `${DRIFT_API_BASE}/positions?wallet=${walletAddress}&subAccount=1`;
-      console.log('[DRIFT-POS] Fetching active positions...');
+      log('[DRIFT-POS] Fetching active positions...');
       const resp = await fetch(url, { headers });
 
       if (!resp.ok) {
@@ -2191,9 +2192,9 @@ export const useStore = create<AppState>((set, get) => ({
           openOrders: data.openOrders || [],
         },
       });
-      console.log(`[DRIFT-POS] Got ${data.perpPositions?.length || 0} perp positions, ${data.openOrders?.length || 0} open orders`);
+      log(`[DRIFT-POS] Got ${data.perpPositions?.length || 0} perp positions, ${data.openOrders?.length || 0} open orders`);
     } catch (error: any) {
-      console.error('[DRIFT-POS] Error:', error.message);
+      logError('[DRIFT-POS] Error:', error.message);
     }
   },
 
@@ -2202,7 +2203,7 @@ export const useStore = create<AppState>((set, get) => ({
     const KAMINO_API_BASE = 'https://kingme-api.vercel.app/api/kamino';
     const rpcUrl = process.env.EXPO_PUBLIC_SOLANA_RPC || '';
 
-    console.log(`[KAMINO-SYNC] Starting Kamino sync for ${walletAddress.slice(0, 8)}...`);
+    log(`[KAMINO-SYNC] Starting Kamino sync for ${walletAddress.slice(0, 8)}...`);
 
     try {
       const fetchHeaders: Record<string, string> = {};
@@ -2236,12 +2237,12 @@ export const useStore = create<AppState>((set, get) => ({
           }
         }
         set({ kaminoRates });
-        console.log(`[KAMINO-SYNC] Got rates for ${Object.keys(kaminoRates).length} reserves`);
+        log(`[KAMINO-SYNC] Got rates for ${Object.keys(kaminoRates).length} reserves`);
       }
 
       if (!balancesRes.ok) {
         if (balancesRes.status === 404) {
-          console.log('[KAMINO-SYNC] No Kamino positions found, skipping');
+          log('[KAMINO-SYNC] No Kamino positions found, skipping');
           return;
         }
         throw new Error(`Kamino API error: ${balancesRes.status}`);
@@ -2252,11 +2253,11 @@ export const useStore = create<AppState>((set, get) => ({
       const borrows = data.borrows || [];
 
       if (deposits.length === 0 && borrows.length === 0) {
-        console.log('[KAMINO-SYNC] No Kamino positions, skipping');
+        log('[KAMINO-SYNC] No Kamino positions, skipping');
         return;
       }
 
-      console.log(`[KAMINO-SYNC] Got ${deposits.length} deposits, ${borrows.length} borrows`);
+      log(`[KAMINO-SYNC] Got ${deposits.length} deposits, ${borrows.length} borrows`);
 
       // Build price map from existing assets
       const currentAssets = get().assets;
@@ -2308,7 +2309,7 @@ export const useStore = create<AppState>((set, get) => ({
 
         const tokenInfo = lookupToken(sym);
 
-        console.log(`[KAMINO-SYNC] Deposit: ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} APY=${preservedApy.toFixed(2)}%`);
+        log(`[KAMINO-SYNC] Deposit: ${sym}: ${balance.toFixed(4)} × $${price.toFixed(4)} = $${value.toFixed(2)} APY=${preservedApy.toFixed(2)}%`);
 
         newKaminoAssets.push({
           id: existing?.id || assetId,
@@ -2352,7 +2353,7 @@ export const useStore = create<AppState>((set, get) => ({
 
         const borrowApr = kaminoRates[sym]?.borrowApr || kaminoRates[sym.toUpperCase()]?.borrowApr || 0;
 
-        console.log(`[KAMINO-SYNC] Borrow: ${sym}: ${balance.toFixed(4)} = $${value.toFixed(2)} cost=${borrowApr.toFixed(2)}%`);
+        log(`[KAMINO-SYNC] Borrow: ${sym}: ${balance.toFixed(4)} = $${value.toFixed(2)} cost=${borrowApr.toFixed(2)}%`);
 
         // Store as defi asset with negative annual income (cost of borrow)
         const existingBorrow = currentAssets.find(a => a.id === assetId);
@@ -2388,7 +2389,7 @@ export const useStore = create<AppState>((set, get) => ({
         const meta = a.metadata as any;
         const sym = (meta?.symbol || '').toUpperCase();
         if (meta?.protocol?.toLowerCase() === 'kamino' && !a.id.startsWith('auto_') && (kaminoAssetIds.has(`kamino_${sym}_deposit`) || kaminoAssetIds.has(`kamino_${sym}_borrow`))) {
-          console.log(`[KAMINO-SYNC] Replacing manual "${a.name}" with auto-synced`);
+          log(`[KAMINO-SYNC] Replacing manual "${a.name}" with auto-synced`);
           return false;
         }
         return true;
@@ -2397,11 +2398,11 @@ export const useStore = create<AppState>((set, get) => ({
       const mergedAssets = [...nonKaminoAssets, ...newKaminoAssets];
       set({ assets: mergedAssets });
 
-      console.log(`[KAMINO-SYNC] Complete: ${newKaminoAssets.length} Kamino positions synced`);
+      log(`[KAMINO-SYNC] Complete: ${newKaminoAssets.length} Kamino positions synced`);
       await get().saveProfile();
 
     } catch (error: any) {
-      console.error('[KAMINO-SYNC] Error:', error.message);
+      logError('[KAMINO-SYNC] Error:', error.message);
     }
   },
 
@@ -2441,11 +2442,11 @@ export const useStore = create<AppState>((set, get) => ({
     const coingeckoIds = Object.keys(coingeckoMap);
 
     if (stockTickers.length === 0 && coingeckoIds.length === 0) {
-      console.log('[MARKET] No stock/exchange-crypto assets to refresh');
+      log('[MARKET] No stock/exchange-crypto assets to refresh');
       return;
     }
 
-    console.log(`[MARKET] Refreshing: ${stockTickers.length} stocks, ${coingeckoIds.length} CoinGecko`);
+    log(`[MARKET] Refreshing: ${stockTickers.length} stocks, ${coingeckoIds.length} CoinGecko`);
 
     const result = await fetchAllMarketPrices({ stockTickers, coingeckoIds });
 
@@ -2511,7 +2512,7 @@ export const useStore = create<AppState>((set, get) => ({
     } as any);
 
     await get().saveProfile();
-    console.log('[MARKET] Price refresh complete');
+    log('[MARKET] Price refresh complete');
   },
 
   resetStore: () => set(initialState),

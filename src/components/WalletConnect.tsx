@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import WalletPickerModal from './WalletPickerModal';
+import { log, warn, error as logError } from '../utils/logger';
 
 export function WalletConnect() {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -55,7 +56,7 @@ export function WalletConnect() {
         `Connected to ${walletName || 'wallet'}: ${address.slice(0, 4)}...${address.slice(-4)}`
       );
     } catch (error: any) {
-      console.error('Connection error:', error);
+      logError('Connection error:', error);
       if (!error.message?.includes('User rejected')) {
         Alert.alert('Connection Failed', error.message || 'Failed to connect wallet');
       }
@@ -77,7 +78,7 @@ export function WalletConnect() {
         return;
       }
 
-      console.log(`Starting sync for ${walletsToSync.length} wallet(s)...`);
+      log(`Starting sync for ${walletsToSync.length} wallet(s)...`);
 
       // Use the store's server-side sync (Helius wallet API) for each wallet
       for (const addr of walletsToSync) {
@@ -91,7 +92,7 @@ export function WalletConnect() {
         `Synced ${walletsToSync.length} wallet(s) via Helius`
       );
     } catch (error: any) {
-      console.error('Sync error:', error);
+      logError('Sync error:', error);
       Alert.alert('Sync Failed', error.message || 'Failed to sync wallets');
     } finally {
       setIsSyncing(false);
@@ -132,7 +133,7 @@ export function WalletConnect() {
       
       Alert.alert('Success', 'Wallet disconnected successfully');
     } catch (error: any) {
-      console.error('Disconnect error:', error);
+      logError('Disconnect error:', error);
       Alert.alert('Error', error.message || 'Failed to disconnect wallet');
     }
   };

@@ -28,6 +28,7 @@ import { executeSwap, fetchMintDecimals, isSwapConfigured, MINTS } from '../../s
 import { useSwapToast } from '../../src/components/SwapToast';
 import { postSwapUpdate } from '../../src/utils/postSwapUpdate';
 import type { Asset, RealEstateAsset, StockAsset, CryptoAsset } from '../../src/types';
+import { log, warn, error } from '@/utils/logger';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -86,7 +87,7 @@ export default function AssetDetailScreen() {
         const goals = await loadGoals();
         const linked = goals.filter(g => g.mint === assetMint);
         for (const g of linked) await removeGoal(g.id);
-        if (linked.length > 0) console.log(`[THESIS] Removed ${linked.length} goals for ${assetSymbol}`);
+        if (linked.length > 0) log(`[THESIS] Removed ${linked.length} goals for ${assetSymbol}`);
       } catch {}
     }
 

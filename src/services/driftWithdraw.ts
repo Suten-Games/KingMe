@@ -14,6 +14,7 @@ import {
 } from '@solana/web3.js';
 import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
@@ -70,7 +71,7 @@ export async function executeDriftWithdraw(
   const url = `${API_BASE}/api/drift/withdraw`;
   const isWeb = Platform.OS === 'web';
 
-  console.log(`[DRIFT-WITHDRAW] Executing: ${amount} ${symbol} (${isWeb ? 'web' : 'mobile'})`);
+  log(`[DRIFT-WITHDRAW] Executing: ${amount} ${symbol} (${isWeb ? 'web' : 'mobile'})`);
 
   try {
     // ── 1. Get unsigned transaction from API ─────────────────
@@ -82,7 +83,7 @@ export async function executeDriftWithdraw(
         body: JSON.stringify({ wallet, subAccount, amount, symbol }),
       });
     } catch (networkError: any) {
-      console.error(`[DRIFT-WITHDRAW] Network error:`, networkError.message);
+      logError(`[DRIFT-WITHDRAW] Network error:`, networkError.message);
       throw new Error('Cannot reach withdrawal server. Check your connection.');
     }
 
@@ -94,7 +95,7 @@ export async function executeDriftWithdraw(
       } catch {
         errorDetail = await response.text().catch(() => '');
       }
-      console.error(`[DRIFT-WITHDRAW] API error: HTTP ${response.status}`, errorDetail);
+      logError(`[DRIFT-WITHDRAW] API error: HTTP ${response.status}`, errorDetail);
       throw new Error(errorDetail || `Drift withdrawal server error (HTTP ${response.status})`);
     }
 
@@ -108,18 +109,18 @@ export async function executeDriftWithdraw(
     const transactionBuffer = base64ToUint8Array(txBase64);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[DRIFT-WITHDRAW] Transaction deserialized, requesting signature...');
+    log('[DRIFT-WITHDRAW] Transaction deserialized, requesting signature...');
 
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
     if (isWeb && signAndSendTransaction) {
-      console.log('[DRIFT-WITHDRAW] Using signAndSendTransaction (web/Phantom)...');
+      log('[DRIFT-WITHDRAW] Using signAndSendTransaction (web/Phantom)...');
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
-      console.log(`[DRIFT-WITHDRAW] Phantom submitted: ${signature}`);
+      log(`[DRIFT-WITHDRAW] Phantom submitted: ${signature}`);
     } else {
-      console.log('[DRIFT-WITHDRAW] Using signTransaction + manual submit (mobile)...');
+      log('[DRIFT-WITHDRAW] Using signTransaction + manual submit (mobile)...');
       const signedTransaction = await signTransaction(transaction);
 
       const connection = new Connection(RPC_URL, 'confirmed');
@@ -132,7 +133,7 @@ export async function executeDriftWithdraw(
         maxRetries: 3,
         preflightCommitment: 'confirmed',
       });
-      console.log(`[DRIFT-WITHDRAW] Submitted: ${signature}`);
+      log(`[DRIFT-WITHDRAW] Submitted: ${signature}`);
     }
 
     // ── 4. Confirm transaction ───────────────────────────────
@@ -149,12 +150,12 @@ export async function executeDriftWithdraw(
       const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
 
       if (confirmation.value.err) {
-        console.error('[DRIFT-WITHDRAW] Transaction failed on-chain:', confirmation.value.err);
+        logError('[DRIFT-WITHDRAW] Transaction failed on-chain:', confirmation.value.err);
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
     }
 
-    console.log(`[DRIFT-WITHDRAW] Confirmed: ${signature}`);
+    log(`[DRIFT-WITHDRAW] Confirmed: ${signature}`);
 
     return {
       success: true,
@@ -164,7 +165,7 @@ export async function executeDriftWithdraw(
     };
 
   } catch (error: any) {
-    console.error('[DRIFT-WITHDRAW] Error:', error);
+    logError('[DRIFT-WITHDRAW] Error:', error);
 
     let message = error.message || 'Drift withdrawal failed';
     if (message.includes('User rejected') || message.includes('user rejected')) {

@@ -5,6 +5,7 @@
 import { VersionedTransaction, Connection } from '@solana/web3.js';
 import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
+import { log, warn, error as logError } from '../utils/logger';
 
 const API_BASE = 'https://kingme-api.vercel.app/api/kamino';
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
@@ -119,7 +120,7 @@ export async function executeKaminoDeposit(
       }, 'confirmed');
     }
 
-    console.log(`[KAMINO] Deposit confirmed: ${signature}`);
+    log(`[KAMINO] Deposit confirmed: ${signature}`);
     return { success: true, signature };
 
   } catch (error: any) {
@@ -177,7 +178,7 @@ export async function executeKaminoWithdraw(
       }, 'confirmed');
     }
 
-    console.log(`[KAMINO] Withdraw confirmed: ${signature}`);
+    log(`[KAMINO] Withdraw confirmed: ${signature}`);
     return { success: true, signature };
 
   } catch (error: any) {

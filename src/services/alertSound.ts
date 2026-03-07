@@ -3,6 +3,7 @@
 // Uses the Web Audio API on web and expo-av on native.
 
 import { Platform } from 'react-native';
+import { log, warn, error } from '../utils/logger';
 
 let _lastPlayed = 0;
 const COOLDOWN_MS = 10_000; // Don't spam — at most once per 10 seconds
@@ -54,7 +55,7 @@ function playWebAudio(priority: 'urgent' | 'high') {
     // Clean up context after tones finish
     setTimeout(() => ctx.close(), 1000);
   } catch (e) {
-    console.warn('[ALERT SOUND] Web Audio failed:', e);
+    warn('[ALERT SOUND] Web Audio failed:', e);
   }
 }
 
@@ -87,7 +88,7 @@ async function playNativeAudio(priority: 'urgent' | 'high') {
 
     setTimeout(() => sound.unloadAsync(), 500);
   } catch (e) {
-    console.warn('[ALERT SOUND] Native audio failed:', e);
+    warn('[ALERT SOUND] Native audio failed:', e);
   }
 }
 

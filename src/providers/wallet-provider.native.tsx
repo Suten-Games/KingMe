@@ -8,6 +8,7 @@ import * as PhantomDeepLink from '../services/phantomDeepLink';
 import * as MWA from '../services/mwaWallet';
 import WalletPickerModal from '../components/WalletPickerModal';
 import type { WalletOption } from '../components/WalletPickerModal';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
       setShowPicker(false);
     } catch (error: any) {
-      console.error(`🔴 ${option} connect failed:`, error);
+      logError(`🔴 ${option} connect failed:`, error);
     } finally {
       setConnecting(false);
       setConnectingWallet(null);

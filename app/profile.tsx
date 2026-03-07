@@ -22,6 +22,7 @@ import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { DEMO_PERSONAS, type DemoPersona } from '../src/utils/demoPersonas';
+import { log, warn, error as logError } from '@/utils/logger';
 
 /** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
 function crossConfirm(title: string, message: string, onConfirm: () => void) {
@@ -168,18 +169,18 @@ export default function ProfileScreen() {
         try {
           // 1. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
           await AsyncStorage.clear();
-          console.log('[RESET] AsyncStorage cleared');
+          log('[RESET] AsyncStorage cleared');
 
           // 2. Reset zustand store to initial state
           resetStore();
-          console.log('[RESET] Store reset');
+          log('[RESET] Store reset');
 
           // 3. Navigate to onboarding after a brief delay so state settles
           setTimeout(() => {
             router.replace('/onboarding/intro');
           }, 300);
         } catch (err) {
-          console.error('[RESET] Error during reset:', err);
+          logError('[RESET] Error during reset:', err);
           // Even if something fails, try to navigate
           resetStore();
           setTimeout(() => router.replace('/onboarding/intro'), 300);
@@ -342,7 +343,7 @@ export default function ProfileScreen() {
         `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nIncludes: store data + ${Object.keys(fullBackup.asyncStorage).length} feature stores (goals, plans, snapshots, etc.)\n\nYou can restore on any device with this wallet.`
       );
     } catch (error: any) {
-      console.error('Backup failed:', error);
+      logError('Backup failed:', error);
       crossAlert('Backup Failed', 'Could not save backup. Please check your connection and try again.');
     } finally {
       setIsSyncing(false);
@@ -415,7 +416,7 @@ export default function ProfileScreen() {
             `Profile restored from backup.${asyncCount > 0 ? `\n\n+ ${asyncCount} feature stores restored (goals, plans, snapshots, etc.)` : ''}\n\nLast backup: ${backupTime ? new Date(backupTime).toLocaleString() : 'Unknown'}`
           );
         } catch (error: any) {
-          console.error('Restore failed:', error);
+          logError('Restore failed:', error);
           crossAlert('Restore Failed', 'Could not restore backup. Make sure you have a previous backup with this wallet.');
         } finally {
           setIsSyncing(false);

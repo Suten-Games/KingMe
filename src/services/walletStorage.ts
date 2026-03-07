@@ -8,6 +8,7 @@ import * as Crypto from 'expo-crypto';
 import { Buffer } from 'buffer';
 
 import { getApiBase } from './apiBase';
+import { log, warn, error as logError } from '../utils/logger';
 
 const BACKUP_API_BASE = getApiBase();
 
@@ -138,7 +139,7 @@ export async function encryptProfileWithWallet(
 
     return base64String;
   } catch (error) {
-    console.error('Encryption failed:', error);
+    logError('Encryption failed:', error);
     throw error;
   }
 }
@@ -170,7 +171,7 @@ export async function decryptProfileWithWallet(
 
     // Fall back to legacy key (pre-salt: SHA256(publicKey) only)
     if (!decrypted) {
-      console.log('[DECRYPT] Salted key failed, trying legacy key...');
+      log('[DECRYPT] Salted key failed, trying legacy key...');
       const legacyKey = await getLegacyEncryptionKey(publicKey);
       decrypted = tryDecrypt(combined, legacyKey);
     }
@@ -182,7 +183,7 @@ export async function decryptProfileWithWallet(
     const jsonString = decodeText(decrypted);
     return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Decryption failed:', error);
+    logError('Decryption failed:', error);
     throw error;
   }
 }

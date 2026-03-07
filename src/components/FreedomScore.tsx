@@ -5,6 +5,7 @@ import { Asset } from 'expo-asset';
 import type { AvatarType, FreedomState } from '../types';
 import { AVATAR_IMAGES, AVATAR_VIDEOS } from '../utils/constants';
 import { useStore } from '../store/useStore';
+import { log, warn, error } from '../utils/logger';
 
 // Conditionally import expo-av for native only
 let NativeVideo: any = null;
@@ -49,7 +50,7 @@ function WebVideo({ source }: { source: any }) {
         });
       }
     } catch (e) {
-      console.warn('[WebVideo] Asset resolution failed:', e);
+      warn('[WebVideo] Asset resolution failed:', e);
     }
   }, [source]);
 
@@ -57,7 +58,7 @@ function WebVideo({ source }: { source: any }) {
     if (!el) return;
     el.muted = true;
     el.playsInline = true;
-    el.play().catch((e) => console.log('[WebVideo] play() blocked:', e));
+    el.play().catch((e) => log('[WebVideo] play() blocked:', e));
   }, []);
 
   if (!uri) return null;
@@ -90,7 +91,7 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
   const canPlayVideo = animatedAvatar && videoSource;
 
   if (Platform.OS === 'web') {
-    console.log('[FreedomScore] animated:', animatedAvatar, 'videoSource:', !!videoSource, 'canPlay:', canPlayVideo, 'state:', state);
+    log('[FreedomScore] animated:', animatedAvatar, 'videoSource:', !!videoSource, 'canPlay:', canPlayVideo, 'state:', state);
   }
 
   // ── shared score circle ─────────────────────────────────────────────────

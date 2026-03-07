@@ -9,6 +9,7 @@ import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import { useRouter } from 'expo-router';
 import WalletPickerModal from './WalletPickerModal';
+import { log, warn, error as logError } from '../utils/logger';
 
 function SolanaLogo({ size = 14 }: { size?: number }) {
   return (
@@ -85,7 +86,7 @@ export default function WalletHeaderButton() {
       }
       await saveProfile();
     } catch (err: any) {
-      console.error('Disconnect error:', err);
+      logError('Disconnect error:', err);
     } finally {
       setConfirmDisconnect(false);
       setShowMenu(false);

@@ -1,6 +1,7 @@
 // src/services/priceTracker.ts
 // Tracks token prices over time, computes 24h/7d changes, detects significant moves
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log, warn, error as logError } from '../utils/logger';
 
 const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
 const DEXSCREENER_API = 'https://api.dexscreener.com/tokens/v1/solana';
@@ -62,7 +63,7 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, numbe
         if (Object.keys(prices).length > 0) return prices;
       }
     } catch (error) {
-      console.warn('Jupiter price fetch failed, falling back to DexScreener');
+      warn('Jupiter price fetch failed, falling back to DexScreener');
     }
   }
 
@@ -87,7 +88,7 @@ export async function fetchPrices(mints: string[]): Promise<Record<string, numbe
 
     return prices;
   } catch (error) {
-    console.error('Failed to fetch prices:', error);
+    logError('Failed to fetch prices:', error);
     return {};
   }
 }
@@ -136,7 +137,7 @@ export async function recordPriceSnapshot(
   }
 
   if (newSnapshots.length > 0) {
-    console.log(`📊 Recorded ${newSnapshots.length} price snapshots`);
+    log(`📊 Recorded ${newSnapshots.length} price snapshots`);
     await saveSnapshots([...existing, ...newSnapshots]);
   }
 }
@@ -296,7 +297,7 @@ export async function fetchTokenInfo(mint: string): Promise<TokenProjectInfo | n
 
     return result;
   } catch (error) {
-    console.error('Failed to fetch token info:', error);
+    logError('Failed to fetch token info:', error);
     return null;
   }
 }
@@ -317,7 +318,7 @@ export async function addToWatchlist(mint: string, symbol: string, notes?: strin
   if (list.find(t => t.mint === mint)) return;
   list.push({ mint, symbol, addedAt: Date.now(), notes });
   await AsyncStorage.setItem(WATCHLIST_KEY, JSON.stringify(list));
-  console.log(`👁️ Added ${symbol} to watchlist`);
+  log(`👁️ Added ${symbol} to watchlist`);
 }
 
 export async function removeFromWatchlist(mint: string): Promise<void> {

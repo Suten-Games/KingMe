@@ -28,6 +28,7 @@ import {
   type Goal, type GoalType, type GoalStrategy, type GoalWithProgress,
   formatNum,
 } from '../src/services/goals';
+import { log, warn, error as logError } from '@/utils/logger';
 
 // ── Cross-platform helpers ───────────────────────────────────────
 function xAlert(t: string, m?: string) {
@@ -133,7 +134,7 @@ export default function GoalsScreen() {
       const withProgress = raw.map(g => calcGoalProgress(g));
       setGoals(sortByReachability(withProgress));
     } catch (err) {
-      console.error('[GOALS] Load error:', err);
+      logError('[GOALS] Load error:', err);
     } finally {
       setRefreshing(false);
     }

@@ -13,6 +13,7 @@ import {
 } from '@solana/web3.js';
 import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
@@ -22,7 +23,7 @@ const isWeb = Platform.OS === 'web';
 // ── Validate API_BASE at module load ─────────────────────────
 function getApiBase(): string {
   if (!API_BASE || API_BASE === 'https://your-app.example.com') {
-    console.error(
+    logError(
       '[JUPITER] ❌ EXPO_PUBLIC_API_URL is not set or is still the placeholder!\n' +
       '  Current value: "' + API_BASE + '"\n' +
       '  Fix: Run `eas env:create --scope project --environment production --name EXPO_PUBLIC_API_URL --value https://kingme.money`\n' +
@@ -103,7 +104,7 @@ function resolveDecimals(mint: string, explicit?: number): number {
   if (TOKEN_DECIMALS[mint]) return TOKEN_DECIMALS[mint];
   if (TOKEN_DECIMALS[mint.toUpperCase()]) return TOKEN_DECIMALS[mint.toUpperCase()];
   if (_decimalsCache[mint] !== undefined) return _decimalsCache[mint];
-  console.warn(`[JUPITER] ⚠️ Unknown decimals for mint ${mint.slice(0, 8)}... defaulting to 9. Call fetchMintDecimals() first for accuracy.`);
+  warn(`[JUPITER] ⚠️ Unknown decimals for mint ${mint.slice(0, 8)}... defaulting to 9. Call fetchMintDecimals() first for accuracy.`);
   return 9;
 }
 
@@ -135,15 +136,15 @@ export async function fetchMintDecimals(mint: string): Promise<number> {
     if (parsed?.type === 'mint' && parsed?.info?.decimals !== undefined) {
       const decimals = parsed.info.decimals;
       _decimalsCache[mint] = decimals;
-      console.log(`[JUPITER] Fetched decimals for ${mint.slice(0, 8)}...: ${decimals}`);
+      log(`[JUPITER] Fetched decimals for ${mint.slice(0, 8)}...: ${decimals}`);
       return decimals;
     }
   } catch (err) {
-    console.error(`[JUPITER] Failed to fetch decimals for ${mint}:`, err);
+    logError(`[JUPITER] Failed to fetch decimals for ${mint}:`, err);
   }
 
   // Fallback: default to 9
-  console.warn(`[JUPITER] Could not determine decimals for ${mint.slice(0, 8)}..., defaulting to 9`);
+  warn(`[JUPITER] Could not determine decimals for ${mint.slice(0, 8)}..., defaulting to 9`);
   return 9;
 }
 
@@ -191,9 +192,9 @@ export async function fetchLiveBalances(
     });
     const solData = await solRes.json();
     solBalance = (solData?.result?.value || 0) / 1e9;
-    console.log(`[JUPITER] Live SOL balance: ${solBalance} for ${walletAddress.slice(0, 8)}...`);
+    log(`[JUPITER] Live SOL balance: ${solBalance} for ${walletAddress.slice(0, 8)}...`);
   } catch (e) {
-    console.warn('[JUPITER] Failed to fetch SOL balance:', e);
+    warn('[JUPITER] Failed to fetch SOL balance:', e);
   }
 
   // Token balance (if mint provided and not SOL itself)
@@ -221,7 +222,7 @@ export async function fetchLiveBalances(
         tokenBalance = 0;
       }
     } catch (e) {
-      console.warn('[JUPITER] Failed to fetch token balance:', e);
+      warn('[JUPITER] Failed to fetch token balance:', e);
     }
   } else if (tokenMint === MINTS.SOL) {
     tokenBalance = solBalance;
@@ -246,7 +247,7 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
   const amountSmallest = toSmallestUnits(amount, decimals);
   const url = `${apiBase}/api/swap/quote`;
 
-  console.log(`[JUPITER] Getting quote: ${amount} ${inputMint} → ${outputMint} (${amountSmallest} smallest units)`);
+  log(`[JUPITER] Getting quote: ${amount} ${inputMint} → ${outputMint} (${amountSmallest} smallest units)`);
 
   let response: Response;
   try {
@@ -265,7 +266,7 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
       }),
     });
   } catch (networkError: any) {
-    console.error(`[JUPITER] Network error fetching ${url}:`, networkError.message);
+    logError(`[JUPITER] Network error fetching ${url}:`, networkError.message);
     throw new Error(
       `Cannot reach swap server (${apiBase}). Check your internet connection or verify EXPO_PUBLIC_API_URL is correct.`
     );
@@ -279,7 +280,7 @@ export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
     } catch {
       errorDetail = await response.text().catch(() => '');
     }
-    console.error(`[JUPITER] Quote failed: HTTP ${response.status}`, errorDetail);
+    logError(`[JUPITER] Quote failed: HTTP ${response.status}`, errorDetail);
     throw new Error(errorDetail || `Quote failed (HTTP ${response.status})`);
   }
 
@@ -328,14 +329,14 @@ export async function executeSwap(
   const amountSmallest = toSmallestUnits(amount, decimals);
   const url = `${apiBase}/api/swap/quote`;
 
-  console.log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint} slippage=${slippageBps}bps auto=${autoSlippage}`);
-  console.log(`[JUPITER] API URL: ${url}, amount: ${amountSmallest} (${decimals} decimals)`);
+  log(`[JUPITER] Executing swap: ${amount} ${inputMint} → ${outputMint} slippage=${slippageBps}bps auto=${autoSlippage}`);
+  log(`[JUPITER] API URL: ${url}, amount: ${amountSmallest} (${decimals} decimals)`);
 
   // Attempt swap — retry without platform fee on InvalidAccountData
   // (referral token account may not exist for this output token)
   for (const skipFee of [false, true]) {
     if (skipFee) {
-      console.log('[JUPITER] Retrying swap without platform fee...');
+      log('[JUPITER] Retrying swap without platform fee...');
     }
 
   try {
@@ -358,7 +359,7 @@ export async function executeSwap(
         }),
       });
     } catch (networkError: any) {
-      console.error(`[JUPITER] Network error fetching ${url}:`, networkError.message);
+      logError(`[JUPITER] Network error fetching ${url}:`, networkError.message);
       throw new Error(
         `Cannot reach swap server. Check your connection or EXPO_PUBLIC_API_URL (${apiBase}).`
       );
@@ -372,7 +373,7 @@ export async function executeSwap(
       } catch {
         errorDetail = await response.text().catch(() => '');
       }
-      console.error(`[JUPITER] Swap API failed: HTTP ${response.status}`, errorDetail);
+      logError(`[JUPITER] Swap API failed: HTTP ${response.status}`, errorDetail);
       throw new Error(errorDetail || `Swap server error (HTTP ${response.status})`);
     }
 
@@ -382,23 +383,23 @@ export async function executeSwap(
       throw new Error('No swap transaction returned');
     }
 
-    console.log(`[JUPITER] Quote: ${quote.inAmount} → ${quote.outAmount}`);
+    log(`[JUPITER] Quote: ${quote.inAmount} → ${quote.outAmount}`);
 
     // ── 2. Deserialize the versioned transaction ──────────────
     const transactionBuffer = base64ToUint8Array(swapTransaction);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[JUPITER] Transaction deserialized, requesting signature...');
+    log('[JUPITER] Transaction deserialized, requesting signature...');
 
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
     if (isWeb && signAndSendTransaction) {
       // Web: Phantom handles RPC submission via signAndSendTransaction
-      console.log('[JUPITER] Using signAndSendTransaction (web/Phantom)...');
+      log('[JUPITER] Using signAndSendTransaction (web/Phantom)...');
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
-      console.log(`[JUPITER] Phantom submitted: ${signature}`);
+      log(`[JUPITER] Phantom submitted: ${signature}`);
 
       // Phantom returns a signature but doesn't guarantee success —
       // poll for confirmation to catch on-chain errors (slippage, etc.)
@@ -419,7 +420,7 @@ export async function executeSwap(
           const status = statusData.result?.value?.[0];
           if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
             if (status.err) {
-              console.error('[JUPITER] Transaction failed on-chain:', status.err);
+              logError('[JUPITER] Transaction failed on-chain:', status.err);
               throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
             }
             break;
@@ -431,7 +432,7 @@ export async function executeSwap(
       }
     } else {
       // Mobile (MWA): sign locally, then submit to RPC ourselves
-      console.log('[JUPITER] Using signTransaction + manual submit (mobile)...');
+      log('[JUPITER] Using signTransaction + manual submit (mobile)...');
       const signedTransaction = await signTransaction(transaction);
 
       const connection = new Connection(RPC_URL, 'confirmed');
@@ -445,7 +446,7 @@ export async function executeSwap(
         preflightCommitment: 'confirmed',
       });
 
-      console.log(`[JUPITER] Submitted: ${signature}`);
+      log(`[JUPITER] Submitted: ${signature}`);
 
       // Confirm transaction (mobile only — Phantom confirms internally on web)
       const latestBlockhash = await connection.getLatestBlockhash('confirmed');
@@ -457,12 +458,12 @@ export async function executeSwap(
 
       const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
       if (confirmation.value.err) {
-        console.error('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
+        logError('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
     }
 
-    console.log(`[JUPITER] ✅ Confirmed: ${signature}`);
+    log(`[JUPITER] ✅ Confirmed: ${signature}`);
 
     return {
       success: true,
@@ -471,12 +472,12 @@ export async function executeSwap(
     };
 
   } catch (error: any) {
-    console.error('[JUPITER] Swap error:', error);
+    logError('[JUPITER] Swap error:', error);
 
     // If InvalidAccountData and we haven't retried without fee yet, retry
     const msg = error.message || '';
     if (!skipFee && msg.includes('InvalidAccountData')) {
-      console.warn('[JUPITER] InvalidAccountData — likely missing referral token account, retrying without fee...');
+      warn('[JUPITER] InvalidAccountData — likely missing referral token account, retrying without fee...');
       continue; // retry the for loop with skipFee=true
     }
 

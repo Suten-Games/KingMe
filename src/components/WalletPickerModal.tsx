@@ -7,6 +7,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking, Image } from 'react-native';
 import { useWallet, DetectedWallet } from '../providers/wallet-provider';
+import { log, warn, error } from '../utils/logger';
 
 // Export type for cross-platform compatibility with native provider
 export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave';
@@ -25,7 +26,7 @@ export default function WalletPickerModal() {
     try {
       await connect(wallet.id);
     } catch (e: any) {
-      console.error('[WalletPicker] connect failed:', e);
+      error('[WalletPicker] connect failed:', e);
     }
   };
 

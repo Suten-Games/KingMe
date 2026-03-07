@@ -13,6 +13,7 @@ import {
 } from '@solana/web3.js';
 import { Platform } from 'react-native';
 import { decode as atob } from 'base-64';
+import { log, warn, error as logError } from '../utils/logger';
 
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
@@ -74,7 +75,7 @@ export async function executeDriftSwap(
   const url = `${API_BASE}/api/drift/swap`;
   const isWeb = Platform.OS === 'web';
 
-  console.log(`[DRIFT-SWAP] Executing: ${amount} ${fromSymbol} → ${toSymbol} (${isWeb ? 'web' : 'mobile'})`);
+  log(`[DRIFT-SWAP] Executing: ${amount} ${fromSymbol} → ${toSymbol} (${isWeb ? 'web' : 'mobile'})`);
 
   try {
     // ── 1. Get unsigned transaction from API ─────────────────
@@ -86,7 +87,7 @@ export async function executeDriftSwap(
         body: JSON.stringify({ wallet, subAccount, fromSymbol, toSymbol, amount }),
       });
     } catch (networkError: any) {
-      console.error(`[DRIFT-SWAP] Network error:`, networkError.message);
+      logError(`[DRIFT-SWAP] Network error:`, networkError.message);
       throw new Error('Cannot reach swap server. Check your connection.');
     }
 
@@ -98,7 +99,7 @@ export async function executeDriftSwap(
       } catch {
         errorDetail = await response.text().catch(() => '');
       }
-      console.error(`[DRIFT-SWAP] API error: HTTP ${response.status}`, errorDetail);
+      logError(`[DRIFT-SWAP] API error: HTTP ${response.status}`, errorDetail);
       throw new Error(errorDetail || `Drift swap server error (HTTP ${response.status})`);
     }
 
@@ -112,20 +113,20 @@ export async function executeDriftSwap(
     const transactionBuffer = base64ToUint8Array(txBase64);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
-    console.log('[DRIFT-SWAP] Transaction deserialized, requesting signature...');
+    log('[DRIFT-SWAP] Transaction deserialized, requesting signature...');
 
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
     if (isWeb && signAndSendTransaction) {
       // Web: Phantom requires signAndSendTransaction (it handles RPC submission)
-      console.log('[DRIFT-SWAP] Using signAndSendTransaction (web/Phantom)...');
+      log('[DRIFT-SWAP] Using signAndSendTransaction (web/Phantom)...');
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
-      console.log(`[DRIFT-SWAP] Phantom submitted: ${signature}`);
+      log(`[DRIFT-SWAP] Phantom submitted: ${signature}`);
     } else {
       // Mobile (MWA): sign locally, then submit to RPC ourselves
-      console.log('[DRIFT-SWAP] Using signTransaction + manual submit (mobile)...');
+      log('[DRIFT-SWAP] Using signTransaction + manual submit (mobile)...');
       const signedTransaction = await signTransaction(transaction);
 
       const connection = new Connection(RPC_URL, 'confirmed');
@@ -138,7 +139,7 @@ export async function executeDriftSwap(
         maxRetries: 3,
         preflightCommitment: 'confirmed',
       });
-      console.log(`[DRIFT-SWAP] Submitted: ${signature}`);
+      log(`[DRIFT-SWAP] Submitted: ${signature}`);
     }
 
     // ── 4. Confirm transaction ───────────────────────────────
@@ -158,12 +159,12 @@ export async function executeDriftSwap(
       const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
 
       if (confirmation.value.err) {
-        console.error('[DRIFT-SWAP] Transaction failed on-chain:', confirmation.value.err);
+        logError('[DRIFT-SWAP] Transaction failed on-chain:', confirmation.value.err);
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
     }
 
-    console.log(`[DRIFT-SWAP] Confirmed: ${signature}`);
+    log(`[DRIFT-SWAP] Confirmed: ${signature}`);
 
     return {
       success: true,
@@ -174,7 +175,7 @@ export async function executeDriftSwap(
     };
 
   } catch (error: any) {
-    console.error('[DRIFT-SWAP] Error:', error);
+    logError('[DRIFT-SWAP] Error:', error);
 
     let message = error.message || 'Drift swap failed';
     if (message.includes('User rejected') || message.includes('user rejected')) {

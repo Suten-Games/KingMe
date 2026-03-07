@@ -6,6 +6,7 @@ import bs58 from 'bs58';
 import * as Linking from 'expo-linking';
 import { PublicKey } from '@solana/web3.js';
 import { Buffer } from 'buffer';
+import { log, warn, error as logError } from '../utils/logger';
 
 const PHANTOM_CONNECT = 'https://phantom.app/ul/v1/connect';
 const PHANTOM_SIGN_TX = 'https://phantom.app/ul/v1/signTransaction';
@@ -40,10 +41,10 @@ function encryptPayload(payload: object, nonce: Uint8Array): Uint8Array {
   const jsonStr = JSON.stringify(payload);
   // Must be Uint8Array for tweetnacl, not Buffer
   const message = new Uint8Array(Buffer.from(jsonStr));
-  console.log('🔐 Encrypting payload:', jsonStr.length, 'chars');
+  log('🔐 Encrypting payload:', jsonStr.length, 'chars');
   const encrypted = nacl.box.after(message, nonce, sharedSecret);
   if (!encrypted) throw new Error('nacl.box.after returned null — encryption failed');
-  console.log('🔐 Encrypted:', encrypted.length, 'bytes');
+  log('🔐 Encrypted:', encrypted.length, 'bytes');
   return encrypted;
 }
 
@@ -77,7 +78,7 @@ export function handlePhantomDeepLink(url: string): boolean {
     // Error response
     if (params.get('errorCode')) {
       const errorMessage = params.get('errorMessage') || 'Phantom rejected the request';
-      console.error('🔴 Phantom error:', errorMessage);
+      logError('🔴 Phantom error:', errorMessage);
       if (pendingReject) {
         pendingReject(new Error(errorMessage));
         pendingResolve = null;
@@ -104,14 +105,14 @@ export function handlePhantomDeepLink(url: string): boolean {
         getOrCreateKeyPair().secretKey
       );
 
-      console.log('🔑 Shared secret derived:', sharedSecret.length, 'bytes');
+      log('🔑 Shared secret derived:', sharedSecret.length, 'bytes');
 
       // Decrypt payload to get wallet public key and session
       const decrypted = decryptPayload(data, nonce);
       phantomWalletPublicKey = new PublicKey(decrypted.public_key);
       session = decrypted.session;
 
-      console.log('✅ Phantom connected:', phantomWalletPublicKey.toBase58());
+      log('✅ Phantom connected:', phantomWalletPublicKey.toBase58());
 
       if (pendingResolve) {
         pendingResolve({
@@ -131,7 +132,7 @@ export function handlePhantomDeepLink(url: string): boolean {
       const decrypted = decryptPayload(data, nonce);
       const signedTx = Buffer.from(decrypted.transaction, 'base64');
 
-      console.log('✅ Phantom signed transaction');
+      log('✅ Phantom signed transaction');
 
       if (pendingResolve) {
         pendingResolve(signedTx);
@@ -148,7 +149,7 @@ export function handlePhantomDeepLink(url: string): boolean {
       const decrypted = decryptPayload(data, nonce);
       const signature = bs58.decode(decrypted.signature);
 
-      console.log('✅ Phantom signed message');
+      log('✅ Phantom signed message');
 
       if (pendingResolve) {
         pendingResolve(signature);
@@ -164,7 +165,7 @@ export function handlePhantomDeepLink(url: string): boolean {
 
       const decrypted = decryptPayload(data, nonce);
 
-      console.log('✅ Phantom signed & sent:', decrypted.signature);
+      log('✅ Phantom signed & sent:', decrypted.signature);
 
       if (pendingResolve) {
         pendingResolve(decrypted.signature);
@@ -176,7 +177,7 @@ export function handlePhantomDeepLink(url: string): boolean {
     pendingAction = null;
     return true;
   } catch (error) {
-    console.error('🔴 Failed to handle Phantom deep link:', error);
+    logError('🔴 Failed to handle Phantom deep link:', error);
     if (pendingReject) {
       pendingReject(error);
       pendingResolve = null;
@@ -205,7 +206,7 @@ export function connect(): Promise<{ publicKey: PublicKey; session: string }> {
       redirect_link: redirectUrl,
     });
 
-    console.log('🔗 Opening Phantom connect...');
+    log('🔗 Opening Phantom connect...');
     Linking.openURL(url).catch(reject);
   });
 }
@@ -236,7 +237,7 @@ export function signTransaction(serializedTx: Uint8Array): Promise<Uint8Array> {
       redirect_link: redirectUrl,
     });
 
-    console.log('🔗 Opening Phantom for tx signing...');
+    log('🔗 Opening Phantom for tx signing...');
     Linking.openURL(url).catch(reject);
   });
 }
@@ -251,7 +252,7 @@ export function signMessage(message: Uint8Array): Promise<Uint8Array> {
     pendingReject = reject;
     pendingAction = 'signMessage';
 
-    console.log('🔗 Signing message:', message.length, 'bytes, session:', session?.slice(0, 12) + '...');
+    log('🔗 Signing message:', message.length, 'bytes, session:', session?.slice(0, 12) + '...');
 
     const nonce = nacl.randomBytes(24);
     const payload = {
@@ -259,7 +260,7 @@ export function signMessage(message: Uint8Array): Promise<Uint8Array> {
       session,
     };
 
-    console.log('📦 Payload message (bs58):', payload.message.slice(0, 20) + '...');
+    log('📦 Payload message (bs58):', payload.message.slice(0, 20) + '...');
 
     const encryptedPayload = encryptPayload(payload, nonce);
     const redirectUrl = Linking.createURL('phantom-sign-msg');
@@ -271,8 +272,8 @@ export function signMessage(message: Uint8Array): Promise<Uint8Array> {
       redirect_link: redirectUrl,
     });
 
-    console.log('🔗 Sign URL length:', url.length);
-    console.log('🔗 Opening Phantom for message signing...');
+    log('🔗 Sign URL length:', url.length);
+    log('🔗 Opening Phantom for message signing...');
     Linking.openURL(url).catch(reject);
   });
 }
@@ -303,7 +304,7 @@ export function signAndSendTransaction(serializedTx: Uint8Array): Promise<string
       redirect_link: redirectUrl,
     });
 
-    console.log('🔗 Opening Phantom for sign+send...');
+    log('🔗 Opening Phantom for sign+send...');
     Linking.openURL(url).catch(reject);
   });
 }
@@ -316,7 +317,7 @@ export function disconnect() {
   pendingResolve = null;
   pendingReject = null;
   pendingAction = null;
-  console.log('🔌 Phantom disconnected');
+  log('🔌 Phantom disconnected');
 }
 
 export function isConnected(): boolean {

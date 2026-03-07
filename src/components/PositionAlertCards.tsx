@@ -16,6 +16,7 @@ import { useSwapToast } from './SwapToast';
 import { postSwapUpdate } from '@/utils/postSwapUpdate';
 import { playAlertSound } from '@/services/alertSound';
 import ConfirmModal from './ConfirmModal';
+import { log, warn, error as logError } from '../utils/logger';
 
 // Platform-safe alert for errors
 function xAlert(title: string, message?: string) {
@@ -104,7 +105,7 @@ export default function PositionAlertCards() {
       try {
         allPlans = await loadAllPlans();
       } catch (err) {
-        console.warn('[ALERTS] Failed to load accumulation plans:', err);
+        warn('[ALERTS] Failed to load accumulation plans:', err);
       }
 
       // Merge plan mints into the fetch so exited positions still get price data
@@ -127,7 +128,7 @@ export default function PositionAlertCards() {
         if (data.change24h !== null) changes.push(`24h: ${data.change24h > 0 ? '+' : ''}${data.change24h.toFixed(1)}%`);
         if (data.change7d !== null) changes.push(`7d: ${data.change7d > 0 ? '+' : ''}${data.change7d.toFixed(1)}%`);
         if (changes.length > 0) {
-          console.log(`📊 ${data.symbol}: $${data.currentPrice.toFixed(6)} (${changes.join(', ')})`);
+          log(`📊 ${data.symbol}: $${data.currentPrice.toFixed(6)} (${changes.join(', ')})`);
         }
       }
 
@@ -181,7 +182,7 @@ export default function PositionAlertCards() {
       }
       // ── END TEST ──
 
-      console.log(`🔔 Generated ${newAlerts.length} position alerts`);
+      log(`🔔 Generated ${newAlerts.length} position alerts`);
 
       // Play alert sound for new urgent/high alerts that aren't dismissed
       const undismissedHigh = newAlerts.filter(a => {
@@ -196,7 +197,7 @@ export default function PositionAlertCards() {
       setAlerts(newAlerts);
       setLastRefresh(Date.now());
     } catch (error) {
-      console.error('Failed to refresh position alerts:', error);
+      logError('Failed to refresh position alerts:', error);
     } finally {
       setLoading(false);
     }
@@ -271,7 +272,7 @@ export default function PositionAlertCards() {
     const quantity = (meta?.quantity || meta?.balance || 0) * (percentage / 100);
     const decimals = (meta as any)?.decimals ?? await fetchMintDecimals(fromMint);
 
-    console.log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
+    log(`[SWAP] ${fromSymbol}: ${quantity} tokens, decimals=${decimals}, mint=${fromMint}`);
     showToast({ type: 'loading', symbol: fromSymbol, percentage });
 
     try {

@@ -14,6 +14,7 @@ import TargetIcon from './icons/TargetIcon';
 import { SwapEvents } from '@/utils/swapEvents';
 import { useStore } from '@/store/useStore';
 import type { CryptoAsset } from '@/types';
+import { log, warn, error } from '../utils/logger';
 
 export default function AccumulationAlerts() {
   const assets = useStore(s => s.assets);
@@ -82,7 +83,7 @@ export default function AccumulationAlerts() {
 
       setPlanAlerts(results);
     } catch (err) {
-      console.error('[ACC_ALERTS] Error:', err);
+      error('[ACC_ALERTS] Error:', err);
     }
   }, [mintToAssetId]);
 
@@ -94,7 +95,7 @@ export default function AccumulationAlerts() {
   // Re-load whenever a swap completes
   useEffect(() => {
     const unsubscribe = SwapEvents.on((payload) => {
-      console.log(`[ACC_ALERTS] Swap detected for ${payload.symbol}, reloading signals…`);
+      log(`[ACC_ALERTS] Swap detected for ${payload.symbol}, reloading signals…`);
       load();
     });
     return () => { unsubscribe(); };

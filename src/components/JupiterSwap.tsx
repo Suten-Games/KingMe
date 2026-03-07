@@ -16,6 +16,7 @@ import type { Asset } from '../types';
 import { postSwapUpdate } from '../utils/postSwapUpdate';
 import { useSwapToast } from './SwapToast';
 import { lookupToken } from '../utils/tokenRegistry';
+import { log, warn, error } from '../utils/logger';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -181,7 +182,7 @@ export default function JupiterSwap({ asset }: Props) {
       let swapAmount = numAmount;
       if (tokenBalance !== null && tokenBalance >= 0) {
         if (numAmount > tokenBalance) {
-          console.log(`[JUPITER] Capping amount from ${numAmount} to on-chain balance ${tokenBalance}`);
+          log(`[JUPITER] Capping amount from ${numAmount} to on-chain balance ${tokenBalance}`);
           swapAmount = tokenBalance * MAX_SELL_FACTOR; // leave tiny buffer
           if (swapAmount <= 0) {
             setLoading(false);
