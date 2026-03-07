@@ -5,7 +5,7 @@
 // underperforming coins or buying with available funds.
 // ══════════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, ActivityIndicator, Platform, Alert as RNAlert, Image,
@@ -19,6 +19,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { useStore } from '../src/store/useStore';
+import { useWallet } from '../src/providers/wallet-provider';
+import {
+  getSwapQuote, executeSwap, isSwapConfigured,
+  fetchMintDecimals, fetchLiveBalances, MINTS,
+} from '../src/services/jupiterSwap';
+import { useSwapToast } from '../src/components/SwapToast';
+import { postSwapUpdate } from '../src/utils/postSwapUpdate';
 import {
   fetchPrices, recordPriceSnapshot, getTokenPriceData,
   getWatchlist, addToWatchlist, removeFromWatchlist,
@@ -223,6 +230,8 @@ export default function WatchlistScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const assets = useStore(s => s.assets);
+  const { connected, publicKey, signTransaction, signAndSendTransaction } = useWallet();
+  const { showToast, ToastComponent } = useSwapToast();
   const totalPortfolio = useMemo(
     () => assets.reduce((sum, a) => sum + a.value, 0),
     [assets]
@@ -240,6 +249,21 @@ export default function WatchlistScreen() {
   const [showManual, setShowManual] = useState(false);
   const [editingMint, setEditingMint] = useState<string | null>(null);
   const [expandedMint, setExpandedMint] = useState<string | null>(null);
+
+  // ── Inline swap modal state ──
+  const [swapModal, setSwapModal] = useState<{
+    targetMint: string;
+    targetSymbol: string;
+    sourceMint: string;
+    sourceSymbol: string;
+  } | null>(null);
+  const [swapAmount, setSwapAmount] = useState('');
+  const [swapBalance, setSwapBalance] = useState<number | null>(null);
+  const [swapQuote, setSwapQuote] = useState<string | null>(null);
+  const [swapQuoting, setSwapQuoting] = useState(false);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const swapDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-add all held crypto tokens to watchlist
   const autoTrackHeldCoins = useCallback(async (currentWatchlist: WatchlistToken[]) => {
@@ -418,6 +442,114 @@ export default function WatchlistScreen() {
       return m === mint && a.value > 0;
     });
   }, [assets]);
+
+  // ── Inline swap helpers ──
+  const SWAP_PCTS = [25, 50, 75, 100] as const;
+
+  const openSwapModal = useCallback(async (targetMint: string, targetSymbol: string, sourceMint: string, sourceSymbol: string) => {
+    setSwapModal({ targetMint, targetSymbol, sourceMint, sourceSymbol });
+    setSwapAmount('');
+    setSwapQuote(null);
+    setSwapError(null);
+    setSwapBalance(null);
+
+    if (connected && publicKey) {
+      try {
+        const { tokenBalance, solBalance } = await fetchLiveBalances(publicKey.toBase58(), sourceMint);
+        setSwapBalance(sourceMint === MINTS.SOL ? solBalance : tokenBalance);
+      } catch {}
+    }
+  }, [connected, publicKey]);
+
+  const closeSwapModal = () => {
+    setSwapModal(null);
+    setSwapAmount('');
+    setSwapQuote(null);
+    setSwapError(null);
+    setSwapBalance(null);
+  };
+
+  // Auto-quote when amount changes
+  useEffect(() => {
+    if (swapDebounce.current) clearTimeout(swapDebounce.current);
+    setSwapQuote(null);
+    setSwapError(null);
+
+    const num = parseFloat(swapAmount) || 0;
+    if (!swapModal || num <= 0 || !connected || !publicKey) return;
+
+    setSwapQuoting(true);
+    swapDebounce.current = setTimeout(async () => {
+      try {
+        const inputDecimals = await fetchMintDecimals(swapModal.sourceMint);
+        const quote = await getSwapQuote({
+          inputMint: swapModal.sourceMint,
+          outputMint: swapModal.targetMint,
+          amount: num,
+          inputDecimals,
+          userPublicKey: publicKey.toBase58(),
+          slippageBps: 100,
+        });
+        const outDecimals = await fetchMintDecimals(swapModal.targetMint);
+        const outAmount = parseInt(quote.outAmount) / Math.pow(10, outDecimals);
+        setSwapQuote(`~${outAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${swapModal.targetSymbol}`);
+      } catch (e: any) {
+        setSwapError(e.message?.slice(0, 60) || 'Quote failed');
+      } finally {
+        setSwapQuoting(false);
+      }
+    }, 500);
+
+    return () => { if (swapDebounce.current) clearTimeout(swapDebounce.current); };
+  }, [swapAmount, swapModal, connected, publicKey]);
+
+  const handleSwapExecute = useCallback(async () => {
+    const num = parseFloat(swapAmount) || 0;
+    if (!swapModal || num <= 0 || !connected || !publicKey) return;
+
+    setSwapLoading(true);
+    setSwapError(null);
+    showToast({ type: 'loading', symbol: swapModal.targetSymbol, percentage: 0 });
+
+    try {
+      const walletAddr = publicKey.toBase58();
+      const { solBalance } = await fetchLiveBalances(walletAddr);
+      if (solBalance < 0.005) {
+        setSwapLoading(false);
+        return alert('Not enough SOL', `You need ~0.005 SOL for fees. You have ${solBalance.toFixed(6)} SOL.`);
+      }
+
+      const inputDecimals = await fetchMintDecimals(swapModal.sourceMint);
+      const result = await executeSwap(
+        {
+          inputMint: swapModal.sourceMint,
+          outputMint: swapModal.targetMint,
+          amount: num,
+          inputDecimals,
+          userPublicKey: walletAddr,
+          slippageBps: 100,
+        },
+        signTransaction,
+        signAndSendTransaction,
+      );
+
+      if (result.success) {
+        showToast({ type: 'success', symbol: swapModal.targetSymbol, signature: result.signature || '' });
+        closeSwapModal();
+        // Refresh prices after swap
+        setTimeout(() => loadData(), 3000);
+      } else if (result.error !== 'Transaction cancelled by user') {
+        showToast({ type: 'error', message: result.error || 'Swap failed' });
+        setSwapError(result.error || 'Swap failed');
+      } else {
+        showToast({ type: 'error', message: 'Transaction cancelled.' });
+      }
+    } catch (e: any) {
+      setSwapError(e.message || 'Swap failed');
+    } finally {
+      setSwapLoading(false);
+    }
+  }, [swapAmount, swapModal, connected, publicKey, signTransaction, signAndSendTransaction]);
 
   // Sort: signal items first
   const sortedWatchlist = useMemo(() => {
@@ -634,7 +766,7 @@ export default function WatchlistScreen() {
                               <TouchableOpacity
                                 key={f.assetId}
                                 style={st.fundingRow}
-                                onPress={() => router.push(`/asset/${heldAsset ? heldAsset.id : f.assetId}` as any)}
+                                onPress={() => openSwapModal(token.mint, token.symbol, f.mint, f.symbol)}
                               >
                                 <View style={{ flex: 1 }}>
                                   <Text style={st.fundingSymbol}>{f.symbol}</Text>
@@ -654,7 +786,7 @@ export default function WatchlistScreen() {
                               <TouchableOpacity
                                 key={f.assetId}
                                 style={st.fundingRow}
-                                onPress={() => router.push(`/asset/${heldAsset ? heldAsset.id : f.assetId}` as any)}
+                                onPress={() => openSwapModal(token.mint, token.symbol, f.mint, f.symbol)}
                               >
                                 <View style={{ flex: 1 }}>
                                   <Text style={st.fundingSymbol}>{f.symbol}</Text>
@@ -812,6 +944,124 @@ export default function WatchlistScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Inline Swap Modal ── */}
+      <Modal visible={!!swapModal} animationType="fade" transparent onRequestClose={closeSwapModal}>
+        <View style={st.modalOverlay}>
+          <View style={st.modalContent}>
+            <View style={st.modalHeader}>
+              <Text style={st.modalTitle}>
+                Buy {swapModal?.targetSymbol} with {swapModal?.sourceSymbol}
+              </Text>
+              <TouchableOpacity onPress={closeSwapModal}>
+                <Text style={st.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Balance */}
+            {swapBalance !== null && (
+              <Text style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>
+                Available: {swapBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} {swapModal?.sourceSymbol}
+              </Text>
+            )}
+
+            {/* Amount input */}
+            <TextInput
+              style={st.searchInput}
+              placeholder={`Amount in ${swapModal?.sourceSymbol || ''}...`}
+              placeholderTextColor="#666"
+              keyboardType="numeric"
+              value={swapAmount}
+              onChangeText={setSwapAmount}
+              autoFocus
+            />
+
+            {/* Percentage buttons */}
+            {swapBalance !== null && swapBalance > 0 && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 8 }}>
+                {SWAP_PCTS.map(pct => (
+                  <TouchableOpacity
+                    key={pct}
+                    style={{
+                      flex: 1, paddingVertical: 8, borderRadius: 8,
+                      backgroundColor: '#1a1f2e', alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      const factor = pct === 100 ? 0.999 : pct / 100;
+                      setSwapAmount((swapBalance * factor).toString());
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#60a5fa' }}>
+                      {pct === 100 ? 'MAX' : `${pct}%`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Quote output */}
+            {swapQuoting && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <ActivityIndicator size="small" color="#60a5fa" />
+                <Text style={{ color: '#888', fontSize: 13 }}>Getting quote...</Text>
+              </View>
+            )}
+            {swapQuote && (
+              <View style={{ backgroundColor: '#4ade8015', borderRadius: 10, padding: 12, marginTop: 8 }}>
+                <Text style={{ color: '#4ade80', fontSize: 16, fontWeight: '700' }}>
+                  You receive: {swapQuote}
+                </Text>
+              </View>
+            )}
+            {swapError && (
+              <View style={{ backgroundColor: '#f8717115', borderRadius: 10, padding: 12, marginTop: 8 }}>
+                <Text style={{ color: '#f87171', fontSize: 13 }}>{swapError}</Text>
+              </View>
+            )}
+
+            {/* Wallet warning */}
+            {!connected && (
+              <Text style={{ color: '#f4c430', fontSize: 13, textAlign: 'center', marginTop: 12 }}>
+                Connect wallet to swap
+              </Text>
+            )}
+
+            {/* Action buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                style={{ flex: 1, padding: 14, borderRadius: 12, borderWidth: 2, borderColor: '#2a2f3e', alignItems: 'center' }}
+                onPress={closeSwapModal}
+                disabled={swapLoading}
+              >
+                <Text style={{ color: '#888', fontSize: 15, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1, padding: 14, borderRadius: 12, alignItems: 'center',
+                  backgroundColor: '#60a5fa',
+                  opacity: (!connected || swapLoading || !(parseFloat(swapAmount) > 0)) ? 0.4 : 1,
+                }}
+                onPress={handleSwapExecute}
+                disabled={!connected || swapLoading || !(parseFloat(swapAmount) > 0)}
+              >
+                {swapLoading ? (
+                  <ActivityIndicator size="small" color="#0a0e1a" />
+                ) : (
+                  <Text style={{ color: '#0a0e1a', fontSize: 15, fontWeight: '800' }}>
+                    Swap
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 10, color: '#444', textAlign: 'center', marginTop: 8 }}>
+              Powered by Jupiter · 1% slippage
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      <ToastComponent />
     </View>
   );
 }
