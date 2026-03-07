@@ -1,5 +1,5 @@
 // app/onboarding/reveal.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform, Dimensions, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useMemo } from 'react';
 import { FreedomScore } from '../../src/components/FreedomScore';
@@ -102,7 +102,8 @@ export default function RevealScreen() {
       )}
 
       <TouchableOpacity style={st.button} onPress={handleFinish}>
-        <Text style={st.buttonText}>Enter Your Kingdom 👑</Text>
+        <Image source={require('../../src/assets/images/kingmelogo.jpg')} style={{ width: 24, height: 24, borderRadius: 6, marginRight: 8 }} />
+        <Text style={st.buttonText}>Enter Your Kingdom</Text>
       </TouchableOpacity>
       <TouchableOpacity style={st.secondaryButton} onPress={() => router.back()}>
         <Text style={st.secondaryButtonText}>Go Back & Edit</Text>
@@ -177,7 +178,7 @@ const st = StyleSheet.create({
   firstRecLabel: { fontSize: 11, color: T.gold, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
   firstRecText: { fontSize: 14, color: T.textSecondary, lineHeight: 20 },
 
-  button: { backgroundColor: T.gold, padding: 18, borderRadius: T.radius.md, alignItems: 'center', marginBottom: 12 },
+  button: { backgroundColor: T.gold, padding: 18, borderRadius: T.radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 12 },
   buttonText: { fontSize: 18, fontWeight: 'bold', color: T.bg },
   secondaryButton: {
     padding: 18, borderRadius: T.radius.md, alignItems: 'center',
