@@ -534,7 +534,7 @@ export default function WatchlistScreen() {
       );
 
       if (result.success) {
-        showToast({ type: 'success', symbol: swapModal.targetSymbol, signature: result.signature || '' });
+        showToast({ type: 'success', symbol: swapModal.targetSymbol, usdReceived: num, signature: result.signature || '' });
         closeSwapModal();
         // Refresh prices after swap
         setTimeout(() => loadData(), 3000);

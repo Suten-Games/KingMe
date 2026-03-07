@@ -105,7 +105,7 @@ export function useSwapToast() {
       name = `Trimming ${config.percentage}% of ${config.symbol}…`;
       detail = 'Waiting for Phantom to sign';
     } else if (config.type === 'success') {
-      name = `${config.symbol} → +$${config.usdReceived.toFixed(2)} USDC`;
+      name = `${config.symbol} → +$${(config.usdReceived ?? 0).toFixed(2)} received`;
       detail = `tx ${config.signature.slice(0, 12)}… · Tap to view on Solscan`;
     } else {
       name = 'Transaction failed';
