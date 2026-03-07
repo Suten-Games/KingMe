@@ -1,9 +1,10 @@
 // app/onboarding/income.tsx
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function IncomeScreen() {
   const router = useRouter();
@@ -21,7 +22,8 @@ export default function IncomeScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={S.page}>
+      <ScrollView style={{ flex: 1, backgroundColor: T.bg }} contentContainerStyle={{ flexGrow: 1, padding: 20 }}
+        keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Text style={S.progress}>Step 1 of 3</Text>
         <Text style={S.title}>What's your income?</Text>
         <Text style={S.subtitle}>Your active income (salary, wages, etc.)</Text>
@@ -51,13 +53,15 @@ export default function IncomeScreen() {
 
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
-            <Text style={S.skipButtonText}>Skip for now</Text>
+            <Text style={S.skipButtonText}>Skip</Text>
           </TouchableOpacity>
           <TouchableOpacity style={S.button} onPress={handleContinue}>
             <Text style={S.buttonText}>Continue</Text>
           </TouchableOpacity>
         </View>
-      </View>
+
+        <KingMeFooter />
+      </ScrollView>
     </TouchableWithoutFeedback>
   );
 }

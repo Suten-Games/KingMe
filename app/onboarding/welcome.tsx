@@ -1,5 +1,5 @@
 // app/onboarding/welcome.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,6 +7,7 @@ import type { AvatarType } from '../../src/types';
 import { AVATAR_IMAGES } from '../../src/utils/constants';
 import { useStore } from '../../src/store/useStore';
 import { T } from '../../src/theme';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={st.container}>
+    <ScrollView style={st.container} contentContainerStyle={st.containerContent}>
       {/* Logo + Title */}
       <View style={st.header}>
         <Image
@@ -98,11 +99,18 @@ export default function WelcomeScreen() {
 
       {/* Continue */}
       <View style={st.bottomArea}>
-        <TouchableOpacity style={st.button} onPress={handleContinue}>
-          <Text style={st.buttonText}>Continue</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <TouchableOpacity style={st.skipButton} onPress={() => router.push('/onboarding/bank-accounts')}>
+            <Text style={st.skipButtonText}>Skip</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={st.button} onPress={handleContinue}>
+            <Text style={st.buttonText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      <KingMeFooter />
+    </ScrollView>
   );
 }
 
@@ -113,6 +121,9 @@ const st = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: T.bg,
+  },
+  containerContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     justifyContent: 'center',
   },
@@ -216,7 +227,20 @@ const st = StyleSheet.create({
   bottomArea: {
     paddingBottom: 20,
   },
+  skipButton: {
+    flex: 1,
+    padding: 18,
+    borderRadius: T.radius.md,
+    borderWidth: 1.5,
+    borderColor: T.border,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 16,
+    color: T.textSecondary,
+  },
   button: {
+    flex: 1,
     backgroundColor: T.gold,
     padding: 18,
     borderRadius: T.radius.md,

@@ -28,7 +28,9 @@ interface FreedomScoreProps {
 const { width, height } = Dimensions.get('window');
 
 function defaultLayout(): 'hero' | 'sidebar' {
-  return Platform.OS === 'web' ? 'sidebar' : 'hero';
+  if (Platform.OS !== 'web') return 'hero';
+  // Use hero layout on narrow screens (mobile web) so content is scrollable
+  return width >= 768 ? 'sidebar' : 'hero';
 }
 
 // ── Web Video Component ───────────────────────────────────────────────────────

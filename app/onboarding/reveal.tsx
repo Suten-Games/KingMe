@@ -1,11 +1,13 @@
 // app/onboarding/reveal.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useMemo } from 'react';
 import { FreedomScore } from '../../src/components/FreedomScore';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { T } from '../../src/theme';
+
+const { width } = Dimensions.get('window');
 
 const HEALTH_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   critical:   { bg: '#2a0c0c', text: T.red,    border: T.red },
@@ -111,7 +113,7 @@ export default function RevealScreen() {
   return (
     <View style={st.container}>
       <Animated.View style={[{ flex: 1 }, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-        {isWeb ? (
+        {isWeb && width >= 768 ? (
           <>
             <Text style={st.title}>Your Freedom Score</Text>
             <FreedomScore days={freedom.days} formatted={freedom.formatted} state={freedom.state}
@@ -120,7 +122,7 @@ export default function RevealScreen() {
             </FreedomScore>
           </>
         ) : (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
             <Text style={st.title}>Your Freedom Score</Text>
             <FreedomScore days={freedom.days} formatted={freedom.formatted} state={freedom.state}
               avatarType={avatarType} isKinged={freedom.isKinged} />

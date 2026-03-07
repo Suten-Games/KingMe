@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Obligation, BankAccount } from '../../src/types';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 function AccountPicker({ bankAccounts, value, onChange }: { bankAccounts: BankAccount[]; value: string; onChange: (id: string) => void }) {
   return (
@@ -164,9 +165,14 @@ export default function ObligationsScreen() {
             💡 Later you can review each obligation and see how removing them would impact your freedom score.
           </Text>
         </View>
+
+        <KingMeFooter />
       </ScrollView>
 
-      <View style={S.buttonContainerSingle}>
+      <View style={S.buttonContainer}>
+        <TouchableOpacity style={S.skipButton} onPress={() => router.push('/onboarding/cashflow-check')}>
+          <Text style={S.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={S.button} onPress={handleContinue}>
           <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>

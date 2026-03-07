@@ -415,8 +415,10 @@ export default function DebtsScreen() {
 
               return (
                 <TouchableOpacity key={debt.id} onPress={() => router.push(`/debt/${debt.id}`)} activeOpacity={0.7}>
-                  <LinearGradient colors={T.gradients.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={[s.debtCard, { borderColor: isPaid ? T.green + '60' : T.redBright + '40' }]}>
+                  <LinearGradient
+                    colors={isPaid ? ['#0a1a0f', '#0f1f14'] : T.gradients.card}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={[s.debtCard, { borderColor: isPaid ? '#22c55e40' : T.redBright + '40' }]}>
 
                     {/* Header row with name + paid toggle */}
                     <View style={s.debtHeader}>
@@ -428,7 +430,14 @@ export default function DebtsScreen() {
                       </TouchableOpacity>
 
                       <View style={s.debtHeaderLeft}>
-                        <Text style={[s.debtName, isPaid && s.debtNamePaid]}>{debt.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={[s.debtName, isPaid && s.debtNamePaid]}>{debt.name}</Text>
+                          {isPaid && (
+                            <View style={s.paidStamp}>
+                              <Text style={s.paidStampText}>PAID</Text>
+                            </View>
+                          )}
+                        </View>
                         {(debt as any).payee && (
                           <Text style={s.debtPayee}>Paid to: {(debt as any).payee}</Text>
                         )}
@@ -442,16 +451,25 @@ export default function DebtsScreen() {
                             📅 Due on the {debt.dueDate}{getDaySuffix(debt.dueDate)} of each month
                           </Text>
                         )}
+                        {isPaid && !matchedTxns.length && debt.lastPaidDate && (
+                          <Text style={s.paidDateLabel}>✅ Paid {debt.lastPaidDate}</Text>
+                        )}
                       </View>
 
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {!isPaid ? (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity onPress={(e) => { e.stopPropagation(); openEdit(debt); }} style={{ padding: 4 }}>
+                            <Text style={s.editButton}>✎</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeDebt(debt.id); }} style={{ padding: 4 }}>
+                            <Text style={s.deleteButton}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
                         <TouchableOpacity onPress={(e) => { e.stopPropagation(); openEdit(debt); }} style={{ padding: 4 }}>
                           <Text style={s.editButton}>✎</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeDebt(debt.id); }} style={{ padding: 4 }}>
-                          <Text style={s.deleteButton}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
+                      )}
                     </View>
 
                     {/* Details row */}
@@ -493,13 +511,6 @@ export default function DebtsScreen() {
                             </Text>
                           </View>
                         ))}
-                      </View>
-                    )}
-
-                    {/* Paid badge */}
-                    {isPaid && (
-                      <View style={s.paidBadge}>
-                        <Text style={s.paidBadgeText}>✓ Paid This Month</Text>
                       </View>
                     )}
 
@@ -731,16 +742,17 @@ const s = StyleSheet.create({
   debtPayment: { fontSize: 15, color: T.redBright, fontFamily: T.fontBold },
 
   // Bank match section
-  bankMatchSection: { marginTop: 4 },
-  bankMatchDivider: { height: 1, backgroundColor: T.green + '30', marginVertical: 10 },
+  bankMatchSection: { marginTop: 8, backgroundColor: '#22c55e10', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#22c55e20' },
+  bankMatchDivider: { display: 'none' },
   bankMatchTitle: { fontSize: 12, color: T.green, marginBottom: 6, fontFamily: T.fontBold },
   bankMatchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
   bankMatchDesc: { fontSize: 12, color: T.textSecondary, flex: 1, fontFamily: T.fontRegular },
   bankMatchAmount: { fontSize: 12, color: T.green, fontFamily: T.fontSemiBold, marginLeft: 8 },
 
-  // Paid badge
-  paidBadge: { backgroundColor: T.green + '20', borderRadius: T.radius.sm, paddingVertical: 6, paddingHorizontal: 12, alignSelf: 'flex-start', marginTop: 10 },
-  paidBadgeText: { fontSize: 12, color: T.green, fontFamily: T.fontBold },
+  // Paid stamp
+  paidStamp: { backgroundColor: '#22c55e', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
+  paidStampText: { fontSize: 11, fontFamily: T.fontExtraBold, color: '#0a0e1a', letterSpacing: 1.5 },
+  paidDateLabel: { fontSize: 12, color: '#22c55e', fontFamily: T.fontMedium, marginTop: 4 },
   tapHint: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: T.border, alignItems: 'center' },
   tapHintText: { fontSize: 12, color: T.textMuted, fontFamily: T.fontRegular },
 

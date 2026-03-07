@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { IncomeSource } from '../../src/types';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function IncomeSourcesScreen() {
   const router = useRouter();
@@ -113,17 +114,17 @@ export default function IncomeSourcesScreen() {
             <Text style={S.totalYearly}>${(getTotalMonthlyIncome() * 12).toLocaleString()}/year</Text>
           </View>
         )}
+
+        <KingMeFooter />
       </ScrollView>
 
       <View style={S.buttonContainer}>
-        {incomeSources.length === 0 && (
-          <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
-            <Text style={S.skipButtonText}>Skip</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
+          <Text style={S.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
         <TouchableOpacity
-          style={[S.buttonGreen, incomeSources.length === 0 && S.buttonSecondary]}
-          onPress={handleContinue} disabled={incomeSources.length === 0}
+          style={S.buttonGreen}
+          onPress={handleContinue}
         >
           <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>

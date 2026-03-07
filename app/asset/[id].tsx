@@ -1456,7 +1456,7 @@ const styles = StyleSheet.create({
   targetChangeGreen: { color: '#4ade80' },
   targetChangeRed: { color: '#f87171' },
   targetGain: { fontSize: 14, fontWeight: '600', color: '#666' },
-  invalidatorsSection: { marginBottom: 16 },
+  invalidatorsSection: { marginTop: 16, marginBottom: 16 },
   invalidatorsTitle: { fontSize: 16, fontWeight: 'bold', color: '#fff', marginBottom: 12 },
   invalidatorCard: { flexDirection: 'row', gap: 12, backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#fbbf24', borderWidth: 1, borderColor: '#2a2f3e' },
   invalidatorTriggered: { borderLeftColor: '#f87171', backgroundColor: '#2a1f1f' },

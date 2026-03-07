@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useStore } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function CashFlowCheckScreen() {
   const router = useRouter();
@@ -150,15 +151,16 @@ export default function CashFlowCheckScreen() {
             <Text key={i} style={st.recommendationItem}>{rec}</Text>
           ))}
         </View>
+
+        <KingMeFooter />
       </ScrollView>
 
-      <View style={S.buttonContainerSingle}>
+      <View style={S.buttonContainer}>
+        <TouchableOpacity style={S.skipButton} onPress={() => router.push('/onboarding/assets')}>
+          <Text style={S.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={S.button} onPress={handleContinue}>
-          <Text style={S.buttonText}>
-            {cashFlow.healthStatus === 'critical'
-              ? 'Continue (I want to track my assets too)'
-              : 'Continue to Assets →'}
-          </Text>
+          <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
     </View>

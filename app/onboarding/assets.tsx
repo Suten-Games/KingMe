@@ -6,6 +6,7 @@ import { useStore } from '../../src/store/useStore';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import type { Asset, AssetType } from '../../src/types';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function AssetsScreen() {
   const router = useRouter();
@@ -153,18 +154,15 @@ export default function AssetsScreen() {
             🔗 Later you can connect your Solana wallet to automatically track crypto assets and DeFi positions.
           </Text>
         </View>
+
+        <KingMeFooter />
       </ScrollView>
 
       <View style={S.buttonContainer}>
-        {assets.length === 0 && (
-          <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
-            <Text style={S.skipButtonText}>Skip for now</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[S.button, assets.length === 0 && S.buttonSecondary]}
-          onPress={handleContinue}
-        >
+        <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
+          <Text style={S.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={S.button} onPress={handleContinue}>
           <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>

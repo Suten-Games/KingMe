@@ -6,6 +6,7 @@ import { useStore } from '../../src/store/useStore';
 import type { Debt } from '../../src/types';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { S, T } from '../../src/styles/onboarding';
+import KingMeFooter from '../../src/components/KingMeFooter';
 
 export default function DebtsScreen() {
   const router = useRouter();
@@ -107,19 +108,16 @@ export default function DebtsScreen() {
               </View>
             </View>
           )}
+
+          <KingMeFooter />
         </ScrollView>
       </ResponsiveContainer>
 
       <View style={S.buttonContainer}>
-        {debts.length === 0 && (
-          <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
-            <Text style={S.skipButtonText}>Skip</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={[S.button, debts.length === 0 && S.buttonSecondary]}
-          onPress={handleContinue}
-        >
+        <TouchableOpacity style={S.skipButton} onPress={handleSkip}>
+          <Text style={S.skipButtonText}>Skip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={S.button} onPress={handleContinue}>
           <Text style={S.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>

@@ -1,13 +1,13 @@
 // src/services/marketPriceService.ts
-// Fetches live prices for stocks (Yahoo Finance) and exchange-based crypto (CoinGecko).
+// Fetches live prices for stocks (KingMe API) and exchange-based crypto (CoinGecko).
 // Solana tokens with a mint address are priced via Jupiter/DexScreener during wallet sync — not here.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
 const CACHE_KEY = 'market_price_cache';
 const STALE_MS = 5 * 60 * 1000; // 5 minutes
-const isWeb = Platform.OS === 'web';
+
+const API_BASE = 'https://kingme.money/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,21 @@ export interface MarketPriceCache {
   fetchedAt: string;                 // ISO timestamp
 }
 
-// ─── Yahoo Finance (Stocks / ETFs) ──────────────────────────────────────────
+// ─── Stock Quotes (KingMe API) ──────────────────────────────────────────────
+
+async function fetchSingleStockQuote(ticker: string): Promise<{ symbol: string; price: number } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/stocks/quote?symbol=${encodeURIComponent(ticker)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.symbol && typeof data.price === 'number' && data.price > 0) {
+      return { symbol: data.symbol, price: data.price };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchStockPrices(tickers: string[]): Promise<Record<string, number>> {
   if (tickers.length === 0) return {};
@@ -25,35 +39,20 @@ export async function fetchStockPrices(tickers: string[]): Promise<Record<string
   const prices: Record<string, number> = {};
 
   try {
-    const symbols = tickers.join(',');
+    // Fetch all tickers in parallel via KingMe API
+    const results = await Promise.allSettled(
+      tickers.map(t => fetchSingleStockQuote(t))
+    );
 
-    if (isWeb) {
-      // On web, proxy through our own API to avoid CORS
-      const url = `https://kingme.money/api/market/stocks?symbols=${encodeURIComponent(symbols)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Stock proxy ${res.status}`);
-      const data = await res.json();
-      Object.assign(prices, data.prices || {});
-    } else {
-      // Native — call Yahoo directly (no CORS restriction)
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-      const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; KingMe/1.0)' },
-      });
-      if (!res.ok) throw new Error(`Yahoo Finance ${res.status}`);
-      const data = await res.json();
-      const results = data?.quoteResponse?.result || [];
-      for (const quote of results) {
-        const price = quote.regularMarketPrice;
-        if (quote.symbol && typeof price === 'number' && price > 0) {
-          prices[quote.symbol.toUpperCase()] = price;
-        }
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        prices[result.value.symbol.toUpperCase()] = result.value.price;
       }
     }
 
-    console.log(`[MARKET] Yahoo Finance: ${Object.keys(prices).length}/${tickers.length}`);
+    console.log(`[MARKET] Stock quotes: ${Object.keys(prices).length}/${tickers.length}`);
   } catch (err) {
-    console.warn('[MARKET] Yahoo Finance failed:', err);
+    console.warn('[MARKET] Stock quotes failed:', err);
   }
 
   return prices;
