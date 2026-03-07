@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
 import { generateTradeInsights, getInsightColor, TradeInsight } from '../services/tradeInsights';
 
@@ -16,6 +17,7 @@ const DISMISSED_KEY = 'dismissed_trade_insights';
 const DISMISS_DURATION = 24 * 60 * 60 * 1000; // 24h
 
 export default function TradeInsightCards() {
+  const router = useRouter();
   const driftTrades = useStore(s => s.driftTrades || []);
   const [dismissed, setDismissed] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -147,6 +149,11 @@ export default function TradeInsightCards() {
           </LinearGradient>
         );
       })}
+
+      {/* Go to Trading */}
+      <TouchableOpacity style={s.tradingButton} onPress={() => router.push('/trading')}>
+        <Text style={s.tradingButtonText}>Open Trading →</Text>
+      </TouchableOpacity>
 
       {/* Show more / less */}
       {hiddenCount > 0 && !showAll && (
@@ -314,5 +321,20 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Inter_600SemiBold',
     color: '#60a5fa',
+  },
+
+  tradingButton: {
+    backgroundColor: '#f4c43015',
+    borderWidth: 1.5,
+    borderColor: '#f4c43040',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tradingButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter_700Bold',
+    color: '#f4c430',
   },
 });

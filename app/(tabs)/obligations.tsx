@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
-import type { Obligation } from '../../src/types';
+import type { Obligation, ObligationFrequency } from '../../src/types';
+import { obligationMonthlyAmount } from '../../src/types';
 import { BankTransactionCategory, TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '../../src/types/bankTransactionTypes';
 import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
@@ -164,6 +165,7 @@ export default function ObligationsScreen() {
   const [amount, setAmount] = useState('');
   const [accountId, setAccountId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [frequency, setFrequency] = useState<ObligationFrequency>('monthly');
   const [transactionCategory, setTransactionCategory] = useState<BankTransactionCategory | ''>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -180,7 +182,7 @@ export default function ObligationsScreen() {
 
   // ── Per-obligation freedom impact ──
   const obligationImpacts = useMemo(() => {
-    const totalMonthlyObs = obligations.reduce((s, o) => s + o.amount, 0);
+    const totalMonthlyObs = obligations.reduce((s, o) => s + obligationMonthlyAmount(o), 0);
     const totalMonthlyDebts = debts.reduce((s, d) => s + (d.monthlyPayment || 0), 0);
     const totalMonthlyNeeds = totalMonthlyObs + totalMonthlyDebts;
     const dailyNeeds = totalMonthlyNeeds / 30;
@@ -194,15 +196,16 @@ export default function ObligationsScreen() {
     const impacts: Record<string, { freedomDelta: number; newFreedomDays: number; yearlyAmount: number; percentOfNeeds: number }> = {};
 
     for (const ob of obligations) {
-      const newDailyNeeds = dailyNeeds - (ob.amount / 30);
+      const obMonthly = obligationMonthlyAmount(ob);
+      const newDailyNeeds = dailyNeeds - (obMonthly / 30);
       const newFreedomDays = newDailyNeeds > 0 && dailyPassive > 0 ? dailyPassive / newDailyNeeds : 0;
       const delta = newFreedomDays - freedomDays;
 
       impacts[ob.id] = {
         freedomDelta: delta,
         newFreedomDays: newFreedomDays,
-        yearlyAmount: ob.amount * 12,
-        percentOfNeeds: totalMonthlyNeeds > 0 ? (ob.amount / totalMonthlyNeeds) * 100 : 0,
+        yearlyAmount: obMonthly * 12,
+        percentOfNeeds: totalMonthlyNeeds > 0 ? (obMonthly / totalMonthlyNeeds) * 100 : 0,
       };
     }
 
@@ -216,8 +219,8 @@ export default function ObligationsScreen() {
     const unreviewed = obligations.filter(o => !auditRatings[o.id] || auditRatings[o.id] === 'unreviewed');
     const reviewed = obligations.filter(o => auditRatings[o.id] && auditRatings[o.id] !== 'unreviewed');
 
-    const cuttableTotal = cuttable.reduce((s, o) => s + o.amount, 0);
-    const niceToHaveTotal = niceToHave.reduce((s, o) => s + o.amount, 0);
+    const cuttableTotal = cuttable.reduce((s, o) => s + obligationMonthlyAmount(o), 0);
+    const niceToHaveTotal = niceToHave.reduce((s, o) => s + obligationMonthlyAmount(o), 0);
     const cuttableFreedomGain = cuttable.reduce((s, o) => s + (obligationImpacts[o.id]?.freedomDelta || 0), 0);
 
     return { cuttable, niceToHave, unreviewed, reviewed, cuttableTotal, niceToHaveTotal, cuttableFreedomGain };
@@ -255,13 +258,13 @@ export default function ObligationsScreen() {
     if (!name || !amount) return;
     addObligation({
       id: Date.now().toString(), name, payee: payee || 'Various',
-      amount: parseFloat(amount), category: 'other', isRecurring: true,
+      amount: parseFloat(amount), frequency, category: 'other', isRecurring: true,
       dueDate: dueDate ? parseInt(dueDate) : 1,
       bankAccountId: accountId || undefined,
       ...(transactionCategory && { transactionCategory }),
     });
-    setName(''); setPayee(''); setAmount(''); setAccountId(''); setDueDate('');
-    setTransactionCategory('');
+    setName(''); setPayee(''); setAmount(''); setFrequency('monthly');
+    setAccountId(''); setDueDate(''); setTransactionCategory('');
     setShowAddModal(false);
   };
 
@@ -269,6 +272,7 @@ export default function ObligationsScreen() {
     setEditingObligation(obligation);
     setName(obligation.name); setPayee(obligation.payee);
     setAmount(obligation.amount.toString());
+    setFrequency(obligation.frequency || 'monthly');
     setAccountId(obligation.bankAccountId || '');
     setDueDate(obligation.dueDate?.toString() || '');
     setTransactionCategory(obligation.transactionCategory || '');
@@ -278,21 +282,23 @@ export default function ObligationsScreen() {
   const handleSaveEdit = () => {
     if (!editingObligation || !name || !amount) return;
     updateObligation(editingObligation.id, {
-      name, payee: payee || 'Various', amount: parseFloat(amount),
+      name, payee: payee || 'Various', amount: parseFloat(amount), frequency,
       bankAccountId: accountId || undefined,
       dueDate: dueDate ? parseInt(dueDate) : undefined,
       transactionCategory: transactionCategory || undefined,
     });
     setEditingObligation(null); setName(''); setPayee(''); setAmount('');
-    setAccountId(''); setDueDate(''); setTransactionCategory(''); setShowAddModal(false);
+    setFrequency('monthly'); setAccountId(''); setDueDate(''); setTransactionCategory('');
+    setShowAddModal(false);
   };
 
   const handleCloseModal = () => {
     setEditingObligation(null); setName(''); setPayee(''); setAmount('');
-    setAccountId(''); setDueDate(''); setTransactionCategory(''); setShowAddModal(false);
+    setFrequency('monthly'); setAccountId(''); setDueDate(''); setTransactionCategory('');
+    setShowAddModal(false);
   };
 
-  const monthlyTotal = obligations.reduce((sum, o) => sum + o.amount, 0);
+  const monthlyTotal = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
 
   return (
     <View style={s.container}>
@@ -450,7 +456,14 @@ export default function ObligationsScreen() {
                   </View>
 
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={s.obligationAmount}>${ob.amount.toFixed(2)}/month</Text>
+                    <View>
+                      <Text style={s.obligationAmount}>
+                        ${ob.amount.toFixed(2)}/{ob.frequency === 'quarterly' ? 'quarter' : ob.frequency === 'yearly' ? 'year' : ob.frequency === 'weekly' ? 'week' : ob.frequency === 'biweekly' ? '2 weeks' : 'month'}
+                      </Text>
+                      {ob.frequency && ob.frequency !== 'monthly' && (
+                        <Text style={s.obligationMonthlyEquiv}>${obligationMonthlyAmount(ob).toFixed(2)}/mo equiv</Text>
+                      )}
+                    </View>
                     {auditMode && impact && (
                       <Text style={s.freedomChip}>
                         +{impact.freedomDelta.toFixed(1)}d freedom if cut
@@ -574,12 +587,26 @@ export default function ObligationsScreen() {
               <Text style={s.label}>Who are you paying?</Text>
               <TextInput style={s.modalInput} placeholder="e.g., XYZ Financial, Landlord" placeholderTextColor="#555" value={payee} onChangeText={setPayee} />
 
-              <Text style={s.label}>Monthly Amount</Text>
+              <Text style={s.label}>Amount</Text>
               <View style={s.inputContainer}>
                 <Text style={s.currencySymbol}>$</Text>
                 <TextInput style={s.input} placeholder="0" placeholderTextColor="#555" keyboardType="numeric" value={amount} onChangeText={setAmount} />
-                <Text style={s.period}>/month</Text>
+                <Text style={s.period}>/{frequency === 'quarterly' ? 'quarter' : frequency === 'yearly' ? 'year' : frequency === 'weekly' ? 'week' : frequency === 'biweekly' ? '2 weeks' : 'month'}</Text>
               </View>
+
+              <Text style={s.label}>Frequency</Text>
+              <View style={s.frequencyRow}>
+                {([['weekly', 'Weekly'], ['biweekly', 'Bi-weekly'], ['monthly', 'Monthly'], ['quarterly', 'Quarterly'], ['yearly', 'Yearly']] as const).map(([key, label]) => (
+                  <TouchableOpacity key={key}
+                    style={[s.freqButton, frequency === key && s.freqButtonActive]}
+                    onPress={() => setFrequency(key)}>
+                    <Text style={[s.freqButtonText, frequency === key && s.freqButtonTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {frequency !== 'monthly' && amount ? (
+                <Text style={s.freqEquiv}>${obligationMonthlyAmount({ amount: parseFloat(amount) || 0, frequency }).toFixed(2)}/mo equivalent</Text>
+              ) : null}
 
               <Text style={s.label}>Due Day of Month (Optional)</Text>
               <TextInput style={s.modalInput} placeholder="e.g., 1, 15" placeholderTextColor="#555" keyboardType="numeric" value={dueDate} onChangeText={setDueDate} />
@@ -680,6 +707,7 @@ const s = StyleSheet.create({
   obligationWarning: { fontSize: 12, color: T.orange, marginTop: 4, fontFamily: T.fontMedium },
   obligationDueDate: { fontSize: 12, color: T.blue, marginTop: 4, fontFamily: T.fontMedium },
   obligationAmount: { fontSize: 18, color: T.gold, fontFamily: T.fontExtraBold },
+  obligationMonthlyEquiv: { fontSize: 12, color: T.textMuted, fontFamily: T.fontMedium, marginTop: 2 },
   deleteButton: { fontSize: 20, color: T.redBright, padding: 4 },
 
   // Modal
@@ -688,6 +716,12 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 24, color: T.gold, marginBottom: 20, fontFamily: T.fontExtraBold },
   label: { fontSize: 15, color: T.textPrimary, marginBottom: 8, marginTop: 14, fontFamily: T.fontBold },
   modalInput: { backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16, fontSize: 16, color: T.textPrimary, borderWidth: 1.5, borderColor: T.border, fontFamily: T.fontRegular },
+  frequencyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  freqButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: T.radius.sm, borderWidth: 1.5, borderColor: T.border, backgroundColor: T.bgCard },
+  freqButtonActive: { borderColor: T.gold, backgroundColor: T.gold + '20' },
+  freqButtonText: { fontSize: 13, color: T.textMuted, fontFamily: T.fontMedium },
+  freqButtonTextActive: { color: T.gold, fontFamily: T.fontBold },
+  freqEquiv: { fontSize: 12, color: T.textMuted, fontFamily: T.fontMedium, marginTop: 4, marginBottom: 4 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: T.bgCard, borderRadius: T.radius.md, paddingHorizontal: 16, borderWidth: 1.5, borderColor: T.border },
   currencySymbol: { fontSize: 20, color: T.gold, marginRight: 8, fontFamily: T.fontBold },
   input: { flex: 1, fontSize: 20, color: T.textPrimary, paddingVertical: 16, fontFamily: T.fontSemiBold },

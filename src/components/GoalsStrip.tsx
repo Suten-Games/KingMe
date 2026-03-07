@@ -15,6 +15,7 @@ import {
   calcGoalProgress, sortByReachability, autoPopulateGoals,
   type GoalWithProgress,
 } from '../services/goals';
+import { obligationMonthlyAmount } from '../types';
 
 function progressColor(pct: number): string {
   if (pct >= 100) return '#f4c430';
@@ -40,7 +41,7 @@ export default function GoalsStrip() {
         // Auto-populate on first ever load
         const autoResult = await autoPopulateGoals({
           debts: debts.map(d => ({ ...d, interestRate: d.interestRate })),
-          obligations: obligations.map(o => ({ amount: o.amount })),
+          obligations: obligations.map(o => ({ amount: obligationMonthlyAmount(o) })),
           assets,
         });
         if (autoResult.created > 0) {

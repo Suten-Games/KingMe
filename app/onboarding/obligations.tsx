@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Obligation, BankAccount } from '../../src/types';
+import { obligationMonthlyAmount } from '../../src/types';
 import { S, T } from '../../src/styles/onboarding';
 import KingMeFooter from '../../src/components/KingMeFooter';
 
@@ -70,12 +71,7 @@ export default function ObligationsScreen() {
   };
 
   const calculateMonthlyTotal = () => {
-    let total = 0;
-    obligations.forEach(o => {
-      if (o.frequency === 'monthly') total += o.amount;
-      else if (o.frequency === 'weekly') total += o.amount * 4.33;
-      else if (o.frequency === 'yearly') total += o.amount / 12;
-    });
+    let total = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
     if (dailyAllowance) total += parseFloat(dailyAllowance) * 30;
     return total;
   };

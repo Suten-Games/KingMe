@@ -169,11 +169,14 @@ export interface RetirementAsset {
 
 export type ObligationCategory = 'housing' | 'utilities' | 'insurance' | 'debt_service' | 'daily_living' | 'retirement' | 'other';
 
+export type ObligationFrequency = 'monthly' | 'weekly' | 'biweekly' | 'quarterly' | 'yearly';
+
 export interface Obligation {
   id: string;
   name: string;
   payee?: string; // Who gets paid
-  amount: number; // monthly
+  amount: number; // per frequency period (defaults to monthly if frequency omitted)
+  frequency?: ObligationFrequency; // defaults to 'monthly'
   category: ObligationCategory;
   transactionCategory?: BankTransactionCategory; // For bank transaction matching
   isRecurring: boolean;
@@ -182,6 +185,18 @@ export interface Obligation {
   dueDate?: number; // Day of month (1-31)
   isPaidThisMonth?: boolean;
   lastPaidDate?: string;
+}
+
+/** Convert an obligation's amount to its monthly equivalent */
+export function obligationMonthlyAmount(o: { amount: number; frequency?: ObligationFrequency }): number {
+  switch (o.frequency) {
+    case 'weekly': return o.amount * (52 / 12);
+    case 'biweekly': return o.amount * (26 / 12);
+    case 'quarterly': return o.amount / 3;
+    case 'yearly': return o.amount / 12;
+    case 'monthly':
+    default: return o.amount;
+  }
 }
 
 export type ScenarioType =

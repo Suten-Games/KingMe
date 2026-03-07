@@ -6,6 +6,7 @@
 // ══════════════════════════════════════════════════════════════════
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { obligationMonthlyAmount } from '../types';
 // accumulationPlan module removed — token goals now sync directly from store assets
 
 const GOALS_KEY = 'kingme_goals';
@@ -353,7 +354,7 @@ export async function autoPopulateGoals(storeData: {
   // ── 2. Trading buffer (USD* / Perena) ──────────────────────
   const BUFFER_MONTHS = 3;
   // Obligations are always monthly amounts
-  const monthlyObs = storeData.obligations.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const monthlyObs = storeData.obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
 
   if (monthlyObs > 0) {
     const bufferNeeded = monthlyObs * BUFFER_MONTHS;

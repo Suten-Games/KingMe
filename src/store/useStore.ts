@@ -7,6 +7,7 @@ import type {
   PreTaxDeduction, Tax, PostTaxDeduction, UserSettings,
   WhatIfScenario, ThesisAlert, InvestmentThesis
 } from '../types';
+import { obligationMonthlyAmount } from '../types';
 import { calculateFreedom } from '../utils/calculations';
 import { syncDriftIncomeSource, getDefaultDriftIncomeAccount } from '../services/drift-income-sync';
 import { exportProfile, importProfile } from '../services/backup';
@@ -233,7 +234,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (existing) return;
 
     // Calculate monthly expenses from obligations + debts
-    const monthlyObligations = state.obligations.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const monthlyObligations = state.obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
     const monthlyDebts = state.debts.reduce((sum, d) => sum + (d.monthlyPayment || 0), 0);
     const monthlyExpenses = monthlyObligations + monthlyDebts;
 
@@ -1697,8 +1698,17 @@ export const useStore = create<AppState>((set, get) => ({
       // Commodity token symbols — these should be categorized as commodities, not crypto
       const COMMODITY_SYMBOLS = ['GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM', 'OIL', 'COPPER'];
 
+      // Filter out NFTs (decimals 0 with balance 1 or less, and no meaningful USD value)
+      const filteredSyncedAssets = syncedAssets.filter((sa: any) => {
+        if (sa.decimals === 0 && (sa.balance || 0) <= 1 && (sa.valueUSD || 0) < 1) {
+          console.log(`[SYNC] 🚫 Filtering NFT: ${sa.name || sa.symbol} (decimals=0, balance=${sa.balance})`);
+          return false;
+        }
+        return true;
+      });
+
       // Convert API assets to app format, PRESERVING user edits
-      const newAutoAssets = syncedAssets.map((sa: any) => {
+      const newAutoAssets = filteredSyncedAssets.map((sa: any) => {
         // Safe handling of null prices
         const safePrice = sa.priceUSD || 0;
         const safeValue = sa.valueUSD || 0;

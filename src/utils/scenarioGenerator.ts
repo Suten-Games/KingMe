@@ -1,5 +1,6 @@
 // src/utils/scenarioGenerator.ts
 import type { Asset, IncomeSource, Obligation, Debt, RealEstateAsset, WhatIfScenario, InvestmentThesis, DriftTrade } from '../types';
+import { obligationMonthlyAmount } from '../types';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 import { detectRecurring } from './csvBankImport';
@@ -1948,7 +1949,7 @@ function calculateMonthlyNeeds(
   obligations: Obligation[],
   debts: Debt[]
 ): number {
-  const obligationTotal = obligations.reduce((sum, o) => sum + o.amount, 0);
+  const obligationTotal = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
   const debtTotal = debts
     .filter(d => d.isActive)
     .reduce((sum, d) => sum + d.minimumPayment, 0);

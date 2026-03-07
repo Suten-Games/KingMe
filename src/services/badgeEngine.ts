@@ -5,6 +5,7 @@
 
 import type { EarnedBadge } from '../types/badges';
 import type { Asset, Obligation, Debt, Income, BankAccount } from '../types';
+import { obligationMonthlyAmount } from '../types';
 import type { BankTransaction } from '../types/bankTransactionTypes';
 
 interface BadgeCheckState {
@@ -154,7 +155,7 @@ export function evaluateBadges(state: BadgeCheckState): BadgeCheckResult {
     })
     .reduce((sum, a) => sum + a.value, 0);
 
-  const monthlyObligations = state.obligations.reduce((sum, o) => sum + o.amount, 0)
+  const monthlyObligations = state.obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0)
     + state.debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
   const bufferTarget = monthlyObligations * 3;
 

@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { evaluateBadges, getISODate, getISOWeek } from '../services/badgeEngine';
 import { calculateFreedom } from '../utils/calculations';
+import { obligationMonthlyAmount } from '../types';
 
 export function useBadgeChecker() {
   const wallets = useStore(s => s.wallets);
@@ -41,7 +42,7 @@ export function useBadgeChecker() {
     const assetIncome = assets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
     const totalIncome = (income.salary || 0) + (income.otherIncome || 0) + assetIncome;
     const monthlyIncome = totalIncome / 12;
-    const monthlyObligations = obligations.reduce((sum, o) => sum + o.amount, 0)
+    const monthlyObligations = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0)
       + debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
     const totalAssets = assets.reduce((sum, a) => sum + a.value, 0);
     const dailyNeeds = monthlyObligations / 30;

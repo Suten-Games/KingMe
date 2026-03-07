@@ -11,6 +11,7 @@ import type {
   FreedomState,
   HeliusWalletData,
 } from '../types';
+import { obligationMonthlyAmount } from '../types';
 
 /**
  * Calculate total annual income from assets
@@ -56,7 +57,7 @@ export function calculateAssetIncome(assets: Asset[]): number {
  */
 export function calculateAnnualObligations(profile: UserProfile): number {
   return profile.obligations.reduce((total, obligation) => {
-    return total + obligation.amount * 12; // monthly to annual
+    return total + obligationMonthlyAmount(obligation) * 12;
   }, 0);
 }
 

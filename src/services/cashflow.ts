@@ -2,6 +2,7 @@
 // Analyzes cash flow per bank account using actual store types
 
 import type { BankAccount, IncomeSource, Obligation, Debt, Asset, PaycheckDeduction, RealEstateAsset } from '../types';
+import { obligationMonthlyAmount } from '../types';
 import type { BankTransaction, BankTransactionCategory, BankTransactionGroup, CustomCategoryDef } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META } from '../types/bankTransactionTypes';
 
@@ -100,7 +101,7 @@ export function getMonthlyObligationsForAccount(
 ): number {
   return obligations
     .filter(o => o.bankAccountId === bankAccountId)
-    .reduce((total, o) => total + o.amount, 0);
+    .reduce((total, o) => total + obligationMonthlyAmount(o), 0);
 }
 
 /**
@@ -369,7 +370,7 @@ export function analyzeAllAccounts(
   // Daily living = sum of all obligations categorized as daily_living
   const totalDailyLiving = obligations
     .filter(o => o.category === 'daily_living')
-    .reduce((sum, o) => sum + o.amount, 0);
+    .reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
 
   // Pre-tax retirement contributions (deducted from paycheck, never touch a bank account)
   const { contributions: totalPreTaxDeductions401k, employerMatch: totalEmployerMatch } = getMonthlyPreTaxDeductions(assets);

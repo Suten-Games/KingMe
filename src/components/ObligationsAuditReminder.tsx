@@ -7,6 +7,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useStore } from '../store/useStore';
+import { obligationMonthlyAmount } from '../types';
 
 const DISMISS_KEY = 'obligations_audit_dismissed';
 const DISMISS_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -26,7 +27,7 @@ export default function ObligationsAuditReminder() {
 
   if (dismissed || obligations.length === 0) return null;
 
-  const totalMonthly = obligations.reduce((sum, o) => sum + o.amount, 0);
+  const totalMonthly = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
   const count = obligations.length;
 
   const handleDismiss = () => {
