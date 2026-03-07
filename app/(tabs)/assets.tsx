@@ -442,7 +442,7 @@ export default function AssetsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
 
         {/* Wallet Sync */}
         {wallets.length > 0 && (
@@ -703,7 +703,8 @@ export default function AssetsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080c18' },
-  scrollView: { flex: 1, padding: 20 },
+  scrollView: { flex: 1, padding: 20, paddingBottom: 0 },
+  scrollContent: { paddingBottom: 40 },
 
   // Bank edit modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
