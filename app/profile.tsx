@@ -12,6 +12,7 @@ import { useWallet } from '../src/providers/wallet-provider';
 import * as Clipboard from 'expo-clipboard';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 import { loadBackup, saveBackup } from '@/services/encryptedBackup';
 import { buildFullBackup, restoreAsyncData, deserializeBackup, serializeBackup } from '@/services/fullBackup';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -196,6 +197,18 @@ export default function ProfileScreen() {
       setShowBackupModal(true);
     } catch (error) {
       crossAlert('Error', 'Failed to create backup: ' + (error as Error).message);
+    }
+  };
+
+  const handlePickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.length) return;
+      const uri = result.assets[0].uri;
+      const content = await FileSystem.readAsStringAsync(uri);
+      setImportJson(content);
+    } catch (error) {
+      crossAlert('Error', 'Failed to read file: ' + (error as Error).message);
     }
   };
 
@@ -717,8 +730,14 @@ export default function ProfileScreen() {
             <ScrollView>
               <Text style={styles.modalTitle}>Import Backup</Text>
               <Text style={styles.modalSubtext}>
-                Paste your backup JSON here. This will replace all current data!
+                Upload a JSON file or paste your backup below. This will replace all current data!
               </Text>
+
+              <TouchableOpacity style={styles.uploadBtn} onPress={handlePickFile}>
+                <Text style={styles.uploadBtnText}>{importJson ? '✅ File loaded — tap to change' : '📁 Choose JSON file'}</Text>
+              </TouchableOpacity>
+
+              <Text style={[styles.modalSubtext, { textAlign: 'center', marginVertical: 8 }]}>— or paste manually —</Text>
 
               <TextInput
                 style={[styles.modalInput, { height: 200, fontFamily: 'monospace', fontSize: 11 }]}
@@ -901,6 +920,8 @@ const styles = StyleSheet.create({
   modalButton: { flex: 1, padding: 16, borderRadius: 12, backgroundColor: '#4ade80', alignItems: 'center' },
   modalButtonDisabled: { opacity: 0.5 },
   modalButtonText: { color: '#0a0e1a', fontSize: 16, fontWeight: 'bold' },
+  uploadBtn: { backgroundColor: '#1a2040', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#60a5fa40', borderStyle: 'dashed', marginBottom: 4 },
+  uploadBtnText: { fontSize: 15, fontWeight: '600', color: '#60a5fa' },
   modalCloseButton: { padding: 16, borderRadius: 12, borderWidth: 2, borderColor: '#2a2f3e', alignItems: 'center', marginTop: 12 },
   modalCloseText: { color: '#a0a0a0', fontSize: 16 },
   confirmOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 40 },
