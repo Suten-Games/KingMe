@@ -202,11 +202,29 @@ export default function ProfileScreen() {
 
   const handlePickFile = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
-      if (result.canceled || !result.assets?.length) return;
-      const uri = result.assets[0].uri;
-      const content = await FileSystem.readAsStringAsync(uri);
-      setImportJson(content);
+      if (Platform.OS === 'web') {
+        // Web: use native file input
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const text = ev.target?.result;
+            if (typeof text === 'string') setImportJson(text);
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
+        if (result.canceled || !result.assets?.length) return;
+        const uri = result.assets[0].uri;
+        const content = await FileSystem.readAsStringAsync(uri);
+        setImportJson(content);
+      }
     } catch (error) {
       crossAlert('Error', 'Failed to read file: ' + (error as Error).message);
     }
