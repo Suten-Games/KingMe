@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
   headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24 },
   headerAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
   scroll: { flex: 1, padding: 20 },
   monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },

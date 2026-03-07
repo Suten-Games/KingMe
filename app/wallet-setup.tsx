@@ -259,7 +259,7 @@ const s = StyleSheet.create({
   backText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
-  brandTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1.2, lineHeight: 28 },
+  brandTitle: { fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24 },
   accent: { height: 1.5, marginTop: 10, borderRadius: 1 },
 
   // Body
