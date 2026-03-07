@@ -163,8 +163,7 @@ export default async function handler(request: Request) {
   } catch (error: any) {
     console.error('[ERROR]', error);
     return jsonResponse({
-      error: error.message,
-      stack: error.stack
+      error: 'Internal server error',
     }, 500);
   }
 }
