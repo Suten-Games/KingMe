@@ -619,46 +619,71 @@ export default function BankAccountDetailScreen() {
         } catch {}
       }
 
-      // Build summary lines
       const lines: string[] = [];
-      if (crypto.purchaseCount > 0) lines.push(`Bought: ${crypto.totalBought.toFixed(8)} ${crypto.asset} ($${crypto.totalSpent.toFixed(2)}) from ${crypto.purchaseCount} purchases`);
-      if (crypto.unknownQtyBuys > 0) lines.push(`Recurring buys: ${crypto.unknownQtyBuys}x ($${crypto.unknownQtySpent.toFixed(2)}) — qty not in CSV`);
-      if (crypto.sellCount > 0) lines.push(`Sold: ${crypto.totalSold.toFixed(8)} ${crypto.asset} ($${crypto.totalProceeds.toFixed(2)}) from ${crypto.sellCount} sales`);
-      if (crypto.transferCount > 0) lines.push(`Transfers: +${crypto.totalTransferIn.toFixed(8)} / -${crypto.totalTransferOut.toFixed(8)} (${crypto.transferCount} txns)`);
-      if (crypto.sellCount > 0) lines.push(`Realized P&L: ${crypto.realizedPnL >= 0 ? '+' : ''}$${crypto.realizedPnL.toFixed(2)}`);
-
-      const netAmount = crypto.totalAmount; // net = bought - sold + transferIn - transferOut
 
       if (existing) {
-        // Merge: apply net change to existing position
-        const prevQty = (existing.metadata as any)?.quantity || 0;
-        const prevSpent = (existing.metadata as any)?.totalSpent || 0;
-        const prevProceeds = (existing.metadata as any)?.totalProceeds || 0;
-        const prevRealizedPnL = (existing.metadata as any)?.realizedPnL || 0;
-        const newQty = prevQty + netAmount;
-        const newSpent = prevSpent + crypto.totalSpent;
-        const newProceeds = prevProceeds + crypto.totalProceeds;
-        const newRealizedPnL = prevRealizedPnL + crypto.realizedPnL;
+        // Delta-based merge: compare CSV totals against stored totals to find what's new
+        const meta = existing.metadata as any || {};
+        const prevTotalBought = meta.csvTotalBought || 0;
+        const prevTotalSold = meta.csvTotalSold || 0;
+        const prevTransferIn = meta.csvTransferIn || 0;
+        const prevTransferOut = meta.csvTransferOut || 0;
+
+        const deltaBought = crypto.totalBought - prevTotalBought;
+        const deltaSold = crypto.totalSold - prevTotalSold;
+        const deltaTransferIn = crypto.totalTransferIn - prevTransferIn;
+        const deltaTransferOut = crypto.totalTransferOut - prevTransferOut;
+        const deltaQty = deltaBought - deltaSold + deltaTransferIn - deltaTransferOut;
+
+        const prevQty = meta.quantity || 0;
+        const newQty = prevQty + deltaQty;
+
+        if (deltaBought > 0) lines.push(`New buys: +${deltaBought.toFixed(8)} ${crypto.asset}`);
+        if (deltaSold > 0) lines.push(`New sells: -${deltaSold.toFixed(8)} ${crypto.asset}`);
+        if (deltaTransferIn > 0) lines.push(`New deposits: +${deltaTransferIn.toFixed(8)}`);
+        if (deltaTransferOut > 0) lines.push(`New withdrawals: -${deltaTransferOut.toFixed(8)}`);
+
+        if (deltaBought === 0 && deltaSold === 0 && deltaTransferIn === 0 && deltaTransferOut === 0) {
+          // No new activity — just update price
+          updateAsset(assetId, {
+            value: Math.max(0, prevQty) * currentPrice,
+            metadata: { ...meta, priceUSD: currentPrice } as any,
+          });
+          continue; // Skip alert for no-change assets
+        }
+
         updateAsset(assetId, {
           value: Math.max(0, newQty) * currentPrice,
           metadata: {
-            ...existing.metadata,
+            ...meta,
             type: assetType,
             symbol: crypto.asset,
             quantity: Math.max(0, newQty),
             priceUSD: currentPrice,
-            totalSpent: newSpent,
-            totalProceeds: newProceeds,
-            avgCost: newQty > 0 ? newSpent / (prevQty + crypto.totalBought) : 0,
-            realizedPnL: newRealizedPnL,
+            totalSpent: crypto.totalSpent,
+            totalProceeds: crypto.totalProceeds,
+            avgCost: crypto.totalBought > 0 ? crypto.totalSpent / crypto.totalBought : 0,
+            realizedPnL: crypto.realizedPnL,
+            // Store CSV totals for delta comparison on next import
+            csvTotalBought: crypto.totalBought,
+            csvTotalSold: crypto.totalSold,
+            csvTransferIn: crypto.totalTransferIn,
+            csvTransferOut: crypto.totalTransferOut,
             description: `Cash App ${crypto.asset}`,
             ...(isCrypto ? { coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset === 'SOL' ? 'solana' : crypto.asset.toLowerCase() } : { ticker: crypto.asset }),
           } as any,
         });
-        lines.push(`\nNet position: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
-        if (crypto.unknownQtyBuys > 0) lines.push(`Note: Recurring buy quantities not in CSV — actual balance may be higher.`);
+        lines.push(`\nBalance: ${Math.max(0, newQty).toFixed(8)} ${crypto.asset} ($${(Math.max(0, newQty) * currentPrice).toFixed(2)})`);
         Alert.alert(`${crypto.asset} Updated`, lines.join('\n'));
       } else {
+        // First import — create asset
+        const netAmount = crypto.totalAmount;
+        if (crypto.purchaseCount > 0) lines.push(`Bought: ${crypto.totalBought.toFixed(8)} ${crypto.asset} ($${crypto.totalSpent.toFixed(2)})`);
+        if (crypto.unknownQtyBuys > 0) lines.push(`Recurring buys: ${crypto.unknownQtyBuys}x ($${crypto.unknownQtySpent.toFixed(2)}) — qty not in CSV`);
+        if (crypto.sellCount > 0) lines.push(`Sold: ${crypto.totalSold.toFixed(8)} ($${crypto.totalProceeds.toFixed(2)})`);
+        if (crypto.transferCount > 0) lines.push(`Transfers: +${crypto.totalTransferIn.toFixed(8)} / -${crypto.totalTransferOut.toFixed(8)}`);
+        if (crypto.sellCount > 0) lines.push(`P&L: ${crypto.realizedPnL >= 0 ? '+' : ''}$${crypto.realizedPnL.toFixed(2)}`);
+
         const currentValue = Math.max(0, netAmount) * currentPrice;
         addAsset({
           id: assetId,
@@ -675,6 +700,10 @@ export default function BankAccountDetailScreen() {
             totalProceeds: crypto.totalProceeds,
             avgCost: crypto.avgPrice,
             realizedPnL: crypto.realizedPnL,
+            csvTotalBought: crypto.totalBought,
+            csvTotalSold: crypto.totalSold,
+            csvTransferIn: crypto.totalTransferIn,
+            csvTransferOut: crypto.totalTransferOut,
             description: `Cash App ${crypto.asset}`,
             ...(isCrypto ? { coingeckoId: crypto.asset === 'BTC' ? 'bitcoin' : crypto.asset === 'ETH' ? 'ethereum' : crypto.asset === 'SOL' ? 'solana' : crypto.asset.toLowerCase() } : { ticker: crypto.asset }),
           } as any,
