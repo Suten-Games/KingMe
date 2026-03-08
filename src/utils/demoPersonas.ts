@@ -46,10 +46,10 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'a_demo_4', type: 'crypto', name: 'Fartcoin', value: 22, annualIncome: 0, metadata: { symbol: 'FARTCOIN', quantity: 30, tokenMint: '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump' } },
       ],
       obligations: [
-        { id: 'ob_demo_1', name: 'Rent (shared)', payee: 'Landlord', amount: 650, category: 'housing', isRecurring: true, dueDate: 1 },
-        { id: 'ob_demo_2', name: 'Phone Bill', payee: 'T-Mobile', amount: 45, category: 'utilities', isRecurring: true, dueDate: 15 },
-        { id: 'ob_demo_3', name: 'Car Insurance', payee: 'Geico', amount: 89, category: 'insurance', isRecurring: true, dueDate: 20 },
-        { id: 'ob_demo_4', name: 'Spotify', payee: 'Spotify', amount: 11, category: 'other', isRecurring: true, dueDate: 5 },
+        { id: 'ob_demo_1', name: 'Rent (shared)', payee: 'Landlord', amount: 650, category: 'housing', isRecurring: true, dueDate: 1, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_2', name: 'Phone Bill', payee: 'T-Mobile', amount: 45, category: 'utilities', isRecurring: true, dueDate: 15, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_3', name: 'Car Insurance', payee: 'Geico', amount: 89, category: 'insurance', isRecurring: true, dueDate: 20, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_4', name: 'Spotify', payee: 'Spotify', amount: 11, category: 'other', isRecurring: true, dueDate: 5, bankAccountId: 'ba_demo_1' },
       ],
       debts: [
         { id: 'd_demo_1', name: 'Federal Student Loan', principal: 28000, interestRate: 0.055, monthlyPayment: 0, minimumPayment: 0, dueDate: 0, balance: 28000 },

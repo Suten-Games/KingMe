@@ -154,16 +154,8 @@ export default function AssetDetailScreen() {
     }
   };
 
-  if (!asset) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Asset not found</Text>
-      </View>
-    );
-  }
-
   // Extract display info from metadata
-  const meta = asset.metadata as any;
+  const meta = asset?.metadata as any;
   const currentPrice = meta?.priceUSD || meta?.currentPrice || 0;
   const quantity = meta?.quantity || meta?.balance || meta?.shares || 0;
   const symbol = meta?.symbol || meta?.ticker || '';
@@ -171,12 +163,12 @@ export default function AssetDetailScreen() {
   const logoURI = meta?.logoURI || '';
   const protocol = meta?.protocol || '';
   const apy = meta?.apy || meta?.dividendYield || 0;
-  const isCrypto = asset.type === 'crypto' || asset.type === 'defi';
+  const isCrypto = asset?.type === 'crypto' || asset?.type === 'defi';
 
-  const isPrimaryResidence = asset.type === 'real_estate' &&
-    (asset.metadata as RealEstateAsset)?.isPrimaryResidence;
+  const isPrimaryResidence = asset?.type === 'real_estate' &&
+    (asset?.metadata as RealEstateAsset)?.isPrimaryResidence;
   const isAppreciationAsset = !isPrimaryResidence &&
-    asset.annualIncome < (asset.value * 0.02);
+    (asset ? asset.annualIncome < (asset.value * 0.02) : false);
 
   // Load crypto data
   useEffect(() => {
@@ -200,6 +192,14 @@ export default function AssetDetailScreen() {
 
     return () => { cancelled = true; };
   }, [isCrypto, mint, symbol]);
+
+  if (!asset) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Asset not found</Text>
+      </View>
+    );
+  }
 
   // Stop-loss from thesis invalidators
   const stopLossInvalidators = thesis?.invalidators.filter(

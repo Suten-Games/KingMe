@@ -329,7 +329,11 @@ export function analyzeAllAccounts(
   );
 
   const totalMonthlyIncome = accounts.reduce((sum, a) => sum + a.monthlyIncome, 0);
-  const totalMonthlyObligations = accounts.reduce((sum, a) => sum + a.monthlyObligations, 0);
+  const assignedObligations = accounts.reduce((sum, a) => sum + a.monthlyObligations, 0);
+  const unassignedObligationTotal = obligations
+    .filter(o => !o.bankAccountId)
+    .reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
+  const totalMonthlyObligations = assignedObligations + unassignedObligationTotal;
   const totalMonthlyDebtPayments = debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
 
   // Compute variable spending from bank transaction history
