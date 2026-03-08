@@ -12,7 +12,7 @@ interface CashFlowSummaryProps {
 
 function getRecRoute(rec: string): string | null {
   if (rec.includes('not assigned to an account')) return '/(tabs)/obligations';
-  if (rec.includes('spending estimate') || rec.includes('orange spending card')) return null; // handled by SpendingGapAlert below
+  if (rec.includes('spending estimate') || rec.includes('View All Spending')) return null; // handled by SpendingGapAlert below
   return null;
 }
 

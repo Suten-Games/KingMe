@@ -457,11 +457,11 @@ export function analyzeAllAccounts(
   }
 
   if (monthlyDiscretionary === 0 && variableSpending.autoEstimate === 0 && totalMonthlyObligations > 0) {
-    recommendations.unshift('⚠️ Tap the orange spending card below to set a variable spending estimate, or go to a bank account to import a CSV statement');
+    recommendations.unshift('⚠️ Tap "View All Spending" below to set a variable spending estimate, or go to a bank account to import a CSV statement');
   }
 
   if (unassignedObligations.length > 0) {
-    recommendations.unshift(`⚠️ ${unassignedObligations.length} obligation(s) not assigned to a bank account — tap to fix`);
+    recommendations.unshift(`⚠️ ${unassignedObligations.length} obligation(s) not assigned to an account — tap to fix`);
   }
 
   return {

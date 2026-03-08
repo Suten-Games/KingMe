@@ -16,10 +16,13 @@ const ASYNC_KEY = 'lastAutoBackup';
 export function useAutoBackup() {
   const isLoaded = useStore(s => s._isLoaded);
   const onboardingComplete = useStore(s => s.onboardingComplete);
-  const { connected, publicKey, signMessage } = useWallet();
+  const { connected, publicKey, signMessage, walletType } = useWallet();
   const runningRef = useRef(false);
 
   useEffect(() => {
+    // MWA requires biometric approval for every signMessage — skip auto-backup
+    // to avoid constant wallet popups. Users can still back up manually.
+    if (walletType === 'mwa') return;
     if (!isLoaded || !onboardingComplete || !connected || !publicKey) return;
 
     const walletAddress = publicKey.toBase58();
@@ -71,5 +74,5 @@ export function useAutoBackup() {
     check();
     const interval = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isLoaded, onboardingComplete, connected, publicKey, signMessage]);
+  }, [isLoaded, onboardingComplete, connected, publicKey, signMessage, walletType]);
 }

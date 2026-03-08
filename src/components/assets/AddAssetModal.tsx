@@ -904,36 +904,39 @@ export default function AddAssetModal({
                   </>
                 )}
 
-                {/* APY */}
-                <Text style={styles.label}>APY (optional)</Text>
-                <Text style={styles.helper}>
-                  {isCryptoLike(type) && 'If staked or in DeFi. Leave blank for tokens you just hold.'}
-                  {isStockLike(type) && 'Dividend yield — we\'ll calculate annual income from this.'}
-                  {isRealEstate && 'Cap rate or rental yield.'}
-                  {type === 'business' && 'If applicable.'}
-                  {type === 'other' && 'If applicable — we\'ll calculate income from this.'}
-                </Text>
-                <View style={styles.inputRow}>
-                  <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
-                    keyboardType="numeric" value={apy} onChangeText={setApy} />
-                  <Text style={styles.suffix}>%</Text>
-                </View>
+                {/* APY & Annual Income — hidden for primary residence */}
+                {!isPrimaryResidence && (
+                  <>
+                    <Text style={styles.label}>APY (optional)</Text>
+                    <Text style={styles.helper}>
+                      {isCryptoLike(type) && 'If staked or in DeFi. Leave blank for tokens you just hold.'}
+                      {isStockLike(type) && 'Dividend yield — we\'ll calculate annual income from this.'}
+                      {isRealEstate && 'Cap rate or rental yield.'}
+                      {type === 'business' && 'If applicable.'}
+                      {type === 'other' && 'If applicable — we\'ll calculate income from this.'}
+                    </Text>
+                    <View style={styles.inputRow}>
+                      <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
+                        keyboardType="numeric" value={apy} onChangeText={setApy} />
+                      <Text style={styles.suffix}>%</Text>
+                    </View>
 
-                {/* Annual Income */}
-                <Text style={styles.label}>OR Annual Income</Text>
-                <Text style={styles.helper}>
-                  {isCryptoLike(type) && 'Leave both blank if this is just a holding (memecoin, SOL, etc.)'}
-                  {isRealEstate && 'Net rental income after expenses'}
-                  {type === 'business' && 'Annual distributions or profit share'}
-                  {isStockLike(type) && 'Annual dividends'}
-                  {type === 'other' && 'How much this generates per year'}
-                </Text>
-                <View style={styles.inputRow}>
-                  <Text style={styles.dollar}>$</Text>
-                  <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
-                    keyboardType="numeric" value={annualIncome} onChangeText={setAnnualIncome} />
-                  <Text style={styles.suffix}>/year</Text>
-                </View>
+                    <Text style={styles.label}>OR Annual Income</Text>
+                    <Text style={styles.helper}>
+                      {isCryptoLike(type) && 'Leave both blank if this is just a holding (memecoin, SOL, etc.)'}
+                      {isRealEstate && 'Net rental income after expenses'}
+                      {type === 'business' && 'Annual distributions or profit share'}
+                      {isStockLike(type) && 'Annual dividends'}
+                      {type === 'other' && 'How much this generates per year'}
+                    </Text>
+                    <View style={styles.inputRow}>
+                      <Text style={styles.dollar}>$</Text>
+                      <TextInput style={styles.inputInRow} placeholder="0" placeholderTextColor="#666"
+                        keyboardType="numeric" value={annualIncome} onChangeText={setAnnualIncome} />
+                      <Text style={styles.suffix}>/year</Text>
+                    </View>
+                  </>
+                )}
               </>
             )}
 

@@ -87,7 +87,7 @@ const ADD_ONS: AddOn[] = [
 export default function PaidAddOns() {
   const router = useRouter();
   const isPro = useStore(s => s.isPro);
-  const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction, walletType } = useWallet();
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [showHidden, setShowHidden] = useState(false);
@@ -110,7 +110,9 @@ export default function PaidAddOns() {
   }, []);
 
   // Restore purchases from server when wallet connects
+  // Skip on MWA — each signMessage triggers a biometric wallet popup
   useEffect(() => {
+    if (walletType === 'mwa') return;
     if (connected && publicKey && signMessage) {
       restorePurchases(publicKey.toBase58(), signMessage)
         .then((restored) => {
@@ -119,7 +121,7 @@ export default function PaidAddOns() {
         })
         .catch(() => {});
     }
-  }, [connected, publicKey]);
+  }, [connected, publicKey, walletType]);
 
   const saveHidden = useCallback(async (newHidden: Set<string>) => {
     setHidden(newHidden);
