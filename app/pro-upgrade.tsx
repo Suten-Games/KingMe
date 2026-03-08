@@ -68,7 +68,7 @@ export default function ProUpgradeScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
           <Text style={s.backText}>←</Text>
         </TouchableOpacity>
-        <Text style={s.headerTitle}>KingMe Pro</Text>
+        <Text style={s.headerTitle}>KingMe Crowned</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -85,7 +85,7 @@ export default function ProUpgradeScreen() {
             style={s.heroLogo}
             resizeMode="cover"
           />
-          <Text style={s.heroTitle}>Upgrade to Pro</Text>
+          <Text style={s.heroTitle}>Get Crowned</Text>
           <Text style={s.heroSub}>Unlock the full power of KingMe</Text>
         </LinearGradient>
 

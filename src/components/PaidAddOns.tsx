@@ -228,7 +228,7 @@ export default function PaidAddOns() {
         <View style={s.proBanner}>
           <Image source={require('../assets/images/kingmelogo.jpg')} style={s.proBannerLogo} resizeMode="cover" />
           <View style={{ flex: 1 }}>
-            <Text style={s.proBannerTitle}>KingMe Pro — Active</Text>
+            <Text style={s.proBannerTitle}>KingMe Crowned — Active</Text>
             <Text style={s.proBannerSub}>All tools included</Text>
           </View>
         </View>
@@ -237,12 +237,12 @@ export default function PaidAddOns() {
           <View style={s.proBundleRow}>
             <Image source={require('../assets/images/kingmelogo.jpg')} style={s.proBundleLogo} resizeMode="cover" />
             <View style={{ flex: 1 }}>
-              <Text style={s.proBundleTitle}>KingMe Pro — $19.99</Text>
+              <Text style={s.proBundleTitle}>KingMe Crowned — $19.99</Text>
               <Text style={s.proBundleSub}>All tools, now and future</Text>
             </View>
           </View>
           <View style={s.proBundleButton}>
-            <Text style={s.proBundleButtonText}>Unlock Pro</Text>
+            <Text style={s.proBundleButtonText}>Get Crowned</Text>
           </View>
         </TouchableOpacity>
       )}

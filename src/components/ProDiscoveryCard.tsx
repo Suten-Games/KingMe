@@ -34,7 +34,7 @@ export default function ProDiscoveryCard() {
           resizeMode="cover"
         />
         <View style={{ flex: 1 }}>
-          <Text style={s.headline}>Unlock the full power of KingMe</Text>
+          <Text style={s.headline}>Get Crowned</Text>
           {FEATURES.map(f => (
             <View key={f} style={s.featureRow}>
               <Text style={s.check}>✓</Text>
@@ -49,7 +49,7 @@ export default function ProDiscoveryCard() {
         activeOpacity={0.8}
         onPress={() => router.push('/pro-upgrade')}
       >
-        <Text style={s.buttonText}>Upgrade to Pro — $19.99</Text>
+        <Text style={s.buttonText}>Get Crowned — $19.99</Text>
       </TouchableOpacity>
     </LinearGradient>
   );

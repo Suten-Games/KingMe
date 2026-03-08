@@ -109,7 +109,7 @@ export default function RevealScreen() {
           <View style={st.proFeature}><Text style={st.proCheck}>✓</Text><Text style={st.proFeatureText}>Full What-If scenario breakdowns</Text></View>
           <View style={st.proFeature}><Text style={st.proCheck}>✓</Text><Text style={st.proFeatureText}>All add-on tools included — now and future</Text></View>
           <TouchableOpacity style={st.proButton} onPress={() => router.push('/pro-upgrade')}>
-            <Text style={st.proButtonText}>Unlock Pro — $19.99</Text>
+            <Text style={st.proButtonText}>Get Crowned — $19.99</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -35,7 +35,7 @@ export default function ProGate({ featureName, lockMessage, children }: ProGateP
         activeOpacity={0.8}
         onPress={() => router.push('/pro-upgrade')}
       >
-        <Text style={s.buttonText}>Unlock Pro</Text>
+        <Text style={s.buttonText}>Get Crowned</Text>
       </TouchableOpacity>
     </LinearGradient>
   );
