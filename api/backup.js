@@ -28,9 +28,17 @@ export default async function handler(req, res) {
     const { data } = req.body;
 
     try {
-      await fetch(`${UPSTASH_URL}/set/${key}/${encodeURIComponent(data)}`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+      // Use POST body instead of URL path to support large backups (2MB+)
+      const r = await fetch(`${UPSTASH_URL}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${UPSTASH_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(['SET', key, data]),
       });
+      const result = await r.json();
+      if (result.error) throw new Error(result.error);
       return res.status(200).json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: err.message });
