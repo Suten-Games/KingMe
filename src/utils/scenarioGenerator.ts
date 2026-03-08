@@ -109,7 +109,8 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     currentFreedom,
     currentMonthlyNeeds,
     obligations,
-    debts
+    debts,
+    profile.bankAccounts || []
   );
   if (perenaScenario) scenarios.push(perenaScenario);
 
@@ -1231,7 +1232,8 @@ function generatePerenaYieldScenario(
   currentFreedom: number,
   monthlyNeeds: number,
   obligations: Obligation[],
-  debts: Debt[]
+  debts: Debt[],
+  bankAccounts: Array<{ id: string; name: string; type: string; currentBalance: number; institution: string }> = []
 ): WhatIfScenario | null {
   // 1. Idle stablecoins already in wallet (exclude Drift collateral — handled separately)
   const stablecoinAssets = assets.filter(a =>
@@ -1258,17 +1260,36 @@ function generatePerenaYieldScenario(
   const monthlyBurn = monthlyObligations + monthlyDebtPayments;
 
   // 3. Calculate safe excess cash (keep 3 months of burn as buffer)
-  const cashAccounts = assets.filter(a =>
+  // Check both asset-type bank accounts AND the bankAccounts array
+  const cashAssetAccounts = assets.filter(a =>
     a.type === 'bank_account' &&
     ((a.metadata as any)?.accountType === 'savings' ||
       (a.metadata as any)?.accountType === 'checking')
   );
-  const totalCash = cashAccounts.reduce((sum, a) => sum + a.value, 0);
+  const cashFromAssets = cashAssetAccounts.reduce((sum, a) => sum + a.value, 0);
+  const cashFromBankAccounts = bankAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+  // Use whichever source has data (avoid double counting)
+  const totalCash = cashFromAssets > 0 ? cashFromAssets : cashFromBankAccounts;
+  const cashAccountNames = cashFromAssets > 0
+    ? cashAssetAccounts.map(a => a.name)
+    : bankAccounts.map(a => a.name);
+  const savingsBalance = cashFromAssets > 0
+    ? cashAssetAccounts.filter(a => (a.metadata as any)?.accountType === 'savings').reduce((sum, a) => sum + a.value, 0)
+    : bankAccounts.filter(a => a.type === 'savings').reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+
   const safetyBuffer = Math.max(2000, monthlyBurn * 3); // 3 months of bills or $2k, whichever is higher
   const excessCash = Math.max(0, totalCash - safetyBuffer);
 
-  // Only suggest converting cash if there's meaningful excess after bills are covered
-  const cashToConvert = excessCash >= 500 ? Math.floor(excessCash * 0.5) : 0;
+  // For users with excess cash, suggest converting a portion
+  let cashToConvert = excessCash >= 500 ? Math.floor(excessCash * 0.5) : 0;
+
+  // For users with savings but not enough excess: suggest a smaller starter amount
+  // This catches paycheck-to-paycheck users who have savings earning 0%
+  const isStarterPath = cashToConvert === 0 && totalStablecoins === 0 && savingsBalance >= 200;
+  if (isStarterPath) {
+    // Suggest moving 25-50% of savings (capped at $500) as a starter deposit
+    cashToConvert = Math.min(Math.floor(savingsBalance * 0.4), 500);
+  }
 
   const totalToDeposit = totalStablecoins + cashToConvert;
   if (totalToDeposit < 100) return null;
@@ -1290,28 +1311,36 @@ function generatePerenaYieldScenario(
   const existingUsdStarValue = existingUsdStar?.value || 0;
   const newUsdStarValue = existingUsdStarValue + totalToDeposit;
 
+  const bankNames = cashAccountNames.join(', ');
   const parts: string[] = [];
   if (totalStablecoins > 0) {
     const stableNames = stablecoinAssets.map(a => `${(a.metadata as any)?.symbol || 'USDC'} ($${Math.round(a.value).toLocaleString()})`).join(', ');
     parts.push(stableNames);
   }
   if (cashToConvert > 0) {
-    const bankNames = cashAccounts.map(a => a.name).join(', ');
     parts.push(`$${cashToConvert.toLocaleString()} from ${bankNames} → buy USDC`);
   }
-  const description = `Swap ${parts.join(' + ')} to USD* via Jupiter${existingUsdStarValue > 0 ? ` (USD* balance: $${Math.round(existingUsdStarValue).toLocaleString()} → $${Math.round(newUsdStarValue).toLocaleString()})` : ''}`;
+  const description = isStarterPath
+    ? `Set up a Solana wallet and move $${cashToConvert.toLocaleString()} from ${bankNames} into USD* — earning ${perenaAPY}% instead of 0% in your savings`
+    : `Swap ${parts.join(' + ')} to USD* via Jupiter${existingUsdStarValue > 0 ? ` (USD* balance: $${Math.round(existingUsdStarValue).toLocaleString()} → $${Math.round(newUsdStarValue).toLocaleString()})` : ''}`;
 
-  const bufferNote = cashToConvert > 0
-    ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${Math.round(monthlyBurn).toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash in ${cashAccounts.map(a => a.name).join(', ')}.`
+  const bufferNote = cashToConvert > 0 && !isStarterPath
+    ? ` After keeping $${safetyBuffer.toLocaleString()} as a 3-month bill buffer ($${Math.round(monthlyBurn).toLocaleString()}/mo), you have $${excessCash.toLocaleString()} in excess cash in ${bankNames}.`
+    : '';
+
+  const starterReasoning = isStarterPath
+    ? `You have $${savingsBalance.toLocaleString()} in savings earning basically nothing. Moving $${cashToConvert.toLocaleString()} into USD* on Solana earns ${perenaAPY}% APY — that's $${monthlyIncomeDelta.toFixed(0)}/mo in passive income. It's still your money and you can convert back anytime. A Solana wallet takes 2 minutes to set up and opens the door to higher yields than any bank can offer.`
     : '';
 
   return {
     id: 'perena_yield',
     type: 'perena_yield',
-    title: `Earn ${perenaAPY}% — Swap $${Math.round(totalToDeposit).toLocaleString()} USDC → USD*`,
+    title: isStarterPath
+      ? `Your savings can earn ${perenaAPY}% — move $${cashToConvert.toLocaleString()} to USD*`
+      : `Earn ${perenaAPY}% — Swap $${Math.round(totalToDeposit).toLocaleString()} USDC → USD*`,
     description,
     emoji: '🌊',
-    difficulty: cashToConvert > 0 ? 'medium' : 'easy',
+    difficulty: isStarterPath ? 'medium' : (cashToConvert > 0 ? 'medium' : 'easy'),
     timeframe: 'This week',
 
     changes: {
@@ -1358,17 +1387,28 @@ function generatePerenaYieldScenario(
       roi: perenaAPY,
     },
 
-    reasoning: `${totalStablecoins > 0 ? `You have ${stablecoinAssets.map(a => `$${Math.round(a.value).toLocaleString()} ${(a.metadata as any)?.symbol || 'USDC'}`).join(' + ')} in your wallet earning below-market yield.` : ''}${bufferNote}${existingUsdStarValue > 0 ? ` You already hold $${Math.round(existingUsdStarValue).toLocaleString()} in USD*.` : ''} Swapping $${Math.round(totalToDeposit).toLocaleString()} to USD* at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
+    reasoning: isStarterPath
+      ? starterReasoning
+      : `${totalStablecoins > 0 ? `You have ${stablecoinAssets.map(a => `$${Math.round(a.value).toLocaleString()} ${(a.metadata as any)?.symbol || 'USDC'}`).join(' + ')} in your wallet earning below-market yield.` : ''}${bufferNote}${existingUsdStarValue > 0 ? ` You already hold $${Math.round(existingUsdStarValue).toLocaleString()} in USD*.` : ''} Swapping $${Math.round(totalToDeposit).toLocaleString()} to USD* at ${perenaAPY}% APY adds $${monthlyIncomeDelta.toFixed(0)}/mo in passive income with stablecoin-level risk.`,
 
     risks: [
       'Smart contract risk (Perena protocol)',
       'Stablecoin depeg risk (unlikely for USDC but non-zero)',
       'APY may fluctuate based on protocol utilization',
       'DeFi protocols are not FDIC insured',
-      ...(cashToConvert > 0 ? ['Requires off-ramping cash to USDC (Coinbase, on-ramp)'] : []),
+      ...(isStarterPath ? [
+        'You\'ll need to learn basic crypto wallet usage (takes ~10 minutes)',
+        'Start small — you can always add more later once you\'re comfortable',
+      ] : cashToConvert > 0 ? ['Requires off-ramping cash to USDC (Coinbase, on-ramp)'] : []),
     ],
 
-    steps: [
+    steps: isStarterPath ? [
+      'Set up a Solana wallet — tap the wallet icon in KingMe or download Phantom',
+      `Transfer $${cashToConvert.toLocaleString()} from ${bankNames} to Coinbase (or use MoonPay/Stripe on-ramp)`,
+      'Buy USDC with your deposit',
+      'Send USDC to your Solana wallet address',
+      `Swap USDC → USD* in KingMe (Jupiter handles the swap, earns ${perenaAPY}% automatically)`,
+    ] : [
       ...(cashToConvert > 0 ? [
         `Buy $${cashToConvert.toLocaleString()} USDC on Coinbase or through an on-ramp`,
         'Transfer USDC to your Solana wallet',
