@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useWallet } from '../providers/wallet-provider';
 import { payForAddOn, payForAddOnWithSKR, parsePriceToUsdc, usdToSkr, SKR_PRICE_USD, getUnlockedAddOns, restorePurchases } from '../services/addOnPayment';
+import { useStore } from '../store/useStore';
 
 const HIDDEN_KEY = 'paid_addons_hidden';
 
@@ -111,7 +112,10 @@ export default function PaidAddOns() {
   useEffect(() => {
     if (connected && publicKey && signMessage) {
       restorePurchases(publicKey.toBase58(), signMessage)
-        .then(setUnlocked)
+        .then((restored) => {
+          setUnlocked(restored);
+          useStore.getState().checkProStatus();
+        })
         .catch(() => {});
     }
   }, [connected, publicKey]);

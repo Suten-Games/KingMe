@@ -379,7 +379,7 @@ export default function IncomeScreen() {
               <Text style={s.label}>Deposits Into</Text>
               {srcType === 'trading' && <Text style={s.helperText}>Pick where your trading wins land.</Text>}
               {bankAccounts.length === 0 ? (
-                <Text style={s.noAccountsWarn}>⚠️ No bank accounts added yet — add one in Profile first.</Text>
+                <Text style={s.noAccountsWarn}>⚠️ No bank accounts added yet — add one in Assets first.</Text>
               ) : (
                 <View style={s.accountList}>
                   {bankAccounts.map((acct) => (

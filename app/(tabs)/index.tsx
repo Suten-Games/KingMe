@@ -146,7 +146,10 @@ export default function HomeScreen() {
   useEffect(() => { if (!onboardingComplete) { const t = setTimeout(() => router.replace('/onboarding/intro'), 500); return () => clearTimeout(t); } }, [onboardingComplete]);
 
   // Load unlocked paid add-ons
-  useEffect(() => { getUnlockedAddOns().then(setUnlockedAddOns); }, []);
+  useEffect(() => {
+    getUnlockedAddOns().then(setUnlockedAddOns);
+    useStore.getState().checkProStatus();
+  }, []);
 
   // Check if in demo mode
   useEffect(() => {

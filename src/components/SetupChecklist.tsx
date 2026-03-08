@@ -44,9 +44,9 @@ export default function SetupChecklist() {
   const hasBackup = hasCloudBackup || localBackupDone;
 
   const items: CheckItem[] = [
+    { key: 'bank',        label: 'Add a bank account',       done: hasBankAccounts,  route: '/(tabs)/assets',       emoji: '🏦', priority: 'critical' },
     { key: 'income',      label: 'Add your income',          done: hasIncome,       route: '/(tabs)/income',       emoji: '💰', priority: 'critical' },
     { key: 'obligations', label: 'Add your monthly bills',   done: hasObligations,  route: '/(tabs)/obligations',  emoji: '📋', priority: 'critical' },
-    { key: 'bank',        label: 'Add a bank account',       done: hasBankAccounts,  route: '/(tabs)/assets',       emoji: '🏦', priority: 'recommended' },
     { key: 'assets',      label: 'Add your assets',          done: hasAssets,        route: '/(tabs)/assets',       emoji: '📈', priority: 'recommended' },
     { key: 'debts',       label: 'Track your debts',         done: hasDebts,         route: '/(tabs)/debts',        emoji: '💳', priority: 'optional' },
     { key: 'wallet',      label: 'Connect a Solana wallet',  done: hasWallet,        route: '/wallet-setup',        emoji: '👛', priority: 'optional' },

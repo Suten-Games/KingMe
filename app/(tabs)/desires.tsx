@@ -10,6 +10,7 @@ import ActionPlanCard from '../../src/components/ActionPlanCard';
 import type { Desire } from '../../src/types';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { T } from '../../src/theme';
+import ProGate from '../../src/components/ProGate';
 
 const PURPLE = '#a78bfa';
 
@@ -243,13 +244,15 @@ export default function DesiresScreen() {
               <TouchableOpacity style={s.modalCancelButton} onPress={() => { setShowAddModal(false); setDesireName(''); }}>
                 <Text style={s.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalAddButton, !desireName.trim() && s.modalAddButtonDisabled]}
-                onPress={handleStartResearch}
-                disabled={!desireName.trim()}
-              >
-                <Text style={s.modalAddText}>🤖 Build Plan</Text>
-              </TouchableOpacity>
+              <ProGate featureName="AI Desires Planner" lockMessage="Generate step-by-step AI action plans for your goals.">
+                <TouchableOpacity
+                  style={[s.modalAddButton, !desireName.trim() && s.modalAddButtonDisabled]}
+                  onPress={handleStartResearch}
+                  disabled={!desireName.trim()}
+                >
+                  <Text style={s.modalAddText}>🤖 Build Plan</Text>
+                </TouchableOpacity>
+              </ProGate>
             </View>
             <TouchableOpacity style={s.manualButton} onPress={handleManualAdd} disabled={!desireName.trim()}>
               <Text style={s.manualButtonText}>Skip AI, add manually</Text>

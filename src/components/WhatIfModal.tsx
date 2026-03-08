@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { isOnChainScenario, formatSwapAmount, MINTS } from '@/services/jupiterSwap';
 import type { SwapScenarioState } from '@/hooks/useSwapScenario';
+import ProGate from './ProGate';
 
 interface WhatIfModalProps {
   visible: boolean;
@@ -90,6 +91,7 @@ export default function WhatIfModal({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.description}>{description}</Text>
 
+          <ProGate featureName="Full Scenario Details" lockMessage="See the complete action plan and steps to gain more freedom days.">
           {/* ── Swap Status Section ─────────────────────────────── */}
           {onChain && swapState && (
             <SwapStatusSection swapState={swapState} />
@@ -214,6 +216,7 @@ export default function WhatIfModal({
           </View>
 
           <View style={{ height: 100 }} />
+          </ProGate>
         </ScrollView>
 
         {/* ── Footer / Apply Button ────────────────────────────── */}

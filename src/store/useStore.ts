@@ -27,6 +27,7 @@ import { fetchAllMarketPrices } from '../services/marketPriceService';
 import { lookupToken } from '../utils/tokenRegistry';
 import type { CryptoAsset, StockAsset, DriftPerpPosition, DriftOpenOrder } from '../types';
 import { log, warn, error as logError } from '../utils/logger';
+import { unlockAddOn, isAddOnUnlocked } from '../services/addOnPayment';
 
 interface AppState extends UserProfile {
   // Internal: tracks whether initial load from storage is complete
@@ -155,6 +156,9 @@ interface AppState extends UserProfile {
   removeCustomCategory: (key: string) => void;
 
   resetStore: () => void;
+  isPro: boolean;
+  activatePro: () => Promise<void>;
+  checkProStatus: () => Promise<void>;
 }
 
 const initialState: UserProfile = {
@@ -218,6 +222,7 @@ function mapCategoryToAssetType(category: string): Asset['type'] {
 export const useStore = create<AppState>((set, get) => ({
   ...initialState,
   _isLoaded: false, // NOT persisted, internal flag only
+  isPro: false,
   isLoadingAssets: false,
   lastAssetSync: undefined,
 
@@ -2523,6 +2528,16 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   resetStore: () => set({ ...initialState, _isLoaded: true }),
+
+  activatePro: async () => {
+    await unlockAddOn('pro_bundle');
+    set({ isPro: true });
+  },
+
+  checkProStatus: async () => {
+    const pro = await isAddOnUnlocked('pro_bundle');
+    set({ isPro: pro });
+  },
 }));
 
 // Helper hook to get current freedom score

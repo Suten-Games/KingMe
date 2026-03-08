@@ -2,7 +2,7 @@
 import { useRouter } from 'expo-router';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, Alert, Platform
+  Modal, TextInput, Alert, Platform,
 } from 'react-native';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -26,6 +26,7 @@ import { loadAllPlans, createPlan, getPlan, type AccumulationPlan } from '@/serv
 import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 import { useSwapToast } from '@/components/SwapToast';
+import SuccessModal from '@/components/SuccessModal';
 import { log, warn, error as logError } from '@/utils/logger';
 
 // ── Build SKRCard props from a store asset ─────────────────
@@ -214,6 +215,8 @@ export default function AssetsScreen() {
   const [showBankEditModal, setShowBankEditModal] = useState(false);
   const [bankEditValue, setBankEditValue] = useState('');
 
+  const [syncPopup, setSyncPopup] = useState<{ emoji: string; title: string; message: string } | null>(null);
+
   // Target modal state
   const [targetAsset, setTargetAsset] = useState<Asset | null>(null);
   const [targetAmount, setTargetAmount] = useState('');
@@ -323,9 +326,9 @@ export default function AssetsScreen() {
       // Also refresh SKR staking data
       refreshSkr();
       const syncedCount = assets.filter(a => a.isAutoSynced).length;
-      Alert.alert('Sync Complete', `Successfully synced ${syncedCount} assets from your wallet!`, [{ text: 'OK' }]);
+      setSyncPopup({ emoji: '✅', title: 'Sync Complete', message: `Successfully synced ${syncedCount} assets from your wallet!` });
     } catch {
-      Alert.alert('Sync Failed', 'Could not sync wallet. Please try again later.', [{ text: 'OK' }]);
+      setSyncPopup({ emoji: '⚠️', title: 'Sync Failed', message: 'Could not sync wallet. Please try again later.' });
     }
   };
 
@@ -696,6 +699,15 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Sync popup */}
+      <SuccessModal
+        visible={!!syncPopup}
+        emoji={syncPopup?.emoji}
+        title={syncPopup?.title || ''}
+        message={syncPopup?.message || ''}
+        onClose={() => setSyncPopup(null)}
+      />
 
       {/* Swap/Stake toast */}
       <ToastComponent />

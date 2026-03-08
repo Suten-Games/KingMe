@@ -1,15 +1,17 @@
 // src/components/WalletConnect.tsx - Multi-wallet support
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
 import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { useWallet } from '../providers/wallet-provider';
 import WalletPickerModal from './WalletPickerModal';
+import SuccessModal from './SuccessModal';
 import { log, warn, error as logError } from '../utils/logger';
 
 export function WalletConnect() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [disconnectAddress, setDisconnectAddress] = useState('');
+  const [popup, setPopup] = useState<{ emoji: string; title: string; message: string } | null>(null);
   
   const wallets = useStore((state) => state.wallets);
   const saveProfile = useStore((state) => state.saveProfile);
@@ -40,7 +42,7 @@ export function WalletConnect() {
       
       const currentWallets = useStore.getState().wallets;
       if (currentWallets.includes(address)) {
-        Alert.alert('Already Connected', 'This wallet is already connected.');
+        setPopup({ emoji: '🔗', title: 'Already Connected', message: 'This wallet is already connected.' });
         return;
       }
       
@@ -51,14 +53,15 @@ export function WalletConnect() {
       await handleSync(address);
       await saveProfile();
       
-      Alert.alert(
-        'Wallet Connected! 📱',
-        `Connected to ${walletName || 'wallet'}: ${address.slice(0, 4)}...${address.slice(-4)}`
-      );
+      setPopup({
+        emoji: '📱',
+        title: 'Wallet Connected!',
+        message: `Connected to ${walletName || 'wallet'}: ${address.slice(0, 4)}...${address.slice(-4)}`,
+      });
     } catch (error: any) {
       logError('Connection error:', error);
       if (!error.message?.includes('User rejected')) {
-        Alert.alert('Connection Failed', error.message || 'Failed to connect wallet');
+        setPopup({ emoji: '❌', title: 'Connection Failed', message: error.message || 'Failed to connect wallet' });
       }
     }
   };
@@ -73,7 +76,7 @@ export function WalletConnect() {
       const walletsToSync = walletAddress ? [walletAddress] : wallets;
 
       if (walletsToSync.length === 0) {
-        Alert.alert('No Wallets', 'Please connect a wallet first.');
+        setPopup({ emoji: '🔗', title: 'No Wallets', message: 'Please connect a wallet first.' });
         setIsSyncing(false);
         return;
       }
@@ -87,13 +90,14 @@ export function WalletConnect() {
 
       await saveProfile();
 
-      Alert.alert(
-        'Sync Complete!',
-        `Synced ${walletsToSync.length} wallet(s) via Helius`
-      );
+      setPopup({
+        emoji: '✅',
+        title: 'Sync Complete!',
+        message: `Synced ${walletsToSync.length} wallet(s) via Helius`,
+      });
     } catch (error: any) {
       logError('Sync error:', error);
-      Alert.alert('Sync Failed', error.message || 'Failed to sync wallets');
+      setPopup({ emoji: '⚠️', title: 'Sync Failed', message: error.message || 'Failed to sync wallets' });
     } finally {
       setIsSyncing(false);
     }
@@ -131,10 +135,10 @@ export function WalletConnect() {
       setShowDisconnectModal(false);
       setDisconnectAddress('');
       
-      Alert.alert('Success', 'Wallet disconnected successfully');
+      setPopup({ emoji: '👋', title: 'Disconnected', message: 'Wallet disconnected successfully' });
     } catch (error: any) {
       logError('Disconnect error:', error);
-      Alert.alert('Error', error.message || 'Failed to disconnect wallet');
+      setPopup({ emoji: '❌', title: 'Error', message: error.message || 'Failed to disconnect wallet' });
     }
   };
 
@@ -233,6 +237,15 @@ export function WalletConnect() {
 
       {/* Wallet picker modal (web only — shown when multiple wallets detected) */}
       <WalletPickerModal />
+
+      {/* Success / error popup */}
+      <SuccessModal
+        visible={!!popup}
+        emoji={popup?.emoji}
+        title={popup?.title || ''}
+        message={popup?.message || ''}
+        onClose={() => setPopup(null)}
+      />
 
       {/* Disconnect confirmation */}
       <Modal visible={showDisconnectModal} animationType="fade" transparent={true} onRequestClose={() => setShowDisconnectModal(false)}>
