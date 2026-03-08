@@ -31,7 +31,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'Part-Time Barista', amount: 580, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_1', source: 'salary', name: 'Part-Time Barista', amount: 580, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
         ],
       },
       bankAccounts: [
@@ -81,7 +81,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'Warehouse Associate', amount: 1550, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_1', source: 'salary', name: 'Warehouse Associate', amount: 1550, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
         ],
       },
       bankAccounts: [
@@ -128,7 +128,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'Senior Analyst – TechCorp', amount: 3650, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_1', source: 'salary', name: 'Senior Analyst – TechCorp', amount: 3650, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
         ],
       },
       bankAccounts: [
@@ -203,7 +203,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
           { id: 'is_demo_1', source: 'trading', name: 'Drift Perps PnL (rough month)', amount: 1800, frequency: 'monthly', bankAccountId: 'ba_demo_1' },
-          { id: 'is_demo_2', source: 'other', name: 'Yield Farming', amount: 1400, frequency: 'monthly', bankAccountId: 'ba_demo_1' },
+          { id: 'is_demo_2', source: 'other', name: 'Yield Farming', amount: 1400, frequency: 'monthly', bankAccountId: 'ba_demo_1', isActive: true },
         ],
       },
       wallets: ['DemoCrypt0TraderWa11etXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'],
@@ -279,8 +279,8 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'Engineering Manager – BigCo', amount: 7100, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
-          { id: 'is_demo_2', source: 'other', name: 'Annual Bonus (spread)', amount: 2500, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
+          { id: 'is_demo_1', source: 'salary', name: 'Engineering Manager – BigCo', amount: 7100, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
+          { id: 'is_demo_2', source: 'other', name: 'Annual Bonus (spread)', amount: 2500, frequency: 'monthly', bankAccountId: 'ba_demo_2', isActive: true },
         ],
       },
       bankAccounts: [
@@ -347,8 +347,8 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'IT Director – School District', amount: 5200, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
-          { id: 'is_demo_2', source: 'business', name: 'Rental Income (net)', amount: 2000, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
+          { id: 'is_demo_1', source: 'salary', name: 'IT Director – School District', amount: 5200, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
+          { id: 'is_demo_2', source: 'business', name: 'Rental Income (net)', amount: 2000, frequency: 'monthly', bankAccountId: 'ba_demo_3', isActive: true },
         ],
       },
       bankAccounts: [
@@ -406,9 +406,9 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       income: {
         salary: 0, otherIncome: 0, assetIncome: 0,
         sources: [
-          { id: 'is_demo_1', source: 'salary', name: 'Consulting (part-time)', amount: 4500, frequency: 'biweekly', bankAccountId: 'ba_demo_1' },
-          { id: 'is_demo_2', source: 'business', name: 'Rental Duplex (net)', amount: 3500, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
-          { id: 'is_demo_3', source: 'business', name: 'Rental Condo (net)', amount: 1800, frequency: 'monthly', bankAccountId: 'ba_demo_2' },
+          { id: 'is_demo_1', source: 'salary', name: 'Consulting (part-time)', amount: 4500, frequency: 'biweekly', bankAccountId: 'ba_demo_1', isActive: true },
+          { id: 'is_demo_2', source: 'business', name: 'Rental Duplex (net)', amount: 3500, frequency: 'monthly', bankAccountId: 'ba_demo_2', isActive: true },
+          { id: 'is_demo_3', source: 'business', name: 'Rental Condo (net)', amount: 1800, frequency: 'monthly', bankAccountId: 'ba_demo_2', isActive: true },
           { id: 'is_demo_4', source: 'business', name: 'SaaS Revenue', amount: 4000, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
           { id: 'is_demo_5', source: 'other', name: 'Dividend Income', amount: 1500, frequency: 'monthly', bankAccountId: 'ba_demo_3' },
         ],

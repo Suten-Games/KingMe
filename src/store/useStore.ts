@@ -1644,7 +1644,7 @@ export const useStore = create<AppState>((set, get) => ({
     await get().saveProfile();
 
     // Regenerate scenarios with new state
-    get().generateScenarios();
+    try { get().generateScenarios(); } catch (e) { warn('[SCENARIO] Failed to regenerate:', e); }
   },
 
   dismissAlert: (alertId: string) => {

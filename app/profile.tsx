@@ -1,5 +1,5 @@
 // app/(tabs)/profile.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform, Switch, Image } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,18 +24,7 @@ import KingMeFooter from '../src/components/KingMeFooter';
 import { ExportIcon, ImportIcon, CloudBackupIcon, CloudRestoreIcon, CrownIcon } from '../src/components/TabIcons';
 import { DEMO_PERSONAS, seedDemoWatchlist, type DemoPersona } from '../src/utils/demoPersonas';
 import { log, warn, error as logError } from '@/utils/logger';
-
-/** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
-function crossConfirm(title: string, message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
-  } else {
-    Alert.alert(title, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', style: 'destructive', onPress: onConfirm },
-    ]);
-  }
-}
+import ConfirmModal from '../src/components/ConfirmModal';
 
 export default function ProfileScreen() {
   const [fontsLoaded] = useFonts({ Cinzel_700Bold });
@@ -86,6 +75,11 @@ export default function ProfileScreen() {
   // Styled alert modal (replaces window.alert / Alert.alert)
   const [alertModal, setAlertModal] = useState<{ title: string; message?: string } | null>(null);
   const crossAlert = (title: string, message?: string) => setAlertModal({ title, message });
+
+  // Styled confirm modal (replaces window.confirm / Alert.alert)
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
+  const crossConfirm = (title: string, message: string, onConfirm: () => void, destructive = false) =>
+    setConfirmModal({ title, message, onConfirm, destructive });
 
   // ── Demo / Sandbox mode ─────────────────────────────────────────────────
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -212,7 +206,8 @@ export default function ProfileScreen() {
             try { router.replace('/onboarding/intro'); } catch {}
           }
         }
-      }
+      },
+      true // destructive
     );
   };
 
@@ -889,6 +884,18 @@ export default function ProfileScreen() {
           </LinearGradient>
         </View>
       </Modal>
+      {/* ═══════════════ CONFIRM MODAL ═══════════════ */}
+      <ConfirmModal
+        visible={!!confirmModal}
+        title={confirmModal?.title || ''}
+        message={confirmModal?.message || ''}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        destructive={confirmModal?.destructive ?? false}
+        onConfirm={() => { confirmModal?.onConfirm(); setConfirmModal(null); }}
+        onCancel={() => setConfirmModal(null)}
+      />
+
       {/* ═══════════════ DEMO PERSONA PICKER ═══════════════ */}
       <Modal visible={showDemoModal} transparent animationType="slide" onRequestClose={() => setShowDemoModal(false)}>
         <View style={styles.alertOverlay}>

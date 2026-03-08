@@ -157,31 +157,6 @@ export default function PositionAlertCards() {
       const kaminoRates = (useStore.getState() as any).kaminoRates || {};
       const newAlerts = generatePositionAlerts(assets, priceData, accPlans, { kaminoRates });
 
-      // ── TEST ALERT — remove after testing ──
-      const bigTrout = assets.find(a => a.name?.toLowerCase().includes('trout'));
-      if (bigTrout) {
-        const meta = bigTrout.metadata as CryptoAsset;
-        newAlerts.unshift({
-          id: `test-pump-bigtrout-${Date.now()}`,
-          assetId: bigTrout.id,
-          assetName: bigTrout.name,
-          symbol: meta.symbol || 'BigTrout',
-          mint: meta.tokenMint || meta.mint || '',
-          priority: 'high',
-          action: 'take_profit',
-          title: `BigTrout up +58% today`,
-          message: `Strong pump. Lock in gains before a pullback.`,
-          detail: `Your $${bigTrout.value.toFixed(0)} position is running. Take some off the table.`,
-          emoji: '💰',
-          actionLabel: 'Trim 25%',
-          actionParams: { type: 'swap', fromMint: meta.tokenMint || meta.mint, fromSymbol: meta.symbol || 'BigTrout', percentage: 25 },
-          value: bigTrout.value,
-          change: 58,
-          timestamp: Date.now(),
-        });
-      }
-      // ── END TEST ──
-
       log(`🔔 Generated ${newAlerts.length} position alerts`);
 
       // Play alert sound for new urgent/high alerts that aren't dismissed
@@ -203,11 +178,8 @@ export default function PositionAlertCards() {
     }
   }, [assets, cryptoMints]);
 
-  // Clear stale alerts immediately when assets change (e.g. persona switch),
-  // then re-fetch fresh data
+  // Refresh alerts when assets change; don't clear existing alerts first to avoid flicker
   useEffect(() => {
-    setAlerts([]);
-    setDismissed(new Set());
     refreshAlerts();
     const interval = setInterval(refreshAlerts, REFRESH_INTERVAL);
     return () => clearInterval(interval);

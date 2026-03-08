@@ -2026,7 +2026,7 @@ function calculateMonthlyIncome(
 ): number {
   const assetIncome = assets.reduce((sum, a) => sum + (a.annualIncome || 0), 0) / 12;
   const activeIncome = incomeSources
-    .filter(s => s.isActive)
+    .filter(s => s.isActive !== false)
     .reduce((sum, s) => {
       if (s.frequency === 'monthly') return sum + s.amount;
       if (s.frequency === 'biweekly') return sum + (s.amount * 26 / 12);
@@ -2043,8 +2043,8 @@ function calculateMonthlyNeeds(
 ): number {
   const obligationTotal = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
   const debtTotal = debts
-    .filter(d => d.isActive)
-    .reduce((sum, d) => sum + d.minimumPayment, 0);
+    .filter(d => d.isActive !== false)
+    .reduce((sum, d) => sum + (d.minimumPayment || 0), 0);
 
   return obligationTotal + debtTotal;
 }

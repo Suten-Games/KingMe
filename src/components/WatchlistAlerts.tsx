@@ -168,11 +168,8 @@ export default function WatchlistAlerts() {
     }
   }, [autoTrackHeldCoins]);
 
-  // Clear stale alerts immediately when assets change (e.g. persona switch),
-  // then re-load fresh data from AsyncStorage
+  // Refresh alerts when assets change; don't clear existing alerts first to avoid flicker
   useEffect(() => {
-    setAlerts([]);
-    setDismissed(new Set());
     load();
   }, [load]);
 

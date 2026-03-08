@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform, Modal } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +26,7 @@ import WindfallAlertCard from '@/components/WindfallAlertCard';
 import SpendingGapAlert from '../../src/components/SpendingGapAlert';
 import TradeInsightCards from '@/components/TradeInsightCards';
 import WatchlistAlerts from '@/components/WatchlistAlerts';
+import SuccessModal from '@/components/SuccessModal';
 import { log, warn, error } from '@/utils/logger';
 import TargetIcon from '@/components/icons/TargetIcon';
 import { CrownIcon } from '@/components/TabIcons';
@@ -103,6 +104,7 @@ export default function HomeScreen() {
   const customCategories    = useStore((state) => state.customCategories || {});
   const [selectedScenario, setSelectedScenario] = useState<WhatIfScenario | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [successPopup, setSuccessPopup] = useState<{ emoji: string; title: string; message: string } | null>(null);
   const [infoModal, setInfoModal] = useState<'freedom' | 'runway' | null>(null);
   const [infoDetails, setInfoDetails] = useState(false);
   const [includeHouse, setIncludeHouse] = useState(false);
@@ -292,9 +294,9 @@ export default function HomeScreen() {
           setShowModal(false);
           reset();
           generateScenarios(); // Refresh so the card disappears
-          Alert.alert('Goal Updated! 🎉', `Your goal now targets ${upgrade.toSymbol}.`, [{ text: 'OK' }]);
+          setSuccessPopup({ emoji: '🎯', title: 'Goal Updated!', message: `Your goal now targets ${upgrade.toSymbol}.` });
         } catch (err: any) {
-          Alert.alert('Error', 'Failed to update goal. Please try again.');
+          setSuccessPopup({ emoji: '❌', title: 'Error', message: 'Failed to update goal. Please try again.' });
         }
       }
       return;
@@ -325,7 +327,7 @@ export default function HomeScreen() {
       if (!onChain) {
         setShowModal(false);
         reset();
-        Alert.alert('Scenario Applied! 🎉', 'Your financial plan has been updated.', [{ text: 'OK' }]);
+        setSuccessPopup({ emoji: '👑', title: 'Scenario Applied!', message: 'Your financial plan has been updated.' });
       }
       // On-chain: modal stays open showing success + tx signature
       // User taps "Done — Close" to dismiss
@@ -602,6 +604,15 @@ export default function HomeScreen() {
       <GoalsStrip />
       
 
+
+      {/* ── Success Popup ──────────────────────────────────────── */}
+      <SuccessModal
+        visible={!!successPopup}
+        emoji={successPopup?.emoji || '🎉'}
+        title={successPopup?.title || ''}
+        message={successPopup?.message || ''}
+        onClose={() => setSuccessPopup(null)}
+      />
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
       <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => { setInfoModal(null); setInfoDetails(false); setIncludeHouse(false); }}>
