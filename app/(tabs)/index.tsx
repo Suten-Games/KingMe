@@ -475,7 +475,7 @@ export default function HomeScreen() {
         </View>
       )}
       <SetupChecklist />
-      <ProDiscoveryCard />
+      {!isDemoMode && <ProDiscoveryCard />}
 
       <PositionAlertCards  />
             {windfallAlerts
