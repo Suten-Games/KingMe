@@ -116,7 +116,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     id: 'middle_class',
     name: 'Comfortable Middle Class',
     emoji: '\u{1F3E1}',
-    description: 'Homeowner, 401k, some savings, manageable debt',
+    description: 'Homeowner, 401k, Solana wallet with DeFi positions, manageable debt',
     color: '#eab308',
     profile: {
       income: {
@@ -129,22 +129,31 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'ba_demo_1', name: 'Chase Checking', type: 'checking', currentBalance: 4200, institution: 'Chase', isPrimaryIncome: true },
         { id: 'ba_demo_2', name: 'Ally Savings', type: 'savings', currentBalance: 15000, institution: 'Ally', isPrimaryIncome: false },
       ],
+      wallets: ['DemoMiddleC1assWa11etXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'],
       assets: [
-        { id: 'a_demo_1', type: 'real_estate', name: 'Primary Home', value: 320000, annualIncome: 0, metadata: { address: '123 Main St' } },
+        { id: 'a_demo_1', type: 'real_estate', name: 'Primary Home', value: 320000, annualIncome: 0, metadata: { address: '123 Main St', isPrimaryResidence: true } },
         { id: 'a_demo_2', type: 'retirement', name: '401(k)', value: 85000, annualIncome: 0, metadata: {} },
         { id: 'a_demo_3', type: 'other', name: '2022 Honda CR-V', value: 26000, annualIncome: 0, metadata: {} },
-        { id: 'a_demo_4', type: 'crypto', name: 'Bitcoin', value: 4500, annualIncome: 0, metadata: { symbol: 'BTC', quantity: 0.045 } },
+        // Solana ecosystem crypto
+        { id: 'a_demo_4', type: 'crypto', name: 'Solana', value: 3200, annualIncome: 0, metadata: { symbol: 'SOL', quantity: 22, tokenMint: 'So11111111111111111111111111111111111111112' } },
+        { id: 'a_demo_5', type: 'crypto', name: 'JupSOL (Staked SOL)', value: 2800, annualIncome: 210, metadata: { symbol: 'JupSOL', quantity: 19, tokenMint: '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4' } },
+        // Wrapped blue-chips on Solana
+        { id: 'a_demo_6', type: 'crypto', name: 'Wrapped Bitcoin (Portal)', value: 4500, annualIncome: 0, metadata: { symbol: 'wBTC', quantity: 0.045, tokenMint: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh' } },
+        { id: 'a_demo_7', type: 'crypto', name: 'Wrapped Ethereum (Portal)', value: 3800, annualIncome: 0, metadata: { symbol: 'wETH', quantity: 1.1, tokenMint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs' } },
+        // DeFi yield positions
+        { id: 'a_demo_8', type: 'defi', name: 'Kamino USDC Supply', value: 5000, annualIncome: 450, metadata: { symbol: 'USDC', protocol: 'Kamino', apy: 9.0 } },
+        { id: 'a_demo_9', type: 'crypto', name: 'USD* (Perena)', value: 3000, annualIncome: 280, metadata: { symbol: 'USD*', tokenMint: 'star9agSpjiFe3M49B3RniVU4CMBBEK3Qnaqn3RGiFM', protocol: 'Perena', apy: 9.34 } },
       ],
       obligations: [
-        { id: 'ob_demo_1', name: 'Electric', payee: 'SRP', amount: 180, category: 'utilities', isRecurring: true, dueDate: 10 },
-        { id: 'ob_demo_2', name: 'Water', payee: 'City Water', amount: 65, category: 'utilities', isRecurring: true, dueDate: 15 },
-        { id: 'ob_demo_3', name: 'Internet', payee: 'Cox', amount: 95, category: 'utilities', isRecurring: true, dueDate: 12 },
-        { id: 'ob_demo_4', name: 'Phone (Family)', payee: 'Verizon', amount: 180, category: 'utilities', isRecurring: true, dueDate: 20 },
-        { id: 'ob_demo_5', name: 'Home Insurance', payee: 'State Farm', amount: 145, category: 'insurance', isRecurring: true, dueDate: 1 },
-        { id: 'ob_demo_6', name: 'Auto Insurance', payee: 'State Farm', amount: 135, category: 'insurance', isRecurring: true, dueDate: 1 },
-        { id: 'ob_demo_7', name: 'Life Insurance', payee: 'Northwestern Mutual', amount: 55, category: 'insurance', isRecurring: true, dueDate: 5 },
-        { id: 'ob_demo_8', name: 'Netflix', payee: 'Netflix', amount: 16, category: 'other', isRecurring: true, dueDate: 8 },
-        { id: 'ob_demo_9', name: 'Gym', payee: 'LA Fitness', amount: 35, category: 'other', isRecurring: true, dueDate: 1 },
+        { id: 'ob_demo_1', name: 'Electric', payee: 'SRP', amount: 180, category: 'utilities', isRecurring: true, dueDate: 10, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_2', name: 'Water', payee: 'City Water', amount: 65, category: 'utilities', isRecurring: true, dueDate: 15, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_3', name: 'Internet', payee: 'Cox', amount: 95, category: 'utilities', isRecurring: true, dueDate: 12, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_4', name: 'Phone (Family)', payee: 'Verizon', amount: 180, category: 'utilities', isRecurring: true, dueDate: 20, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_5', name: 'Home Insurance', payee: 'State Farm', amount: 145, category: 'insurance', isRecurring: true, dueDate: 1, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_6', name: 'Auto Insurance', payee: 'State Farm', amount: 135, category: 'insurance', isRecurring: true, dueDate: 1, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_7', name: 'Life Insurance', payee: 'Northwestern Mutual', amount: 55, category: 'insurance', isRecurring: true, dueDate: 5, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_8', name: 'Netflix', payee: 'Netflix', amount: 16, category: 'other', isRecurring: true, dueDate: 8, bankAccountId: 'ba_demo_1' },
+        { id: 'ob_demo_9', name: 'Gym', payee: 'LA Fitness', amount: 35, category: 'other', isRecurring: true, dueDate: 1, bankAccountId: 'ba_demo_1' },
       ],
       debts: [
         { id: 'd_demo_1', name: 'Mortgage', principal: 280000, interestRate: 0.065, monthlyPayment: 1850, minimumPayment: 1850, dueDate: 1, balance: 252000, payee: 'Chase' },
@@ -169,8 +178,13 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', amount: 185, type: 'state' },
       ],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true },
     },
+    demoWatchlist: [
+      { mint: '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4', symbol: 'JupSOL', addedPrice: 140, notes: 'Staked SOL via Jupiter, earning ~7.5% APY' },
+      { mint: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', symbol: 'wBTC', addedPrice: 95000, notes: 'BTC exposure on Solana via Portal bridge' },
+      { mint: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', symbol: 'wETH', addedPrice: 3200, notes: 'ETH exposure on Solana via Portal bridge' },
+    ],
   },
   {
     id: 'high_earner',
