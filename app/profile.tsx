@@ -263,8 +263,14 @@ export default function ProfileScreen() {
     }
   };
 
+  const [isImporting, setIsImporting] = useState(false);
+
   const handleImportBackup = async () => {
+    setIsImporting(true);
     try {
+      // Let the spinner render before heavy parsing
+      await new Promise(r => setTimeout(r, 50));
+
       const parsed = JSON.parse(importJson);
       const isV2 = parsed?.version >= 2 && parsed?.store;
       const storeJson = isV2 ? JSON.stringify(parsed.store) : importJson;
@@ -281,6 +287,8 @@ export default function ProfileScreen() {
       setShowImportModal(false);
     } catch (error) {
       crossAlert('Error', 'Failed to import backup: ' + (error as Error).message);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -843,12 +851,19 @@ export default function ProfileScreen() {
                 <TouchableOpacity style={styles.modalCancelButton} onPress={() => { setImportJson(''); setShowImportModal(false); }}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, !importJson && styles.modalButtonDisabled]} 
+                <TouchableOpacity
+                  style={[styles.modalButton, (!importJson || isImporting) && styles.modalButtonDisabled]}
                   onPress={handleImportBackup}
-                  disabled={!importJson}
+                  disabled={!importJson || isImporting}
                 >
-                  <Text style={styles.modalButtonText}>Import</Text>
+                  {isImporting ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <ActivityIndicator size="small" color="#0a0e1a" />
+                      <Text style={styles.modalButtonText}>Importing...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.modalButtonText}>Import</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
