@@ -2516,7 +2516,7 @@ export const useStore = create<AppState>((set, get) => ({
     log('[MARKET] Price refresh complete');
   },
 
-  resetStore: () => set(initialState),
+  resetStore: () => set({ ...initialState, _isLoaded: true }),
 }));
 
 // Helper hook to get current freedom score

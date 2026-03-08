@@ -201,7 +201,6 @@ export default function HomeScreen() {
     ]);
     // Reset store fully before loading new persona
     store.resetStore();
-    useStore.setState({ _isLoaded: true });
     store.importBackup(JSON.stringify({
       version: '1.0.0',
       exportedAt: new Date().toISOString(),

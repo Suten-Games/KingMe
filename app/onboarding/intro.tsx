@@ -65,7 +65,6 @@ export default function OnboardingIntro() {
       // Reset store fully before loading persona to prevent stale data
       const resetStore = useStore.getState().resetStore;
       resetStore();
-      useStore.setState({ _isLoaded: true });
 
       // Load persona data, keeping the user's connected wallet
       importBackup(JSON.stringify({

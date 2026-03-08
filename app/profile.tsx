@@ -144,7 +144,6 @@ export default function ProfileScreen() {
     invalidateDemoCache(); // ensure auto-save picks up new demo flag
     // Reset store fully before loading new persona to prevent stale data
     resetStore();
-    useStore.setState({ _isLoaded: true });
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     await seedDemoWatchlist(persona);
     setActivePersona(persona.id);
@@ -193,10 +192,8 @@ export default function ProfileScreen() {
           await AsyncStorage.clear();
           log('[RESET] AsyncStorage cleared');
 
-          // 2. Reset zustand store but keep _isLoaded true so root layout
-          //    doesn't revert to splash screen and block navigation
+          // 2. Reset zustand store (keeps _isLoaded: true to prevent splash flash)
           resetStore();
-          useStore.setState({ _isLoaded: true });
           log('[RESET] Store reset');
 
           // 3. Navigate to onboarding after store is clean
@@ -204,7 +201,6 @@ export default function ProfileScreen() {
         } catch (err) {
           logError('[RESET] Error during reset:', err);
           resetStore();
-          useStore.setState({ _isLoaded: true });
           try { router.replace('/onboarding/intro'); } catch {}
         }
       }
