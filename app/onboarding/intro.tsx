@@ -40,9 +40,14 @@ export default function OnboardingIntro() {
   const exportBackup = useStore(s => s.exportBackup);
 
   // Clean URL on web so visitors see kingme.money instead of /onboarding/intro
+  // Delay needed because Expo Router sets the URL after component mount
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.history.replaceState({}, '', '/');
+      const cleanUrl = () => window.history.replaceState({}, '', '/');
+      cleanUrl();
+      const t1 = setTimeout(cleanUrl, 100);
+      const t2 = setTimeout(cleanUrl, 500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
     }
   }, []);
 
