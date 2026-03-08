@@ -1,6 +1,6 @@
 // components/FreedomScore.tsx
 import React from 'react';
-import { View, Image, Text, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Image, Text, StyleSheet, Dimensions, Platform, TouchableOpacity } from 'react-native';
 import { Asset } from 'expo-asset';
 import type { AvatarType, FreedomState } from '../types';
 import { AVATAR_IMAGES, AVATAR_VIDEOS } from '../utils/constants';
@@ -23,6 +23,7 @@ interface FreedomScoreProps {
   avatarType: AvatarType;
   isKinged: boolean;
   layout?: 'hero' | 'sidebar';
+  onCirclePress?: () => void;
   children?: React.ReactNode;
 }
 
@@ -95,7 +96,8 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
   }
 
   // ── shared score circle ─────────────────────────────────────────────────
-  const scoreCircle = (
+  const { onCirclePress } = props;
+  const circleContent = (
     <View style={mode === 'sidebar' ? styles.scoreCircleSidebar : styles.scoreCircle}>
       <Text style={mode === 'sidebar' ? styles.scoreNumberSidebar : styles.scoreNumber}>
         {days === Infinity ? '∞' : formatted}
@@ -104,6 +106,11 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
       {isKinged  && <Text style={styles.kingedLabel}>👑 KINGED</Text>}
     </View>
   );
+  const scoreCircle = onCirclePress ? (
+    <TouchableOpacity activeOpacity={0.7} onPress={onCirclePress}>
+      {circleContent}
+    </TouchableOpacity>
+  ) : circleContent;
 
   // ── Avatar media renderer ───────────────────────────────────────────────
   const renderAvatar = (imageStyle: any) => {

@@ -218,8 +218,8 @@ const styles = StyleSheet.create({
   },
   message: { fontSize: 14, color: '#c0c0c0', marginBottom: 14, lineHeight: 20 },
 
-  numbersRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  numberCard: { flex: 1, backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, alignItems: 'center' } as any,
+  numbersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  numberCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, alignItems: 'center' } as any,
   numberCardDashed: { borderWidth: 1, borderColor: '#ff9f4350', borderStyle: 'dashed' as const, backgroundColor: '#1a1f2e80' },
   numberLabel: { fontSize: 11, color: '#666', marginBottom: 4 },
   numberValue: { fontSize: 16, fontWeight: 'bold' },

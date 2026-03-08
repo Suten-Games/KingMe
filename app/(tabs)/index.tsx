@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx
-import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity, Platform, Modal, Image } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -626,15 +626,20 @@ export default function HomeScreen() {
 
       {/* ── Info Explanation Modal ─────────────────────────────── */}
       <Modal visible={infoModal !== null} animationType="fade" transparent onRequestClose={() => { setInfoModal(null); setInfoDetails(false); setIncludeHouse(false); }}>
-        <TouchableOpacity style={styles.infoModalOverlay} activeOpacity={1} onPress={() => { setInfoModal(null); setInfoDetails(false); setIncludeHouse(false); }}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+        <View style={styles.infoModalOverlay}>
+          <View>
             <LinearGradient
               colors={infoModal === 'freedom' ? ['#3d3010', '#1e1808', '#0e0c04'] : ['#1a3868', '#102040', '#081020']}
               style={styles.infoModalContent}>
               <View style={styles.infoModalHeader}>
-                <Text style={[styles.infoModalTitle, { color: infoModal === 'freedom' ? '#f4c430' : '#60a5fa' }]}>
-                  {infoModal === 'freedom' ? '👑 Freedom Score' : '🛡️ Runway'}
-                </Text>
+                {infoModal === 'freedom' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Image source={require('@/assets/images/kingmelogo.jpg')} style={{ width: 28, height: 28, borderRadius: 14 }} />
+                    <Text style={[styles.infoModalTitle, { color: '#f4c430' }]}>Freedom Score</Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.infoModalTitle, { color: '#60a5fa' }]}>🛡️ Runway</Text>
+                )}
                 <TouchableOpacity onPress={() => setInfoModal(null)} style={styles.infoModalClose}>
                   <Text style={styles.infoModalCloseText}>✕</Text>
                 </TouchableOpacity>
@@ -814,8 +819,8 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
             </LinearGradient>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Tools ─────────────────────────────────────────────────── */}
@@ -902,7 +907,7 @@ export default function HomeScreen() {
     return (
       <View style={styles.container}><StatusBar barStyle="light-content" />
         <FreedomScore days={freedom.days} formatted={freedom.formatted} state={freedom.state}
-          avatarType={avatarType} isKinged={freedom.isKinged} layout="sidebar">
+          avatarType={avatarType} isKinged={freedom.isKinged} layout="sidebar" onCirclePress={() => setInfoModal('freedom')}>
           <ScrollView style={styles.webDashboardScroll} showsVerticalScrollIndicator={true}>{dashboardBody}</ScrollView>
         </FreedomScore>
       </View>
@@ -913,7 +918,7 @@ export default function HomeScreen() {
     <View style={styles.container}><StatusBar barStyle="light-content" />
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <FreedomScore days={freedom.days} formatted={freedom.formatted} state={freedom.state}
-          avatarType={avatarType} isKinged={freedom.isKinged} layout="hero" />
+          avatarType={avatarType} isKinged={freedom.isKinged} layout="hero" onCirclePress={() => setInfoModal('freedom')} />
         {dashboardBody}
       </ScrollView>
     </View>
