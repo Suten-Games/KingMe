@@ -323,18 +323,6 @@ export default function AssetDetailScreen() {
 
           <View style={styles.headerActions}>
             <WalletHeaderButton />
-            <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.editHeaderButton}>
-              <Text style={styles.editHeaderText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                removeAsset(asset.id);
-                router.back();
-              }}
-              style={styles.deleteButton}
-            >
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -345,6 +333,22 @@ export default function AssetDetailScreen() {
           style={styles.headerAccent}
         />
       </LinearGradient>
+
+      {/* Action buttons */}
+      <View style={styles.actionBar}>
+        <TouchableOpacity onPress={() => setShowEditModal(true)} style={styles.editActionButton}>
+          <Text style={styles.editActionText}>✏️ Edit Asset</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            removeAsset(asset.id);
+            router.back();
+          }}
+          style={styles.deleteActionButton}
+        >
+          <Text style={styles.deleteActionText}>🗑 Delete</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView style={styles.content}>
 
@@ -1286,8 +1290,32 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   editHeaderButton: { padding: 6 },
   editHeaderText: { fontSize: 14, color: '#4ade80', fontWeight: '600' },
-  deleteButton: { padding: 6 },
-  deleteText: { fontSize: 14, color: '#f87171' },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#080c18',
+  },
+  editActionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4ade8040',
+    backgroundColor: '#1a2f1e',
+  },
+  editActionText: { fontSize: 13, color: '#4ade80', fontWeight: '600' },
+  deleteActionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f8717140',
+    backgroundColor: '#2a1a1e',
+  },
+  deleteActionText: { fontSize: 13, color: '#f87171', fontWeight: '600' },
   content: { flex: 1, padding: 20 },
   errorText: { fontSize: 18, color: '#666', textAlign: 'center', marginTop: 100 },
 

@@ -93,7 +93,7 @@ export default function IncomeScreen() {
     return { paycheckSources: paycheck, otherSources: other, paycheckMonthly: paycheckM, otherMonthly: otherM };
   }, [incomeSources]);
 
-  const preTaxMonthly = preTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod, d.frequency), 0);
+  const preTaxMonthly = preTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod || 0, d.frequency || 'monthly'), 0);
   const { contributions: ret401kMonthly, employerMatch: employerMatchMonthly } = useMemo(() => getMonthlyPreTaxDeductions(assets), [assets]);
   const totalNetToBank = paycheckMonthly + otherMonthly;
   const paycheckTotal = paycheckSources.reduce((sum, src) => sum + toMonthly(src.amount, src.frequency), 0);

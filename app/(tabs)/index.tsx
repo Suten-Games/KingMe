@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
   // Scenarios
   scenariosSection: { paddingVertical: 20 },
   sectionHeader: { marginBottom: 20 },
-  sectionTitle: { fontSize: 23, color: '#fff', marginBottom: 6, fontFamily: 'Inter_800ExtraBold' },
+  sectionTitle: { fontSize: 19, color: '#fff', marginBottom: 6, fontFamily: 'Inter_800ExtraBold' },
   sectionSubtitle: { fontSize: 14, color: '#888', fontFamily: 'Inter_400Regular' },
   viewAllButton: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#60a5fa50' },
   viewAllText: { fontSize: 14, color: '#60a5fa', fontFamily: 'Inter_700Bold' },

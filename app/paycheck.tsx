@@ -36,9 +36,9 @@ export default function PaycheckBreakdownModal({ visible, onClose, paycheckSourc
 
   // Calculate totals
   const paycheckMonthly = toMonthly(paycheckSource.amount, paycheckSource.frequency);
-  const preTaxMonthly = preTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod, d.frequency), 0);
-  const taxesMonthly = taxes.reduce((sum, t) => sum + toMonthly(t.perPayPeriod, t.frequency), 0);
-  const postTaxMonthly = postTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod, d.frequency), 0);
+  const preTaxMonthly = preTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod || 0, d.frequency || 'monthly'), 0);
+  const taxesMonthly = taxes.reduce((sum, t) => sum + toMonthly(t.perPayPeriod || 0, t.frequency || 'monthly'), 0);
+  const postTaxMonthly = postTaxDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod || 0, d.frequency || 'monthly'), 0);
 
   // OLD pre-tax (deprecated paycheckDeductions + 401k from assets)
   const paycheckDeductionMonthly = paycheckDeductions.reduce((sum, d) => sum + toMonthly(d.perPayPeriod, d.frequency), 0);

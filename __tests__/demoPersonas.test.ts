@@ -64,6 +64,98 @@ describe('DEMO_PERSONAS', () => {
       expect(getIncomeSources(persona).length).toBeGreaterThan(0);
     }
   });
+
+  it('every income source has isActive set', () => {
+    for (const persona of DEMO_PERSONAS) {
+      for (const src of getIncomeSources(persona)) {
+        expect(src.isActive).toBe(true);
+      }
+    }
+  });
+
+  it('preTaxDeductions have perPayPeriod, frequency, and valid type', () => {
+    const validTypes = ['medical_coverage', 'vision_coverage', 'dental_coverage', 'life_insurance', 'add_insurance', '401k_contribution', 'other_pretax'];
+    for (const persona of DEMO_PERSONAS) {
+      for (const d of persona.profile.preTaxDeductions || []) {
+        expect(d.perPayPeriod).toEqual(expect.any(Number));
+        expect(d.frequency).toBeTruthy();
+        expect(validTypes).toContain(d.type);
+        // Should NOT have legacy 'amount' field
+        expect((d as any).amount).toBeUndefined();
+      }
+    }
+  });
+
+  it('taxes have perPayPeriod, frequency, and valid type', () => {
+    const validTypes = ['federal_withholding', 'social_security', 'medicare', 'state_withholding'];
+    for (const persona of DEMO_PERSONAS) {
+      for (const t of persona.profile.taxes || []) {
+        expect(t.perPayPeriod).toEqual(expect.any(Number));
+        expect(t.frequency).toBeTruthy();
+        expect(validTypes).toContain(t.type);
+        expect((t as any).amount).toBeUndefined();
+      }
+    }
+  });
+
+  it('postTaxDeductions have perPayPeriod, frequency, and valid type', () => {
+    const validTypes = ['401k_loan', 'enhanced_ltd', 'other_posttax'];
+    for (const persona of DEMO_PERSONAS) {
+      for (const d of persona.profile.postTaxDeductions || []) {
+        expect(d.perPayPeriod).toEqual(expect.any(Number));
+        expect(d.frequency).toBeTruthy();
+        expect(validTypes).toContain(d.type);
+        expect((d as any).amount).toBeUndefined();
+      }
+    }
+  });
+
+  it('every obligation has a bankAccountId that matches a persona bank account', () => {
+    for (const persona of DEMO_PERSONAS) {
+      const bankIds = new Set((persona.profile.bankAccounts || []).map((a: any) => a.id));
+      for (const ob of persona.profile.obligations || []) {
+        expect(ob.bankAccountId).toBeTruthy();
+        expect(bankIds).toContain(ob.bankAccountId);
+      }
+    }
+  });
+
+  it('every debt has a bankAccountId that matches a persona bank account', () => {
+    for (const persona of DEMO_PERSONAS) {
+      const bankIds = new Set((persona.profile.bankAccounts || []).map((a: any) => a.id));
+      for (const d of persona.profile.debts || []) {
+        expect(d.bankAccountId).toBeTruthy();
+        expect(bankIds).toContain(d.bankAccountId);
+      }
+    }
+  });
+
+  it('toMonthly produces valid numbers for all deductions and taxes', () => {
+    function toMonthly(amount: number, freq: string): number {
+      switch (freq) {
+        case 'weekly': return (amount * 52) / 12;
+        case 'biweekly': return (amount * 26) / 12;
+        case 'twice_monthly': return amount * 2;
+        case 'monthly': return amount;
+        case 'quarterly': return amount / 3;
+        default: return amount;
+      }
+    }
+    for (const persona of DEMO_PERSONAS) {
+      const preTax = (persona.profile.preTaxDeductions || []).reduce(
+        (sum: number, d: any) => sum + toMonthly(d.perPayPeriod, d.frequency), 0
+      );
+      const taxes = (persona.profile.taxes || []).reduce(
+        (sum: number, t: any) => sum + toMonthly(t.perPayPeriod, t.frequency), 0
+      );
+      const postTax = (persona.profile.postTaxDeductions || []).reduce(
+        (sum: number, d: any) => sum + toMonthly(d.perPayPeriod, d.frequency), 0
+      );
+      expect(preTax).not.toBeNaN();
+      expect(taxes).not.toBeNaN();
+      expect(postTax).not.toBeNaN();
+    }
+  });
 });
 
 // ─── Broke College Student ──────────────────────────────────────────────────
