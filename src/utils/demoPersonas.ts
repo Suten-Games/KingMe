@@ -46,6 +46,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -88,6 +89,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -147,6 +149,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', amount: 185, type: 'state' },
       ],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -214,6 +217,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', amount: 450, type: 'state' },
       ],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -272,6 +276,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', amount: 350, type: 'state' },
       ],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -328,6 +333,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: true, walletDeclined: true, localBackupDone: true },
     },
   },
   {
@@ -385,6 +391,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
     },
   },
 ];

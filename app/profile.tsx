@@ -142,6 +142,9 @@ export default function ProfileScreen() {
       AsyncStorage.setItem('_demo_persona_id', persona.id),
     ]);
     invalidateDemoCache(); // ensure auto-save picks up new demo flag
+    // Reset store fully before loading new persona to prevent stale data
+    resetStore();
+    useStore.setState({ _isLoaded: true });
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     setActivePersona(persona.id);
     setIsDemoMode(true);
@@ -184,19 +187,22 @@ export default function ProfileScreen() {
       'This will clear all your data and restart onboarding. Are you sure?',
       async () => {
         try {
-          // 1. Navigate away first so the user doesn't see a blank screen
-          router.replace('/onboarding/intro');
-
-          // 2. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
+          // 1. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
           await AsyncStorage.clear();
           log('[RESET] AsyncStorage cleared');
 
-          // 3. Reset zustand store to initial state
+          // 2. Reset zustand store but keep _isLoaded true so root layout
+          //    doesn't revert to splash screen and block navigation
           resetStore();
+          useStore.setState({ _isLoaded: true });
           log('[RESET] Store reset');
+
+          // 3. Navigate to onboarding after store is clean
+          router.replace('/onboarding/intro');
         } catch (err) {
           logError('[RESET] Error during reset:', err);
           resetStore();
+          useStore.setState({ _isLoaded: true });
           try { router.replace('/onboarding/intro'); } catch {}
         }
       }

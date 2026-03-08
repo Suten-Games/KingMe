@@ -4,7 +4,7 @@
 // Swipeable pages: Why → How it works → Levels → Features → Security → Demo
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Dimensions, Platform, Image, ActivityIndicator, Alert,
@@ -39,6 +39,13 @@ export default function OnboardingIntro() {
   const importBackup = useStore(s => s.importBackup);
   const exportBackup = useStore(s => s.exportBackup);
 
+  // Clean URL on web so visitors see kingme.money instead of /onboarding/intro
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
   const handleTryPersona = async (persona: DemoPersona) => {
     try {
       // Preserve wallet that was connected on page 1
@@ -49,6 +56,11 @@ export default function OnboardingIntro() {
       await AsyncStorage.setItem('_demo_saved_profile', backup);
       await AsyncStorage.setItem('_demo_active', 'true');
       await AsyncStorage.setItem('_demo_persona_id', persona.id);
+
+      // Reset store fully before loading persona to prevent stale data
+      const resetStore = useStore.getState().resetStore;
+      resetStore();
+      useStore.setState({ _isLoaded: true });
 
       // Load persona data, keeping the user's connected wallet
       importBackup(JSON.stringify({
@@ -150,6 +162,7 @@ export default function OnboardingIntro() {
 
   return (
     <View style={st.container}>
+     <View style={st.webWrapper}>
       <TouchableOpacity style={st.skipBtn} onPress={skip}>
         <Text style={st.skipText}>Skip →</Text>
       </TouchableOpacity>
@@ -331,11 +344,11 @@ export default function OnboardingIntro() {
               Pick a persona to explore the app with real-looking data.{'\n'}No commitment — you can start your own setup anytime.
             </Text>
 
-            <View style={{ width: '100%', gap: 8, marginBottom: 20 }}>
+            <View style={{ width: '100%', gap: 10, marginBottom: 20 }}>
               {DEMO_PERSONAS.map(persona => (
                 <TouchableOpacity
                   key={persona.id}
-                  style={[st.personaCard, { borderColor: persona.color + '40' }]}
+                  style={[st.personaCard, { borderColor: persona.color + '50', borderLeftColor: persona.color, borderLeftWidth: 3 }]}
                   onPress={() => handleTryPersona(persona)}
                   activeOpacity={0.7}
                 >
@@ -344,7 +357,9 @@ export default function OnboardingIntro() {
                     <Text style={[st.personaName, { color: persona.color }]}>{persona.name}</Text>
                     <Text style={st.personaDesc}>{persona.description}</Text>
                   </View>
-                  <Text style={{ color: '#555', fontSize: 14 }}>{'\u203A'}</Text>
+                  <View style={[st.personaTryBtn, { backgroundColor: persona.color + '20', borderColor: persona.color + '40' }]}>
+                    <Text style={[st.personaTryText, { color: persona.color }]}>Try →</Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -379,6 +394,7 @@ export default function OnboardingIntro() {
       </View>
 
       <WalletPickerModal />
+     </View>
     </View>
   );
 }
@@ -433,7 +449,13 @@ function SecurityItem({ emoji, title, desc }: { emoji: string; title: string; de
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: T.bg },
+  container: { flex: 1, backgroundColor: T.bg, alignItems: 'center' },
+  webWrapper: {
+    flex: 1,
+    width: Platform.OS === 'web' ? PAGE_WIDTH : '100%',
+    maxWidth: Platform.OS === 'web' ? PAGE_WIDTH : undefined,
+    overflow: 'hidden',
+  } as any,
 
   skipBtn: {
     position: 'absolute', top: 54, right: 20, zIndex: 10,
@@ -556,6 +578,11 @@ const st = StyleSheet.create({
   personaEmoji: { fontSize: 28 },
   personaName: { fontSize: 15, fontWeight: '800' },
   personaDesc: { fontSize: 11, color: T.textMuted, marginTop: 2 },
+  personaTryBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1,
+  },
+  personaTryText: { fontSize: 12, fontWeight: '800' },
 
   ctaDivider: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', marginBottom: 16 },
   ctaDividerLine: { flex: 1, height: 1, backgroundColor: T.border },
