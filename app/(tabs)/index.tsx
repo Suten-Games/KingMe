@@ -235,6 +235,14 @@ export default function HomeScreen() {
       exportedAt: new Date().toISOString(),
       profile: { ...persona.profile, onboardingComplete: true },
     }));
+    // Give high_earner Pro access for demo purposes
+    if (persona.id === 'high_earner') {
+      await AsyncStorage.setItem('paid_addons_unlocked', JSON.stringify(['pro_bundle']));
+      useStore.getState().checkProStatus();
+    } else {
+      await AsyncStorage.setItem('paid_addons_unlocked', JSON.stringify([]));
+      useStore.setState({ isPro: false });
+    }
     await seedDemoWatchlist(persona);
     setActivePersona(persona.id);
     setIsDemoMode(true);

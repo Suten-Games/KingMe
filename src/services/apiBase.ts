@@ -12,5 +12,6 @@ export function getApiBase(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     return window.location.origin;
   }
-  return 'http://localhost:3000';
+  console.warn('[apiBase] EXPO_PUBLIC_BACKUP_API_URL not set — API calls will fail');
+  return '';
 }

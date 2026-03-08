@@ -444,6 +444,10 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       debts: [],
       desires: [
         { id: 'des_demo_1', name: 'Beach House', estimatedCost: 500000, priority: 'low' },
+        { id: 'des_demo_2', name: 'Porsche 911', estimatedCost: 120000, priority: 'medium' },
+        { id: 'des_demo_3', name: 'Family Vacation (Japan)', estimatedCost: 15000, priority: 'high' },
+        { id: 'des_demo_4', name: 'Home Theater', estimatedCost: 25000, priority: 'low' },
+        { id: 'des_demo_5', name: 'Angel Investment Fund', estimatedCost: 100000, priority: 'medium' },
       ],
       driftTrades: [],
       dailyExpenses: [],

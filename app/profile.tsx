@@ -148,6 +148,14 @@ function ProfileScreenInner() {
     invalidateDemoCache(); // ensure auto-save picks up new demo flag
     // Atomic reset + import in one set() call to prevent intermediate re-render crashes
     loadPersonaProfile(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
+    // Give high_earner Pro access for demo purposes
+    if (persona.id === 'high_earner') {
+      await AsyncStorage.setItem('paid_addons_unlocked', JSON.stringify(['pro_bundle']));
+      useStore.getState().checkProStatus();
+    } else {
+      await AsyncStorage.setItem('paid_addons_unlocked', JSON.stringify([]));
+      useStore.setState({ isPro: false });
+    }
     await seedDemoWatchlist(persona);
     setActivePersona(persona.id);
     setIsDemoMode(true);
