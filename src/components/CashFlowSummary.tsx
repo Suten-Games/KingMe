@@ -1,6 +1,7 @@
 // app/components/CashFlowSummary.tsx - Cash flow analysis component
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useState, useEffect, type ReactNode } from 'react';
+import { useRouter } from 'expo-router';
 import { useStore } from '../../src/store/useStore';
 import type { OverallCashFlow } from '../../src/services/cashflow';
 
@@ -9,7 +10,14 @@ interface CashFlowSummaryProps {
   children?: ReactNode;
 }
 
+function getRecRoute(rec: string): string | null {
+  if (rec.includes('not assigned to an account')) return '/(tabs)/obligations';
+  if (rec.includes('spending estimate') || rec.includes('orange spending card')) return null; // handled by SpendingGapAlert below
+  return null;
+}
+
 export default function CashFlowSummary({ cashFlow, children }: CashFlowSummaryProps) {
+  const router = useRouter();
   const defaultExpanded = useStore((s) => s.settings?.defaultExpandAssetSections ?? false);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -162,9 +170,17 @@ export default function CashFlowSummary({ cashFlow, children }: CashFlowSummaryP
           {/* Recommendations */}
           {cashFlow.recommendations.length > 0 && (
             <View style={styles.recommendationsBox}>
-              {cashFlow.recommendations.map((rec, i) => (
-                <Text key={i} style={styles.recommendationText}>💡 {rec}</Text>
-              ))}
+              {cashFlow.recommendations.map((rec, i) => {
+                const route = getRecRoute(rec);
+                if (route) {
+                  return (
+                    <TouchableOpacity key={i} onPress={() => router.push(route as any)} activeOpacity={0.7}>
+                      <Text style={[styles.recommendationText, styles.recommendationLink]}>💡 {rec} →</Text>
+                    </TouchableOpacity>
+                  );
+                }
+                return <Text key={i} style={styles.recommendationText}>💡 {rec}</Text>;
+              })}
             </View>
           )}
 
@@ -240,4 +256,5 @@ const styles = StyleSheet.create({
 
   recommendationsBox: { marginTop: 12, gap: 6 },
   recommendationText: { fontSize: 13, color: '#a0a0a0', lineHeight: 18 },
+  recommendationLink: { color: '#60a5fa', textDecorationLine: 'underline' },
 });

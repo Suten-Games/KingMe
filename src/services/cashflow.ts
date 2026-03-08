@@ -458,7 +458,7 @@ export function analyzeAllAccounts(
   }
 
   if (unassignedObligations.length > 0) {
-    recommendations.unshift(`⚠️ ${unassignedObligations.length} obligation(s) not assigned to an account`);
+    recommendations.unshift(`⚠️ ${unassignedObligations.length} obligation(s) not assigned to a bank account — tap to fix`);
   }
 
   return {
