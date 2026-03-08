@@ -12,6 +12,7 @@ interface UserProfile {
   incomeSources: IncomeSource[];
   obligations: Obligation[];
   debts: Debt[];
+  bankAccounts?: Array<{ id: string; name: string; type: string; currentBalance: number; institution: string }>;
   bankTransactions?: BankTransaction[];
   investmentTheses?: InvestmentThesis[];
   driftTrades?: DriftTrade[];
@@ -166,6 +167,16 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
     profile.kaminoRates || {}
   );
   if (kaminoScenario) scenarios.push(kaminoScenario);
+
+  // 15. FRACTIONAL DIVIDEND STOCKS — for users with bank accounts but no stocks
+  const fractionalScenario = generateFractionalStockScenario(
+    assets,
+    profile.bankAccounts || [],
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (fractionalScenario) scenarios.push(fractionalScenario);
 
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
@@ -2100,6 +2111,87 @@ function generateKaminoLendingScenario(
     steps: opportunities.slice(0, 5).map(o =>
       `Deposit ${o.symbol} ($${Math.round(o.asset.value).toLocaleString()}) → ${o.kaminoApy.toFixed(1)}% APY on Kamino`
     ),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 15. FRACTIONAL DIVIDEND STOCKS — for users with bank accounts but no stocks
+// ═══════════════════════════════════════════════════════════════
+
+function generateFractionalStockScenario(
+  assets: Asset[],
+  bankAccounts: Array<{ id: string; name: string; type: string; currentBalance: number; institution: string }>,
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Only show if user has NO stock/brokerage assets
+  const hasStocks = assets.some(a => a.type === 'stocks' || a.type === 'brokerage');
+  if (hasStocks) return null;
+
+  // Need at least one bank account with some balance
+  const totalBankBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+  if (totalBankBalance < 25) return null;
+
+  // Find the best bank account to invest from (Cash App, Robinhood, etc. support fractional)
+  const fractionalApps = ['cash app', 'robinhood', 'webull', 'sofi', 'public'];
+  const fractionalAccount = bankAccounts.find(a =>
+    fractionalApps.some(app => a.institution.toLowerCase().includes(app) || a.name.toLowerCase().includes(app))
+  );
+
+  // Suggest investing a small amount — even $5-25/week adds up
+  const weeklyAmount = totalBankBalance >= 200 ? 10 : 5;
+  const monthlyAmount = weeklyAmount * 4;
+  const annualInvestment = monthlyAmount * 12;
+
+  // Popular dividend stocks for beginners
+  const picks = [
+    { symbol: 'SCHD', name: 'Schwab Dividend ETF', yield: 3.5 },
+    { symbol: 'KO', name: 'Coca-Cola', yield: 3.1 },
+    { symbol: 'AAPL', name: 'Apple', yield: 0.5 },
+  ];
+  const primaryPick = picks[0];
+
+  // After 1 year of investing
+  const yearOneValue = annualInvestment;
+  const yearOneDividends = yearOneValue * (primaryPick.yield / 100);
+  const monthlyDividends = yearOneDividends / 12;
+
+  const newMonthlyIncome = currentMonthlyIncome + monthlyDividends;
+  const newFreedom = monthlyNeeds > 0 ? newMonthlyIncome / monthlyNeeds : 0;
+
+  const appName = fractionalAccount?.institution || fractionalAccount?.name || 'Cash App';
+  const hasApp = !!fractionalAccount;
+
+  return {
+    id: 'start_fractional',
+    type: 'start_fractional',
+    title: `Start buying $${weeklyAmount}/week in dividend stocks`,
+    description: hasApp
+      ? `${appName} supports fractional shares — buy ${primaryPick.symbol} (${primaryPick.name}) for ${primaryPick.yield}% dividends`
+      : `Open Cash App Investing and buy fractional shares of ${primaryPick.symbol} for ${primaryPick.yield}% dividends`,
+    emoji: '📊',
+    difficulty: 'easy',
+    timeframe: 'This week',
+    changes: {
+      addAssets: [{
+        type: 'stocks',
+        name: primaryPick.name,
+        value: yearOneValue,
+        annualIncome: yearOneDividends,
+        metadata: { symbol: primaryPick.symbol, dividendYield: primaryPick.yield },
+      }],
+    },
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: monthlyDividends,
+      annualIncomeDelta: yearOneDividends,
+      investmentRequired: annualInvestment,
+    },
   };
 }
 

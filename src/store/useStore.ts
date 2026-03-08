@@ -1533,6 +1533,7 @@ export const useStore = create<AppState>((set, get) => ({
       incomeSources: state.income.sources || [],
       obligations: state.obligations,
       debts: state.debts,
+      bankAccounts: state.bankAccounts || [],
       bankTransactions: state.bankTransactions || [],
       investmentTheses: state.investmentTheses || [],
       driftTrades: state.driftTrades || [],
