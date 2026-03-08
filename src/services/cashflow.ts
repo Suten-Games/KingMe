@@ -352,16 +352,15 @@ export function analyzeAllAccounts(
   const liquidNonRetirementAssets = assets
     .filter(a => {
       // Exclude retirement accounts (401k, IRA, etc.)
-      if (a.metadata?.type === 'retirement') return false;
+      if (a.metadata?.type === 'retirement' || a.type === 'retirement') return false;
+      // Exclude illiquid "other" assets (cars, collectibles, etc.)
+      if (a.type === 'other') return false;
+      // Exclude real estate from liquid count (handled separately)
+      if (a.type === 'real_estate') return false;
       return true;
     })
     .reduce((sum, a) => {
       const val = a.value || 0;
-      if (a.type === 'real_estate') {
-        const m = a.metadata as RealEstateAsset;
-        const mortgage = (m?.mortgageBalance || 0) > 0 ? m!.mortgageBalance! : totalMortgageBalance;
-        return sum + Math.max(0, val - mortgage);
-      }
       return sum + val;
     }, 0);
 

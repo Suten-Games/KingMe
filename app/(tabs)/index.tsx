@@ -336,8 +336,8 @@ export default function HomeScreen() {
     const runwayBurn = cashFlow.totalMonthlyOut;
 
     // Freedom: liquidAssets / (dailyNeeds - dailyAssetIncome)
-    // Freedom liquid = crypto + defi + stocks + retirement (after penalty)
-    const freedomLiquid = cryptoTotal + defiTotal + stockTotal + retirementAfterPenalty;
+    // Freedom liquid = bank accounts + crypto + defi + stocks + retirement (after penalty)
+    const freedomLiquid = bankTotal + cryptoTotal + defiTotal + stockTotal + retirementAfterPenalty;
     const freedomDailyBurn = freedom.dailyNeeds - freedom.dailyAssetIncome;
     const freedomMonthlyBurn = freedomDailyBurn * 30;
 

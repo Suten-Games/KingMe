@@ -180,9 +180,16 @@ export const TOKEN_REGISTRY: Record<string, TokenInfo> = {
   WIF: {
     symbol: 'WIF',
     name: 'dogwifhat',
-    logoURI: 'https://bafkreibk3covs5ltyqxa272uodhber6ksmbua5efpjg5c77h4jnfzcea.ipfs.nftstorage.link',
+    logoURI: 'https://assets.coingecko.com/coins/images/33566/small/dogwifhat.jpg',
     mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
     coingeckoId: 'dogwifcoin',
+  },
+  FARTCOIN: {
+    symbol: 'FARTCOIN',
+    name: 'Fartcoin',
+    logoURI: 'https://assets.coingecko.com/coins/images/41551/small/fartcoin.jpg',
+    mint: '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump',
+    coingeckoId: 'fartcoin',
   },
   RENDER: {
     symbol: 'RENDER',

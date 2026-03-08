@@ -92,8 +92,8 @@ export function calculateAnnualDebtService(profile: UserProfile): number {
  * Calculate total liquid assets (what you can sell for cash)
  * Includes retirement accounts with early-withdrawal penalty applied.
  */
-export function calculateLiquidAssets(assets: Asset[]): number {
-  return assets.reduce((total, asset) => {
+export function calculateLiquidAssets(assets: Asset[], bankBalance: number = 0): number {
+  const assetLiquid = assets.reduce((total, asset) => {
     if (asset.type === 'crypto' || asset.type === 'defi' || asset.type === 'stocks') {
       return total + asset.value;
     }
@@ -104,8 +104,10 @@ export function calculateLiquidAssets(assets: Asset[]): number {
       const penalty = isRoth ? 0.10 : 0.35; // Roth: 10% on earnings; Traditional: 10% penalty + ~25% tax
       return total + asset.value * (1 - penalty);
     }
+    // Exclude illiquid assets (cars, collectibles, real estate)
     return total;
   }, 0);
+  return assetLiquid + bankBalance;
 }
 
 /**
@@ -149,7 +151,7 @@ export function getFreedomState(days: number): FreedomState {
 /**
  * Main freedom calculation function
  */
-export function calculateFreedom(profile: UserProfile): FreedomResult {
+export function calculateFreedom(profile: UserProfile, bankBalance?: number): FreedomResult {
   const assetIncome = calculateAssetIncome(profile.assets);
   const totalObligations = calculateAnnualObligations(profile);
   const totalDesires = calculateAnnualDesires(profile);
@@ -173,8 +175,8 @@ export function calculateFreedom(profile: UserProfile): FreedomResult {
     days = Infinity;
     isKinged = true;
   } else {
-    // Calculate runway based on liquid assets
-    const liquidAssets = calculateLiquidAssets(profile.assets);
+    // Calculate runway based on liquid assets (includes bank accounts)
+    const liquidAssets = calculateLiquidAssets(profile.assets, bankBalance);
     const dailyBurn = dailyNeeds - dailyAssetIncome;
 
     if (dailyBurn <= 0 || liquidAssets <= 0) {

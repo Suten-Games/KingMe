@@ -2528,7 +2528,10 @@ export const useFreedomScore = () => {
     investmentTheses: state.investmentTheses,
   }));
 
-  return calculateFreedom(profile as UserProfile);
+  const bankAccounts = useStore((state) => state.bankAccounts);
+  const bankTotal = bankAccounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+
+  return calculateFreedom(profile as UserProfile, bankTotal);
 };
 
 // Auto-save on any state change (debounced)
