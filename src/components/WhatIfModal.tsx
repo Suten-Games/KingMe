@@ -25,7 +25,7 @@ export default function WhatIfModal({
 }: WhatIfModalProps) {
   if (!scenario) return null;
 
-  const { impact, emoji, title, description, reasoning, risks, steps } = scenario;
+  const { impact, emoji, title, description, reasoning = '', risks = [], steps = [] } = scenario;
   const onChain = isOnChainScenario(scenario.type);
 
   const freedomGainMonths = impact.freedomDelta;

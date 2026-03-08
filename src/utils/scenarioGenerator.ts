@@ -2192,6 +2192,18 @@ function generateFractionalStockScenario(
       annualIncomeDelta: yearOneDividends,
       investmentRequired: annualInvestment,
     },
+    reasoning: `Even $${weeklyAmount}/week adds up. After a year you'd have ~$${annualInvestment} invested, earning ~$${yearOneDividends.toFixed(0)}/year in dividends. Fractional shares let you buy big-name stocks with small amounts — no need to save up for a full share.`,
+    risks: [
+      'Stock prices fluctuate — your balance will go up and down',
+      'Dividends are not guaranteed and can be cut',
+      `$${weeklyAmount}/week is small but consistency matters more than amount`,
+    ],
+    steps: [
+      hasApp ? `Open ${appName} and go to Investing` : 'Download Cash App or Robinhood (both support fractional shares)',
+      `Search for ${primaryPick.symbol} (${primaryPick.name})`,
+      `Set up a recurring buy of $${weeklyAmount}/week`,
+      'Turn on dividend reinvestment (DRIP) so dividends buy more shares automatically',
+    ],
   };
 }
 
