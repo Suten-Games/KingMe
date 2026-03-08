@@ -29,23 +29,32 @@ import * as FileSystem from 'expo-file-system';
 type ViewMode = 'transactions' | 'budget' | 'recurring';
 
 // ─── Institution logos ─────────────────────────────────────────────────────────
+function bankLogo(domain: string): string {
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+}
+
 const INSTITUTION_LOGOS: Record<string, { uri: string; bg: string }> = {
-  'Cash App':   { uri: 'https://logo.clearbit.com/cash.app',       bg: '#00D632' },
-  'Chase':      { uri: 'https://logo.clearbit.com/chase.com',      bg: '#117ACA' },
-  'SoFi':       { uri: 'https://logo.clearbit.com/sofi.com',       bg: '#6933FF' },
-  'Wells Fargo':{ uri: 'https://logo.clearbit.com/wellsfargo.com', bg: '#D71E28' },
-  'Bank of America': { uri: 'https://logo.clearbit.com/bankofamerica.com', bg: '#012169' },
-  'Capital One':{ uri: 'https://logo.clearbit.com/capitalone.com', bg: '#004977' },
-  'Ally':       { uri: 'https://logo.clearbit.com/ally.com',       bg: '#4F2683' },
-  'Discover':   { uri: 'https://logo.clearbit.com/discover.com',   bg: '#FF6600' },
-  'Chime':      { uri: 'https://logo.clearbit.com/chime.com',      bg: '#00D54B' },
-  'USAA':       { uri: 'https://logo.clearbit.com/usaa.com',       bg: '#003D6B' },
-  'Navy Federal': { uri: 'https://logo.clearbit.com/navyfederal.org', bg: '#003468' },
-  'PNC':        { uri: 'https://logo.clearbit.com/pnc.com',        bg: '#F58025' },
-  'TD Bank':    { uri: 'https://logo.clearbit.com/td.com',         bg: '#2D8B2D' },
-  'US Bank':    { uri: 'https://logo.clearbit.com/usbank.com',     bg: '#D71E28' },
-  'Citi':       { uri: 'https://logo.clearbit.com/citi.com',       bg: '#003B70' },
-  'Citibank':   { uri: 'https://logo.clearbit.com/citi.com',       bg: '#003B70' },
+  'Cash App':   { uri: bankLogo('cash.app'),           bg: '#00D632' },
+  'Chase':      { uri: bankLogo('chase.com'),           bg: '#117ACA' },
+  'SoFi':       { uri: bankLogo('sofi.com'),            bg: '#6933FF' },
+  'Wells Fargo':{ uri: bankLogo('wellsfargo.com'),      bg: '#D71E28' },
+  'Bank of America': { uri: bankLogo('bankofamerica.com'), bg: '#012169' },
+  'Capital One':{ uri: bankLogo('capitalone.com'),      bg: '#004977' },
+  'Ally':       { uri: bankLogo('ally.com'),            bg: '#4F2683' },
+  'Discover':   { uri: bankLogo('discover.com'),        bg: '#FF6600' },
+  'Chime':      { uri: bankLogo('chime.com'),           bg: '#00D54B' },
+  'USAA':       { uri: bankLogo('usaa.com'),            bg: '#003D6B' },
+  'Navy Federal': { uri: bankLogo('navyfederal.org'),   bg: '#003468' },
+  'PNC':        { uri: bankLogo('pnc.com'),             bg: '#F58025' },
+  'TD Bank':    { uri: bankLogo('td.com'),              bg: '#2D8B2D' },
+  'US Bank':    { uri: bankLogo('usbank.com'),          bg: '#D71E28' },
+  'Citi':       { uri: bankLogo('citi.com'),            bg: '#003B70' },
+  'Citibank':   { uri: bankLogo('citi.com'),            bg: '#003B70' },
+  'Fidelity':   { uri: bankLogo('fidelity.com'),        bg: '#4A8C2A' },
+  'Schwab':     { uri: bankLogo('schwab.com'),          bg: '#00A0DF' },
+  'Marcus':     { uri: bankLogo('marcus.com'),          bg: '#0D6FBE' },
+  'Mercury':    { uri: bankLogo('mercury.com'),         bg: '#1C1C1E' },
+  'Vanguard':   { uri: bankLogo('vanguard.com'),        bg: '#822529' },
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

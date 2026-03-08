@@ -110,6 +110,8 @@ export default function RootLayout() {
           <Stack.Screen name="protocol/[name]" options={{ headerShown: false }} />
           <Stack.Screen name="net-worth" options={{ headerShown: false }} />
           <Stack.Screen name="wallet-setup" options={{ headerShown: false }} />
+          <Stack.Screen name="paycheck" options={{ title: 'Paycheck' }} />
+          <Stack.Screen name="paycheck-breakdown" options={{ headerShown: false }} />
         </Stack>
       </WalletProvider>
     </PrivyWrapper>

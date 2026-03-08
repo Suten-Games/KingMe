@@ -6,7 +6,6 @@ import { useStore, useFreedomScore } from '../../src/store/useStore';
 import type { Obligation, ObligationFrequency } from '../../src/types';
 import { obligationMonthlyAmount } from '../../src/types';
 import { BankTransactionCategory, TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '../../src/types/bankTransactionTypes';
-import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
@@ -303,15 +302,53 @@ export default function ObligationsScreen() {
   return (
     <View style={s.container}>
       <ScrollView style={s.scrollView}>
-        <PaymentStatusBanner status={paymentStatus} onShowCalendar={() => setShowCalendar(true)} />
-
-        {/* Summary */}
+        {/* Summary with calendar toggle */}
         <LinearGradient colors={T.gradients.gold} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[s.summaryBox, { borderColor: T.gold + '80' }]}>
-          <Text style={s.summaryLabel}>Total Monthly Obligations</Text>
-          <Text style={s.summaryValue}>${monthlyTotal.toLocaleString()}</Text>
-          <Text style={s.summaryYearly}>${(monthlyTotal * 12).toLocaleString()}/year</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.summaryLabel}>Total Monthly Obligations</Text>
+              <Text style={s.summaryValue}>${monthlyTotal.toLocaleString()}</Text>
+              <Text style={s.summaryYearly}>${(monthlyTotal * 12).toLocaleString()}/year</Text>
+            </View>
+            {obligations.length > 0 && (
+              <TouchableOpacity
+                style={{ backgroundColor: '#00000020', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#00000020' }}
+                onPress={() => setShowCalendar(!showCalendar)}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>📅 {showCalendar ? 'Hide' : 'Calendar'}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {/* Payment progress inline */}
+          {obligations.length > 0 && (
+            <View style={{ marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 11, color: '#ffffff90', fontWeight: '700' }}>
+                  {paymentStatus.obligationsPaid} of {paymentStatus.obligationsTotal} paid
+                </Text>
+                {paymentStatus.overdue.length > 0 && (
+                  <Text style={{ fontSize: 11, color: '#ff6b6b', fontWeight: '700' }}>⚠️ {paymentStatus.overdue.length} overdue</Text>
+                )}
+                {paymentStatus.dueThisWeek.length > 0 && paymentStatus.overdue.length === 0 && (
+                  <Text style={{ fontSize: 11, color: '#60a5fa', fontWeight: '700' }}>⏰ {paymentStatus.dueThisWeek.length} due this week</Text>
+                )}
+              </View>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00000030', overflow: 'hidden' }}>
+                <View style={{ height: '100%', borderRadius: 2, backgroundColor: '#fff', width: `${paymentStatus.obligationsTotal > 0 ? (paymentStatus.obligationsPaid / paymentStatus.obligationsTotal) * 100 : 0}%` }} />
+              </View>
+            </View>
+          )}
         </LinearGradient>
+
+        {/* Inline calendar (expandable) */}
+        {showCalendar && (
+          <View style={{ marginBottom: 16 }}>
+            <PaymentCalendar year={currentYear} month={currentMonth} events={paymentEvents}
+              onDayPress={(day) => { setSelectedDay(day); }} />
+          </View>
+        )}
 
         {/* List */}
         <View style={s.section}>
@@ -549,17 +586,6 @@ export default function ObligationsScreen() {
             );
             })
           )}
-
-          {/* Calendar Modal */}
-          <Modal visible={showCalendar} animationType="slide" transparent>
-            <View style={s.modalOverlay}>
-              <View style={s.modalContent}>
-                <PaymentCalendar year={currentYear} month={currentMonth} events={paymentEvents}
-                  onDayPress={(day) => { setSelectedDay(day); setShowCalendar(false); }} />
-                <TouchableOpacity onPress={() => setShowCalendar(false)}><Text style={{ color: T.gold, fontFamily: T.fontSemiBold, textAlign: 'center', padding: 16 }}>Close</Text></TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
 
           {/* Day Detail Modal */}
           <Modal visible={selectedDay !== null} animationType="slide" transparent>

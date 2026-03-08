@@ -22,7 +22,7 @@ import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { ExportIcon, ImportIcon, CloudBackupIcon, CloudRestoreIcon, CrownIcon } from '../src/components/TabIcons';
-import { DEMO_PERSONAS, type DemoPersona } from '../src/utils/demoPersonas';
+import { DEMO_PERSONAS, seedDemoWatchlist, type DemoPersona } from '../src/utils/demoPersonas';
 import { log, warn, error as logError } from '@/utils/logger';
 
 /** Cross-platform confirm — Alert.alert button callbacks don't fire on web */
@@ -146,9 +146,11 @@ export default function ProfileScreen() {
     resetStore();
     useStore.setState({ _isLoaded: true });
     importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
+    await seedDemoWatchlist(persona);
     setActivePersona(persona.id);
     setIsDemoMode(true);
     setShowDemoModal(false);
+    router.replace('/(tabs)');
   };
 
   const handleExitDemo = async () => {

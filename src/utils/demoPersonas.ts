@@ -1,6 +1,15 @@
 // src/utils/demoPersonas.ts
 // Preset financial profiles for demo/sandbox mode
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export interface DemoWatchlistItem {
+  mint: string;
+  symbol: string;
+  addedPrice: number;
+  notes: string;
+}
+
 export interface DemoPersona {
   id: string;
   name: string;
@@ -8,6 +17,7 @@ export interface DemoPersona {
   description: string;
   color: string;
   profile: any; // Partial UserProfile
+  demoWatchlist?: DemoWatchlistItem[];
 }
 
 export const DEMO_PERSONAS: DemoPersona[] = [
@@ -26,9 +36,14 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       },
       bankAccounts: [
         { id: 'ba_demo_1', name: 'Student Checking', type: 'checking', currentBalance: 342, institution: 'Chase', isPrimaryIncome: true },
+        { id: 'ba_demo_2', name: 'Cash App', type: 'checking', currentBalance: 47, institution: 'Cash App', isPrimaryIncome: false },
       ],
+      wallets: ['DemoStudentWa11etXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'],
       assets: [
         { id: 'a_demo_1', type: 'other', name: 'Beat-up Honda Civic', value: 3500, annualIncome: 0, metadata: {} },
+        { id: 'a_demo_2', type: 'crypto', name: 'XRP', value: 180, annualIncome: 0, metadata: { symbol: 'XRP', quantity: 75, exchange: 'Coinbase' } },
+        { id: 'a_demo_3', type: 'crypto', name: 'dogwifhat', value: 45, annualIncome: 0, metadata: { symbol: 'WIF', quantity: 85, tokenMint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm' } },
+        { id: 'a_demo_4', type: 'crypto', name: 'Fartcoin', value: 22, annualIncome: 0, metadata: { symbol: 'FARTCOIN', quantity: 30, tokenMint: '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump' } },
       ],
       obligations: [
         { id: 'ob_demo_1', name: 'Rent (shared)', payee: 'Landlord', amount: 650, category: 'housing', isRecurring: true, dueDate: 1 },
@@ -39,6 +54,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       debts: [
         { id: 'd_demo_1', name: 'Federal Student Loan', principal: 28000, interestRate: 0.055, monthlyPayment: 0, minimumPayment: 0, dueDate: 0, balance: 28000 },
         { id: 'd_demo_2', name: 'Credit Card', principal: 2100, interestRate: 0.249, monthlyPayment: 65, minimumPayment: 35, dueDate: 22, balance: 2100 },
+        { id: 'd_demo_3', name: 'Afterpay', principal: 240, interestRate: 0, monthlyPayment: 60, minimumPayment: 60, dueDate: 10, balance: 240, payee: 'Afterpay' },
       ],
       desires: [],
       driftTrades: [],
@@ -46,8 +62,12 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true },
     },
+    demoWatchlist: [
+      { mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', symbol: 'WIF', addedPrice: 0.32, notes: 'Dog meme coin, bought the dip' },
+      { mint: '9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump', symbol: 'FARTCOIN', addedPrice: 0.45, notes: 'Degen play, small bag' },
+    ],
   },
   {
     id: 'paycheck_to_paycheck',
@@ -395,3 +415,37 @@ export const DEMO_PERSONAS: DemoPersona[] = [
     },
   },
 ];
+
+/** Seed AsyncStorage watchlist data for a demo persona */
+export async function seedDemoWatchlist(persona: DemoPersona): Promise<void> {
+  if (!persona.demoWatchlist || persona.demoWatchlist.length === 0) {
+    // Clear watchlist for personas without one
+    await AsyncStorage.removeItem('price_watchlist');
+    await AsyncStorage.removeItem('watchlist_extended');
+    return;
+  }
+
+  const watchlist = persona.demoWatchlist.map(item => ({
+    mint: item.mint,
+    symbol: item.symbol,
+    addedAt: Date.now() - 7 * 86400000, // pretend added a week ago
+    notes: item.notes,
+  }));
+
+  const extData: Record<string, any> = {};
+  for (const item of persona.demoWatchlist) {
+    extData[item.mint] = {
+      mint: item.mint,
+      addedPrice: item.addedPrice,
+      entryTarget1: item.addedPrice * 0.8,
+      entryTarget2: item.addedPrice * 0.6,
+      maxAllocationPct: 5,
+      takeProfitPct: 100,
+      stopLossPct: -25,
+      notes: item.notes,
+    };
+  }
+
+  await AsyncStorage.setItem('price_watchlist', JSON.stringify(watchlist));
+  await AsyncStorage.setItem('watchlist_extended', JSON.stringify(extData));
+}

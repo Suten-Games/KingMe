@@ -456,19 +456,21 @@ export default function AssetsScreen() {
         {/* Portfolio Summary */}
         <PortfolioSummary totalValue={totalValue} totalIncome={totalIncome} />
 
-        {/* Quick links */}
-        <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4c43010', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#f4c43020', gap: 10 }}
-          onPress={() => router.push('/watchlist')}
-          activeOpacity={0.7}
-        >
-          <CrownIcon color="#f4c430" size={20} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#f4c430' }}>Coin Watchlist</Text>
-            <Text style={{ fontSize: 12, color: '#888' }}>Track coins for good entries</Text>
-          </View>
-          <Text style={{ fontSize: 16, color: '#f4c43060' }}>→</Text>
-        </TouchableOpacity>
+        {/* Quick links — watchlist unlocked by connecting a wallet */}
+        {wallets.length > 0 && (
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f4c43010', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#f4c43020', gap: 10 }}
+            onPress={() => router.push('/watchlist')}
+            activeOpacity={0.7}
+          >
+            <CrownIcon color="#f4c430" size={20} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#f4c430' }}>Coin Watchlist</Text>
+              <Text style={{ fontSize: 12, color: '#888' }}>Track coins for good entries</Text>
+            </View>
+            <Text style={{ fontSize: 16, color: '#f4c43060' }}>→</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Add Asset Button */}
         <AddAssetButton onPress={() => setShowAddModal(true)} />

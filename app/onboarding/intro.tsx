@@ -20,7 +20,7 @@ import { useStore } from '../../src/store/useStore';
 import WalletPickerModal from '../../src/components/WalletPickerModal';
 import { T } from '../../src/theme';
 import { log, warn, error as logError } from '@/utils/logger';
-import { DEMO_PERSONAS, type DemoPersona } from '../../src/utils/demoPersonas';
+import { DEMO_PERSONAS, seedDemoWatchlist, type DemoPersona } from '../../src/utils/demoPersonas';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -72,6 +72,9 @@ export default function OnboardingIntro() {
           wallets: currentWallets.length > 0 ? currentWallets : persona.profile.wallets,
         },
       }));
+
+      // Seed watchlist data if persona has one
+      await seedDemoWatchlist(persona);
 
       router.replace('/(tabs)');
     } catch (err: any) {

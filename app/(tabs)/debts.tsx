@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import { useRouter } from 'expo-router';
 import type { Debt, BankAccount  } from '../../src/types';
-import PaymentStatusBanner from '../../src/components/PaymentStatusBanner';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
@@ -352,24 +351,29 @@ export default function DebtsScreen() {
 
         {normalizedDebts.length > 0 && (
           <>
-            {/* ── Payment Status Banner ─────────────────────────────── */}
-            <PaymentStatusBanner
-              status={paymentStatus}
-              onShowCalendar={() => setShowCalendar(true)}
-            />
-
-            {/* ── Summary ───────────────────────────────────────────── */}
+            {/* ── Summary with calendar toggle ────────────────────── */}
             <LinearGradient colors={T.gradients.red} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={[s.summaryBox, { borderColor: T.redBright + '80' }]}>
-              <View style={s.summaryRow}>
-                <View style={s.summaryItem}>
-                  <Text style={s.summaryLabel}>Total Debt</Text>
-                  <Text style={s.summaryDebt}>${totalDebt.toLocaleString()}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <View style={s.summaryRow}>
+                    <View style={s.summaryItem}>
+                      <Text style={s.summaryLabel}>Total Debt</Text>
+                      <Text style={s.summaryDebt}>${totalDebt.toLocaleString()}</Text>
+                    </View>
+                    <View style={s.summaryItem}>
+                      <Text style={s.summaryLabel}>Monthly Payments</Text>
+                      <Text style={s.summaryPayment}>${monthlyTotal.toLocaleString()}/mo</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={s.summaryItem}>
-                  <Text style={s.summaryLabel}>Monthly Payments</Text>
-                  <Text style={s.summaryPayment}>${monthlyTotal.toLocaleString()}/mo</Text>
-                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: '#00000020', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#00000020' }}
+                  onPress={() => setShowCalendar(!showCalendar)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>📅 {showCalendar ? 'Hide' : 'Calendar'}</Text>
+                </TouchableOpacity>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryRow}>
@@ -386,7 +390,32 @@ export default function DebtsScreen() {
                   </Text>
                 </View>
               </View>
+              {/* Payment progress inline */}
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, color: '#ffffff90', fontWeight: '700' }}>
+                    {paymentStatus.debtsPaid} of {paymentStatus.debtsTotal} paid
+                  </Text>
+                  {paymentStatus.overdue.length > 0 && (
+                    <Text style={{ fontSize: 11, color: '#ff6b6b', fontWeight: '700' }}>⚠️ {paymentStatus.overdue.length} overdue</Text>
+                  )}
+                  {paymentStatus.dueThisWeek.length > 0 && paymentStatus.overdue.length === 0 && (
+                    <Text style={{ fontSize: 11, color: '#60a5fa', fontWeight: '700' }}>⏰ {paymentStatus.dueThisWeek.length} due this week</Text>
+                  )}
+                </View>
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00000030', overflow: 'hidden' }}>
+                  <View style={{ height: '100%', borderRadius: 2, backgroundColor: '#fff', width: `${paymentStatus.debtsTotal > 0 ? (paymentStatus.debtsPaid / paymentStatus.debtsTotal) * 100 : 0}%` }} />
+                </View>
+              </View>
             </LinearGradient>
+
+            {/* Inline calendar (expandable) */}
+            {showCalendar && (
+              <View style={{ marginBottom: 16 }}>
+                <PaymentCalendar year={currentYear} month={currentMonth} events={paymentEvents}
+                  onDayPress={(day) => { setSelectedDay(day); }} />
+              </View>
+            )}
 
             {unassignedCount > 0 && (
               <View style={s.unassignedBanner}>
@@ -553,21 +582,6 @@ export default function DebtsScreen() {
             })
           )}
         </View>
-
-        {/* ── Calendar Modal ─────────────────────────────────────── */}
-        <Modal visible={showCalendar} animationType="slide" transparent>
-          <View style={s.modalOverlay}>
-            <View style={s.modalContent}>
-              <PaymentCalendar
-                year={currentYear} month={currentMonth} events={paymentEvents}
-                onDayPress={(day) => { setSelectedDay(day); setShowCalendar(false); }}
-              />
-              <TouchableOpacity onPress={() => setShowCalendar(false)}>
-                <Text style={s.closeCalendarText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
 
         {/* ── Day Detail Modal ────────────────────────────────────── */}
         <Modal visible={selectedDay !== null} animationType="slide" transparent>

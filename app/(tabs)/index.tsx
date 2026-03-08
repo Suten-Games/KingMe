@@ -748,6 +748,10 @@ export default function HomeScreen() {
           <ToolCard emoji="🏦" title="Bank Consolidation" sub="Optimize your accounts"
             colors={['#1a2a3a', '#101828']} accent="#38bdf8" onPress={() => router.push('/bank-consolidation')} />
         )}
+        {wallets.length > 0 && (
+          <ToolCard emoji="👑" title="Coin Watchlist" sub="Track coins for good entries"
+            colors={['#2a2010', '#1a1508']} accent="#f4c430" onPress={() => router.push('/watchlist')} />
+        )}
       </View>
 
       <View style={styles.toolsSection}>
