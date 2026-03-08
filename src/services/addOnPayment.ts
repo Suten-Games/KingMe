@@ -29,6 +29,7 @@ const SKR_MINT = new PublicKey('SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3');
 const SKR_DECIMALS = 9;
 const SKR_PRICE_USD = 0.0178; // $0.0178 per SKR
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
 const UNLOCKED_KEY = 'paid_addons_unlocked';
@@ -50,9 +51,9 @@ export interface PaymentReceipt {
 }
 
 // ── ATA derivation ───────────────────────────────────────────
-function getAssociatedTokenAddress(wallet: PublicKey, mint: PublicKey): PublicKey {
+function getAssociatedTokenAddress(wallet: PublicKey, mint: PublicKey, tokenProgramId = TOKEN_PROGRAM_ID): PublicKey {
   const [ata] = PublicKey.findProgramAddressSync(
-    [wallet.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    [wallet.toBuffer(), tokenProgramId.toBuffer(), mint.toBuffer()],
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
   return ata;
@@ -64,6 +65,7 @@ function createAssociatedTokenAccountIdempotentInstruction(
   ata: PublicKey,
   owner: PublicKey,
   mint: PublicKey,
+  tokenProgramId = TOKEN_PROGRAM_ID,
 ): TransactionInstruction {
   return new TransactionInstruction({
     keys: [
@@ -72,7 +74,7 @@ function createAssociatedTokenAccountIdempotentInstruction(
       { pubkey: owner, isSigner: false, isWritable: false },
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: tokenProgramId, isSigner: false, isWritable: false },
       { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
     ],
     programId: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -86,6 +88,7 @@ function createTransferInstruction(
   destination: PublicKey,
   owner: PublicKey,
   amount: bigint,
+  tokenProgramId = TOKEN_PROGRAM_ID,
 ): TransactionInstruction {
   const data = Buffer.alloc(9);
   data.writeUInt8(3, 0); // Transfer instruction index
@@ -97,7 +100,7 @@ function createTransferInstruction(
       { pubkey: destination, isSigner: false, isWritable: true },
       { pubkey: owner, isSigner: true, isWritable: false },
     ],
-    programId: TOKEN_PROGRAM_ID,
+    programId: tokenProgramId,
     data,
   });
 }
@@ -290,11 +293,13 @@ export async function payForAddOnWithSKR(
 
   try {
     const payer = new PublicKey(userPublicKey);
-    const payerAta = getAssociatedTokenAddress(payer, SKR_MINT);
-    const treasuryAta = getAssociatedTokenAddress(TREASURY_WALLET, SKR_MINT);
+    const payerAta = getAssociatedTokenAddress(payer, SKR_MINT, TOKEN_2022_PROGRAM_ID);
+    const treasuryAta = getAssociatedTokenAddress(TREASURY_WALLET, SKR_MINT, TOKEN_2022_PROGRAM_ID);
     const amountSmallest = BigInt(Math.round(skrAmount * 10 ** SKR_DECIMALS));
 
     log(`[PAYMENT-SKR] ${addonId}: ${skrAmount} SKR (~$${priceUsd}) from ${userPublicKey.slice(0, 8)}...`);
+    log(`[PAYMENT-SKR] Payer ATA: ${payerAta.toBase58()}`);
+    log(`[PAYMENT-SKR] Treasury ATA: ${treasuryAta.toBase58()}`);
 
     // Get recent blockhash
     const bhRes = await fetch(RPC_PROXY, {
@@ -310,18 +315,18 @@ export async function payForAddOnWithSKR(
     if (bhData.error) throw new Error(`RPC error: ${bhData.error.message}`);
     const blockhash = bhData.result.value.blockhash;
 
-    // Build transaction
+    // Build transaction — SKR uses Token-2022 program
     const tx = new Transaction();
     tx.recentBlockhash = blockhash;
     tx.feePayer = payer;
 
-    // Ensure treasury ATA exists for SKR
+    // Ensure treasury ATA exists for SKR (Token-2022)
     tx.add(createAssociatedTokenAccountIdempotentInstruction(
-      payer, treasuryAta, TREASURY_WALLET, SKR_MINT,
+      payer, treasuryAta, TREASURY_WALLET, SKR_MINT, TOKEN_2022_PROGRAM_ID,
     ));
 
-    // Transfer SKR
-    tx.add(createTransferInstruction(payerAta, treasuryAta, payer, amountSmallest));
+    // Transfer SKR via Token-2022
+    tx.add(createTransferInstruction(payerAta, treasuryAta, payer, amountSmallest, TOKEN_2022_PROGRAM_ID));
 
     // Sign and send
     let signature: string;

@@ -53,8 +53,6 @@ export default function SwapSection({ asset }: Props) {
   const [loading, setLoading] = useState(false);
   const [quoteInfo, setQuoteInfo] = useState<string | null>(null);
 
-  if (!mint || asset.type !== 'crypto') return null;
-
   const output = OUTPUT_OPTIONS[outputIdx];
   const tokenAmount = pct
     ? balance * (pct / 100)
@@ -150,6 +148,8 @@ export default function SwapSection({ asset }: Props) {
       setLoading(false);
     }
   }, [tokenAmount, mint, symbol, output, connected, publicKey, signTransaction, meta]);
+
+  if (!mint || asset.type !== 'crypto') return null;
 
   // ── Collapsed: just a button ───────────────────────────────
   if (!expanded) {

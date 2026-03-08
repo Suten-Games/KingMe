@@ -27,6 +27,7 @@ import { CrownIcon } from '@/components/TabIcons';
 import { addGoal, loadGoals, makeTokenGoal } from '@/services/goals';
 import { useSwapToast } from '@/components/SwapToast';
 import SuccessModal from '@/components/SuccessModal';
+import ConfirmModal from '@/components/ConfirmModal';
 import { log, warn, error as logError } from '@/utils/logger';
 
 // ── Build SKRCard props from a store asset ─────────────────
@@ -209,6 +210,7 @@ export default function AssetsScreen() {
 
   const [showThesisModal, setShowThesisModal] = useState(false);
   const [thesisAsset, setThesisAsset] = useState<Asset | null>(null);
+  const [showThesisPrompt, setShowThesisPrompt] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [editingBankAccount, setEditingBankAccount] = useState<BankAccount | null>(null);
@@ -298,20 +300,8 @@ export default function AssetsScreen() {
     }
 
     if (hasLowIncome && appreciationTypes.includes(asset.type)) {
-      Alert.alert(
-        'Add Investment Thesis?',
-        'This looks like an appreciation play. Document why you\'re buying it and when you\'d sell?',
-        [
-          { text: 'Skip', style: 'cancel' },
-          {
-            text: 'Add Thesis',
-            onPress: () => {
-              setThesisAsset(asset);
-              setShowThesisModal(true);
-            },
-          },
-        ]
-      );
+      setThesisAsset(asset);
+      setShowThesisPrompt(true);
     }
   };
 
@@ -540,6 +530,24 @@ export default function AssetsScreen() {
           }}
         />
       )}
+
+      {/* Thesis Prompt — ask user if they want to add a thesis */}
+      <ConfirmModal
+        visible={showThesisPrompt}
+        title="Add Investment Thesis?"
+        message="This looks like an appreciation play. Document why you're buying it and when you'd sell?"
+        confirmLabel="Add Thesis"
+        cancelLabel="Skip"
+        destructive={false}
+        onConfirm={() => {
+          setShowThesisPrompt(false);
+          setShowThesisModal(true);
+        }}
+        onCancel={() => {
+          setShowThesisPrompt(false);
+          setThesisAsset(null);
+        }}
+      />
 
       {/* Edit Bank Account Balance Modal */}
       <Modal

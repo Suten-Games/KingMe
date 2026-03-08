@@ -7,7 +7,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Modal, ActivityIndicator, Image } from 'react-native';
+import ConfirmModal from './ConfirmModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useWallet } from '../providers/wallet-provider';
@@ -90,6 +91,7 @@ export default function PaidAddOns() {
   const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction, walletType } = useWallet();
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hideTarget, setHideTarget] = useState<AddOn | null>(null);
   const [showHidden, setShowHidden] = useState(false);
 
   // Payment modal state
@@ -197,24 +199,7 @@ export default function PaidAddOns() {
       next.delete(addon.id);
       saveHidden(next);
     } else {
-      if (Platform.OS === 'web') {
-        const next = new Set(hidden);
-        next.add(addon.id);
-        saveHidden(next);
-      } else {
-        Alert.alert(
-          `Hide ${addon.name}?`,
-          'You can restore it from the hidden tools section below.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Hide', style: 'destructive', onPress: () => {
-              const next = new Set(hidden);
-              next.add(addon.id);
-              saveHidden(next);
-            }},
-          ]
-        );
-      }
+      setHideTarget(addon);
     }
   };
 
@@ -393,6 +378,25 @@ export default function PaidAddOns() {
           </View>
         </View>
       </Modal>
+
+      {/* Hide add-on confirmation */}
+      <ConfirmModal
+        visible={!!hideTarget}
+        title={`Hide ${hideTarget?.name || ''}?`}
+        message="You can restore it from the hidden tools section below."
+        confirmLabel="Hide"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => {
+          if (hideTarget) {
+            const next = new Set(hidden);
+            next.add(hideTarget.id);
+            saveHidden(next);
+          }
+          setHideTarget(null);
+        }}
+        onCancel={() => setHideTarget(null)}
+      />
     </View>
   );
 }

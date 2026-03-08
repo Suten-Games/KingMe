@@ -166,7 +166,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
   const linkedId = linkedAccount?.id || linkedCreditCard?.id;
   const allExpenses: DailyExpense[] = useMemo(() => {
     if (linkedId) {
-      return bankTransactions
+      const imported = bankTransactions
         .filter((t) => t.bankAccountId === linkedId)
         .map((t): DailyExpense => ({
           id: t.id,
@@ -176,6 +176,8 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
           amount: t.amount,
           notes: t.notes,
         }));
+      // Merge imported bank transactions with manually added daily expenses
+      return [...imported, ...dailyExpenses];
     }
     return dailyExpenses;
   }, [linkedId, bankTransactions, dailyExpenses]);

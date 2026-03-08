@@ -71,8 +71,6 @@ export default function JupiterSwap({ asset }: Props) {
   const [paymentBalance, setPaymentBalance] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (!mint || asset.type !== 'crypto') return null;
-
   const output = OUTPUT_TOKENS[outputIdx];
   const outputTokenInfo = lookupToken(output.label);
   const outputLogoURI = outputTokenInfo?.logoURI || '';
@@ -245,6 +243,8 @@ export default function JupiterSwap({ asset }: Props) {
   }, [numAmount, inputMint, outputMint, slippageBps, connected, publicKey, signTransaction, meta, flipped]);
 
   const effectiveSlippage = customSlippage ? parseInt(customSlippage) || slippageBps : slippageBps;
+
+  if (!mint || asset.type !== 'crypto') return null;
 
   return (
     <View style={s.container}>

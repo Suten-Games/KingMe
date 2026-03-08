@@ -394,15 +394,15 @@ export async function executeSwap(
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
-    if (isWeb && signAndSendTransaction) {
-      // Web: Phantom handles RPC submission via signAndSendTransaction
-      log('[JUPITER] Using signAndSendTransaction (web/Phantom)...');
+    if (signAndSendTransaction) {
+      // Wallet handles RPC submission via signAndSendTransaction
+      // Works on both web (Phantom) and mobile (MWA/Seed Vault)
+      log('[JUPITER] Using signAndSendTransaction...');
       const result = await signAndSendTransaction(transaction);
       signature = result.signature;
-      log(`[JUPITER] Phantom submitted: ${signature}`);
+      log(`[JUPITER] Wallet submitted: ${signature}`);
 
-      // Phantom returns a signature but doesn't guarantee success —
-      // poll for confirmation to catch on-chain errors (slippage, etc.)
+      // Poll for confirmation to catch on-chain errors (slippage, etc.)
       const rpcProxy = `${getApiBase()}/api/rpc/send`;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1500));
