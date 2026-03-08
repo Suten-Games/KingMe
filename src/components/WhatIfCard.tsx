@@ -6,9 +6,10 @@ import { isOnChainScenario } from '@/services/jupiterSwap';
 interface WhatIfCardProps {
   scenario: WhatIfScenario;
   onPress: () => void;
+  onDismiss?: () => void;
 }
 
-export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
+export default function WhatIfCard({ scenario, onPress, onDismiss }: WhatIfCardProps) {
   const { impact, emoji, title, description, difficulty, timeframe } = scenario;
   const onChain = isOnChainScenario(scenario.type);
 
@@ -52,6 +53,11 @@ export default function WhatIfCard({ scenario, onPress }: WhatIfCardProps) {
             </Text>
           </View>
           <Text style={styles.timeframe}>{timeframe}</Text>
+          {onDismiss && (
+            <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.dismissBtn}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -216,5 +222,11 @@ const styles = StyleSheet.create({
   },
   actionTextOnChain: {
     color: '#f4c430',
+  },
+  dismissBtn: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+    paddingLeft: 4,
   },
 });

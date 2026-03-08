@@ -122,6 +122,7 @@ interface AppState extends UserProfile {
 
   // What-If Actions
   generateScenarios: () => void;
+  dismissScenario: (scenarioId: string) => void;
   applyScenario: (scenario: WhatIfScenario) => Promise<void>;
   checkThesisAlerts: () => void;
   dismissAlert: (alertId: string) => void;
@@ -1546,6 +1547,11 @@ export const useStore = create<AppState>((set, get) => ({
     set({ whatIfScenarios: scenarios });
 
     log(`[SCENARIOS] Generated ${scenarios.length} scenarios`);
+  },
+
+  dismissScenario: (scenarioId: string) => {
+    const current = get().whatIfScenarios;
+    set({ whatIfScenarios: current.filter(s => s.id !== scenarioId) });
   },
 
   applyScenario: async (scenario: WhatIfScenario) => {

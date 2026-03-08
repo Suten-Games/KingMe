@@ -114,6 +114,7 @@ export default function HomeScreen() {
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
+  const dismissScenario = useStore(s => s.dismissScenario);
   const applyScenario = useStore(s => s.applyScenario);
   const thesisAlerts = useStore(s => s.thesisAlerts);
   const dismissThesisAlert = useStore(s => s.dismissThesisAlert);
@@ -575,7 +576,7 @@ export default function HomeScreen() {
             <Text style={styles.sectionSubtitle}>Personalized moves based on your portfolio</Text>
           </View>
           {scenarios.slice(0, 3).map(sc => (
-            <WhatIfCard key={sc.id} scenario={sc} onPress={() => handleViewScenario(sc)} />
+            <WhatIfCard key={sc.id} scenario={sc} onPress={() => handleViewScenario(sc)} onDismiss={() => dismissScenario(sc.id)} />
           ))}
           {scenarios.length > 3 && (
             <TouchableOpacity onPress={() => {}}>
