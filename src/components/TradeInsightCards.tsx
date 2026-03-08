@@ -25,8 +25,11 @@ export default function TradeInsightCards() {
 
   const insights = useMemo(() => generateTradeInsights(driftTrades), [driftTrades]);
 
-  // Load dismissed state
+  // Clear stale dismissed state when trades change (e.g. persona switch),
+  // then reload dismissed from AsyncStorage
   useEffect(() => {
+    setDismissed({});
+    setExpanded(new Set());
     AsyncStorage.getItem(DISMISSED_KEY).then(raw => {
       if (!raw) return;
       const parsed: Record<string, number> = JSON.parse(raw);
@@ -39,7 +42,7 @@ export default function TradeInsightCards() {
       setDismissed(fresh);
       AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify(fresh));
     });
-  }, []);
+  }, [driftTrades]);
 
   // Dismiss by category (not exact id) — same insight won't reappear for 24h
   const handleDismiss = useCallback(async (insight: TradeInsight) => {

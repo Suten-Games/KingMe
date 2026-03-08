@@ -203,8 +203,11 @@ export default function PositionAlertCards() {
     }
   }, [assets, cryptoMints]);
 
-  // Initial load + periodic refresh
+  // Clear stale alerts immediately when assets change (e.g. persona switch),
+  // then re-fetch fresh data
   useEffect(() => {
+    setAlerts([]);
+    setDismissed(new Set());
     refreshAlerts();
     const interval = setInterval(refreshAlerts, REFRESH_INTERVAL);
     return () => clearInterval(interval);

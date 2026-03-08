@@ -218,6 +218,8 @@ export type ScenarioType =
   | 'kamino_lending'
   | 'start_fractional'
   | 'start_business'
+  | 'debt_waterfall'
+  | 'obligations_audit'
   | 'custom';
 
 export interface WhatIfScenario {
@@ -362,6 +364,7 @@ export interface Debt {
   lastPaidDate?: string;
   payee?: string;
   balance?: number;
+  isActive?: boolean;
 }
 
 // ─── Paycheck Breakdown ──────────────────────────────────────────────────────

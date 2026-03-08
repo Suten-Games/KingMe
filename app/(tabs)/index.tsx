@@ -188,13 +188,16 @@ export default function HomeScreen() {
         await AsyncStorage.setItem('_demo_saved_plans', plans || '{}');
       } catch {}
     }
-    // Clear goals, plans, and watchlist alert state for demo persona
+    // Clear goals, plans, and all alert/dismiss state for demo persona
     await Promise.all([
       AsyncStorage.setItem('kingme_goals', '[]'),
       AsyncStorage.setItem('accumulation_plans', '{}'),
       AsyncStorage.setItem('_demo_active', 'true'),
       AsyncStorage.setItem('_demo_persona_id', persona.id),
       AsyncStorage.removeItem('@kingme:watchlist_alerts_dismissed'),
+      AsyncStorage.removeItem('dismissed_position_alerts'),
+      AsyncStorage.removeItem('dismissed_trade_insights'),
+      AsyncStorage.removeItem('trading_warning_dismissed'),
     ]);
     // Reset store fully before loading new persona
     store.resetStore();

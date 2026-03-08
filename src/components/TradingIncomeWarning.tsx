@@ -156,14 +156,16 @@ export default function TradingIncomeWarning({ onDismiss, onPerenaAction }: Prop
   const risk = useTradingIncomeRisk();
   const [dismissed, setDismissed] = useState(false);
 
-  // Check if previously dismissed (within 7 days)
+  // Reset dismissed when risk data changes (e.g. persona switch) and
+  // re-check AsyncStorage
   useEffect(() => {
+    setDismissed(false);
     AsyncStorage.getItem(DISMISS_KEY).then(val => {
       if (val && Date.now() - parseInt(val) < DISMISS_DURATION) {
         setDismissed(true);
       }
     });
-  }, []);
+  }, [risk.tradingMonthly, risk.monthlyObligations]);
 
   const handleDismiss = () => {
     setDismissed(true);

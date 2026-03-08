@@ -198,6 +198,25 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (businessScenario) scenarios.push(businessScenario);
 
+  // 18. DEBT WATERFALL — structured payoff for users with many debts
+  const waterfallScenario = generateDebtWaterfallScenario(
+    debts,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (waterfallScenario) scenarios.push(waterfallScenario);
+
+  // 19. OBLIGATIONS AUDIT — prompt review when burn rate is high
+  const auditScenario = generateObligationsAuditScenario(
+    obligations,
+    debts,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (auditScenario) scenarios.push(auditScenario);
+
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
 
@@ -928,12 +947,13 @@ function generateDebtPayoffScenario(
 ): WhatIfScenario | null {
   // Find active debts sorted by interest rate (avalanche method)
   const activeDebts = debts
-    .filter(d => d.isActive && d.interestRate > 0 && d.balance > 0)
+    .filter(d => (d.isActive !== false) && d.interestRate > 0 && (d.balance ?? d.principal) > 0)
     .sort((a, b) => b.interestRate - a.interestRate);
 
   if (activeDebts.length === 0) return null;
 
   const highestRateDebt = activeDebts[0];
+  const hrdBalance = highestRateDebt.balance ?? highestRateDebt.principal;
   const totalDebtPayments = activeDebts.reduce((sum, d) => sum + d.minimumPayment, 0);
 
   // Find available cash to throw at debt
@@ -953,11 +973,12 @@ function generateDebtPayoffScenario(
   if (extraMonthly < 50) return null;
 
   // Calculate interest saved by paying off highest-rate debt faster
-  const monthsToPayOff = highestRateDebt.balance / (highestRateDebt.minimumPayment + extraMonthly);
-  const monthsOriginal = highestRateDebt.balance / highestRateDebt.minimumPayment;
+  const monthsToPayOff = hrdBalance / (highestRateDebt.minimumPayment + extraMonthly);
+  const monthsOriginal = hrdBalance / highestRateDebt.minimumPayment;
   const monthsSaved = Math.floor(monthsOriginal - monthsToPayOff);
 
-  const monthlyInterestSaved = (highestRateDebt.balance * (highestRateDebt.interestRate / 100)) / 12;
+  const rateDisplay = (highestRateDebt.interestRate * 100).toFixed(1);
+  const monthlyInterestSaved = (hrdBalance * highestRateDebt.interestRate) / 12;
   const annualInterestSaved = monthlyInterestSaved * 12;
 
   // Once debt is paid off, the minimum payment becomes "freed up" income
@@ -968,7 +989,7 @@ function generateDebtPayoffScenario(
   return {
     id: 'debt_payoff_avalanche',
     type: 'debt_payoff',
-    title: `Crush ${highestRateDebt.name} (${highestRateDebt.interestRate}% APR)`,
+    title: `Crush ${highestRateDebt.name} (${rateDisplay}% APR)`,
     description: `Avalanche method: add $${extraMonthly.toFixed(0)}/mo to highest-interest debt`,
     emoji: '🔥',
     difficulty: 'medium',
@@ -996,7 +1017,7 @@ function generateDebtPayoffScenario(
       interestSaved: annualInterestSaved,
     },
 
-    reasoning: `Your ${highestRateDebt.name} at ${highestRateDebt.interestRate}% APR is costing you $${monthlyInterestSaved.toFixed(0)}/mo in interest alone. By adding $${extraMonthly.toFixed(0)}/mo extra, you pay it off ${monthsSaved} months sooner and free up $${freedUpPayment.toFixed(0)}/mo in cash flow.`,
+    reasoning: `Your ${highestRateDebt.name} at ${rateDisplay}% APR is costing you $${monthlyInterestSaved.toFixed(0)}/mo in interest alone. By adding $${extraMonthly.toFixed(0)}/mo extra, you pay it off ${monthsSaved} months sooner and free up $${freedUpPayment.toFixed(0)}/mo in cash flow.`,
 
     risks: [
       'Requires consistent extra payments each month',
@@ -1020,27 +1041,28 @@ function generateDebtRefinanceScenario(
   monthlyNeeds: number
 ): WhatIfScenario | null {
   // Find debts with high interest rates that could be refinanced
+  // interestRate is stored as decimal (0.10 = 10%)
   const refinanceable = debts.filter(d =>
-    d.isActive &&
-    d.balance > 2000 &&
-    d.interestRate > 10 // Only suggest refi for 10%+ rates
+    (d.isActive !== false) &&
+    (d.balance ?? d.principal) > 2000 &&
+    d.interestRate > 0.10 // Only suggest refi for 10%+ rates
   );
 
   if (refinanceable.length === 0) return null;
 
-  const totalBalance = refinanceable.reduce((sum, d) => sum + d.balance, 0);
+  const totalBalance = refinanceable.reduce((sum, d) => sum + (d.balance ?? d.principal), 0);
   const totalCurrentPayments = refinanceable.reduce((sum, d) => sum + d.minimumPayment, 0);
   const weightedRate = refinanceable.reduce((sum, d) =>
-    sum + (d.interestRate * (d.balance / totalBalance)), 0
+    sum + (d.interestRate * ((d.balance ?? d.principal) / totalBalance)), 0
   );
 
-  // Target: consolidate at 7% (personal loan / balance transfer rate)
-  const targetRate = 7;
-  if (weightedRate <= targetRate + 2) return null; // Not worth it if rate is close
+  // Target: consolidate at 7% (0.07 decimal)
+  const targetRate = 0.07;
+  if (weightedRate <= targetRate + 0.02) return null; // Not worth it if rate is close
 
   // Calculate new monthly payment (same term, lower rate)
   const avgRemainingMonths = 36; // Assume 3-year consolidation loan
-  const monthlyRate = targetRate / 100 / 12;
+  const monthlyRate = targetRate / 12;
   const newMonthlyPayment = totalBalance *
     (monthlyRate * Math.pow(1 + monthlyRate, avgRemainingMonths)) /
     (Math.pow(1 + monthlyRate, avgRemainingMonths) - 1);
@@ -1055,7 +1077,7 @@ function generateDebtRefinanceScenario(
   return {
     id: 'debt_refinance',
     type: 'debt_refinance',
-    title: `Refinance $${totalBalance.toLocaleString()} debt from ${weightedRate.toFixed(1)}% → ${targetRate}%`,
+    title: `Refinance $${totalBalance.toLocaleString()} debt from ${(weightedRate * 100).toFixed(1)}% → ${(targetRate * 100).toFixed(0)}%`,
     description: `Consolidate high-interest debt into a lower-rate personal loan`,
     emoji: '🔄',
     difficulty: 'medium',
@@ -1084,7 +1106,7 @@ function generateDebtRefinanceScenario(
       monthlySavings: monthlySavings,
     },
 
-    reasoning: `You're paying ${weightedRate.toFixed(1)}% across $${totalBalance.toLocaleString()} in debt. Consolidating at ${targetRate}% saves $${monthlySavings.toFixed(0)}/mo ($${annualSavings.toFixed(0)}/year) and simplifies payments into one bill.`,
+    reasoning: `You're paying ${(weightedRate * 100).toFixed(1)}% across $${totalBalance.toLocaleString()} in debt. Consolidating at ${(targetRate * 100).toFixed(0)}% saves $${monthlySavings.toFixed(0)}/mo ($${annualSavings.toFixed(0)}/year) and simplifies payments into one bill.`,
 
     risks: [
       'Requires good credit score (680+) for best rates',
@@ -2279,6 +2301,8 @@ function generateSideHustleScenario(
   // Only suggest for users with tight cash flow (freedom < 1.5x needs)
   if (monthlyNeeds === 0) return null;
   if (currentFreedom > 1.5) return null;
+  // Don't suggest gig work to high earners — they need debt strategy, not side hustles
+  if (currentMonthlyIncome > 8000) return null;
   // Don't suggest if they already have multiple income sources
   if (incomeSources.length >= 3) return null;
 
@@ -2350,6 +2374,8 @@ function generateStartBusinessScenario(
   // Suggest for users who are employed but could scale income
   if (monthlyNeeds === 0) return null;
   if (currentFreedom > 2.0) return null;
+  // Don't suggest starting a business to high earners
+  if (currentMonthlyIncome > 8000) return null;
   // Need at least one income source (they have a job to sustain them)
   if (incomeSources.length === 0) return null;
   // Don't suggest if they already have business income
@@ -2415,6 +2441,146 @@ function generateStartBusinessScenario(
       'Get your first paying customer within 2 weeks — speed beats perfection',
       'Use KingMe\'s Business Dashboard to track income, expenses, and profit margins',
       'Reinvest early profits to grow — pay yourself once revenue is consistent',
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 18. DEBT WATERFALL — structured payoff plan for high-debt users
+// ═══════════════════════════════════════════════════════════════
+
+function generateDebtWaterfallScenario(
+  debts: Debt[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  const activeDebts = debts
+    .filter(d => (d.isActive !== false) && (d.balance ?? d.principal) > 0)
+    .sort((a, b) => b.interestRate - a.interestRate);
+
+  // Need at least 3 debts to justify a waterfall strategy
+  if (activeDebts.length < 3) return null;
+
+  const totalDebt = activeDebts.reduce((sum, d) => sum + (d.balance ?? d.principal), 0);
+  const totalMinPayments = activeDebts.reduce((sum, d) => sum + d.minimumPayment, 0);
+
+  // Weighted average interest rate
+  const weightedRate = activeDebts.reduce(
+    (sum, d) => sum + ((d.balance ?? d.principal) * d.interestRate), 0
+  ) / totalDebt;
+
+  // Calculate how much interest the waterfall saves vs minimum payments
+  // By rolling each paid-off debt's payment into the next, you accelerate payoff
+  const rollupSavings = activeDebts.reduce((sum, d) => {
+    const bal = d.balance ?? d.principal;
+    return sum + (bal * d.interestRate) / 12;
+  }, 0);
+
+  // Once all debts are paid, all minimum payments become freed income
+  const newMonthlyNeeds = monthlyNeeds - totalMinPayments;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  const debtList = activeDebts
+    .map(d => `${d.name} ($${Math.round(d.balance ?? d.principal).toLocaleString()} @ ${(d.interestRate * 100).toFixed(1)}%)`)
+    .join(', ');
+
+  return {
+    id: 'debt_waterfall',
+    type: 'debt_waterfall',
+    title: `Debt waterfall: crush $${Math.round(totalDebt / 1000)}K across ${activeDebts.length} debts`,
+    description: `Avalanche method: attack highest-rate debt first, roll payments into the next one`,
+    emoji: '🌊',
+    difficulty: 'medium',
+    timeframe: '12-36 months',
+    changes: {},
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+      monthlySavings: totalMinPayments,
+      interestSaved: rollupSavings * 12,
+    },
+    reasoning: `You have ${activeDebts.length} debts totaling $${Math.round(totalDebt).toLocaleString()} with a weighted average rate of ${(weightedRate * 100).toFixed(1)}%. The waterfall method attacks the highest-rate debt first. Once it's paid off, you roll that full payment into the next debt — creating a snowball effect. This frees up $${Math.round(totalMinPayments).toLocaleString()}/mo in cash flow once complete. Your debts in order: ${debtList}.`,
+    risks: [
+      'Requires discipline — you must redirect freed payments, not spend them',
+      'Takes 1-3 years depending on extra payments',
+      'Emergency expenses can disrupt the plan',
+    ],
+    steps: [
+      `Focus all extra money on ${activeDebts[0].name} (${(activeDebts[0].interestRate * 100).toFixed(1)}% — highest rate)`,
+      `Once ${activeDebts[0].name} is paid off, roll $${activeDebts[0].minimumPayment}/mo into ${activeDebts[1]?.name || 'next debt'}`,
+      'Continue cascading payments down the list until all debts are cleared',
+      'Review your obligations tab to see all monthly commitments — look for subscriptions to cut',
+      'Never take on new debt during the waterfall process',
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 19. OBLIGATIONS AUDIT — prompt users to review their obligations tab
+// ═══════════════════════════════════════════════════════════════
+
+function generateObligationsAuditScenario(
+  obligations: Obligation[],
+  debts: Debt[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Need at least 5 obligations + debts to make an audit worthwhile
+  const totalItems = obligations.length + debts.length;
+  if (totalItems < 5) return null;
+
+  // Only suggest when obligations are eating a big chunk of income (>60%)
+  if (monthlyNeeds <= 0 || currentMonthlyIncome <= 0) return null;
+  const burnRatio = monthlyNeeds / currentMonthlyIncome;
+  if (burnRatio < 0.6) return null;
+
+  // Estimate 10% savings from audit (cancel unused subscriptions, negotiate bills)
+  const obligationTotal = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
+  const estimatedSavings = Math.round(obligationTotal * 0.10);
+  if (estimatedSavings < 20) return null;
+
+  const newMonthlyNeeds = monthlyNeeds - estimatedSavings;
+  const newFreedom = newMonthlyNeeds > 0 ? (currentMonthlyIncome / newMonthlyNeeds) : 0;
+
+  return {
+    id: 'obligations_audit',
+    type: 'obligations_audit',
+    title: `Audit your ${totalItems} obligations — save ~$${estimatedSavings}/mo`,
+    description: `Your monthly burn is ${Math.round(burnRatio * 100)}% of income. A quick audit can uncover hidden savings.`,
+    emoji: '🔍',
+    difficulty: 'easy',
+    timeframe: 'This weekend',
+    changes: {},
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: currentMonthlyIncome,
+      monthlyIncomeDelta: 0,
+      annualIncomeDelta: 0,
+      investmentRequired: 0,
+      monthlySavings: estimatedSavings,
+    },
+    reasoning: `You're spending $${Math.round(monthlyNeeds).toLocaleString()}/mo on ${totalItems} obligations and debts — that's ${Math.round(burnRatio * 100)}% of your income. Most people find 5-15% savings by auditing: canceling forgotten subscriptions, negotiating bills, or switching providers. Even $${estimatedSavings}/mo freed up is $${estimatedSavings * 12}/year you could invest.`,
+    risks: [
+      'Some obligations are non-negotiable (mortgage, insurance)',
+      'Cutting too aggressively can backfire — focus on waste, not essentials',
+    ],
+    steps: [
+      'Go to the Obligations tab to see every recurring payment in one place',
+      'Flag anything you don\'t use or could live without',
+      'Call providers to negotiate — internet, insurance, and phone bills are often negotiable',
+      'Cancel or downgrade at least 2-3 items this week',
+      'Redirect saved money to your highest-interest debt or investments',
     ],
   };
 }
