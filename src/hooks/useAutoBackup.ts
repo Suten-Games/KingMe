@@ -28,6 +28,13 @@ export function useAutoBackup() {
       // Prevent overlapping runs
       if (runningRef.current) return;
 
+      // Never overwrite real cloud backup with demo persona data
+      const demoActive = await AsyncStorage.getItem('_demo_active');
+      if (demoActive === 'true') {
+        log('[AUTO-BACKUP] Skipped — demo mode active');
+        return;
+      }
+
       try {
         const raw = await AsyncStorage.getItem(ASYNC_KEY);
         const lastBackup = raw ? parseInt(raw, 10) : 0;
