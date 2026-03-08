@@ -31,6 +31,7 @@ import TargetIcon from '@/components/icons/TargetIcon';
 import { CrownIcon } from '@/components/TabIcons';
 import { getUnlockedAddOns } from '../../src/services/addOnPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEMO_PERSONAS, seedDemoWatchlist, type DemoPersona } from '../../src/utils/demoPersonas';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -108,6 +109,8 @@ export default function HomeScreen() {
   const [showCashFlow, setShowCashFlow] = useState(false);
   const [unlockedAddOns, setUnlockedAddOns] = useState<Set<string>>(new Set());
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+  const [activePersona, setActivePersona] = useState<string | null>(null);
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -144,8 +147,14 @@ export default function HomeScreen() {
 
   // Check if in demo mode
   useEffect(() => {
-    AsyncStorage.getItem('_demo_active').then(flag => {
-      if (flag === 'true') setIsDemoMode(true);
+    Promise.all([
+      AsyncStorage.getItem('_demo_active'),
+      AsyncStorage.getItem('_demo_persona_id'),
+    ]).then(([flag, personaId]) => {
+      if (flag === 'true') {
+        setIsDemoMode(true);
+        setActivePersona(personaId);
+      }
     });
   }, []);
 
@@ -161,6 +170,43 @@ export default function HomeScreen() {
     useStore.setState({ onboardingComplete: false });
     await useStore.getState().saveProfile();
     router.replace('/onboarding/welcome');
+  };
+
+  const handleSwitchPersona = async (persona: DemoPersona) => {
+    const store = useStore.getState();
+    // Save real profile on first demo load
+    const alreadyInDemo = (await AsyncStorage.getItem('_demo_active')) === 'true';
+    if (!alreadyInDemo) {
+      const backup = store.exportBackup();
+      await AsyncStorage.setItem('_demo_saved_profile', backup);
+      try {
+        const [goals, plans] = await Promise.all([
+          AsyncStorage.getItem('kingme_goals'),
+          AsyncStorage.getItem('accumulation_plans'),
+        ]);
+        await AsyncStorage.setItem('_demo_saved_goals', goals || '[]');
+        await AsyncStorage.setItem('_demo_saved_plans', plans || '{}');
+      } catch {}
+    }
+    // Clear goals & plans for demo persona
+    await Promise.all([
+      AsyncStorage.setItem('kingme_goals', '[]'),
+      AsyncStorage.setItem('accumulation_plans', '{}'),
+      AsyncStorage.setItem('_demo_active', 'true'),
+      AsyncStorage.setItem('_demo_persona_id', persona.id),
+    ]);
+    // Reset store fully before loading new persona
+    store.resetStore();
+    useStore.setState({ _isLoaded: true });
+    store.importBackup(JSON.stringify({
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      profile: { ...persona.profile, onboardingComplete: true },
+    }));
+    await seedDemoWatchlist(persona);
+    setActivePersona(persona.id);
+    setIsDemoMode(true);
+    setShowPersonaPicker(false);
   };
 
   // Auto-refresh stock/crypto prices if stale (>5min) or never fetched
@@ -373,23 +419,28 @@ export default function HomeScreen() {
   const dashboardBody = (
     <View style={styles.content}>
       {isDemoMode && (
-        <TouchableOpacity
-          style={styles.demoBanner}
-          onPress={handleStartOnboarding}
-          activeOpacity={0.8}
-        >
+        <View style={styles.demoBanner}>
           <LinearGradient
             colors={['#f4c43018', '#f4c43008', 'transparent']}
             style={styles.demoBannerGradient}
           >
             <CrownIcon color="#f4c430" size={28} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.demoBannerTitle}>You're exploring demo data</Text>
-              <Text style={styles.demoBannerSub}>Tap here to set up your real profile — it takes about 5 minutes</Text>
+              <Text style={styles.demoBannerTitle}>
+                {activePersona ? `Sandbox: ${DEMO_PERSONAS.find(p => p.id === activePersona)?.name}` : "You're exploring demo data"}
+              </Text>
+              <Text style={styles.demoBannerSub}>Try different personas or set up your real profile</Text>
             </View>
-            <Text style={styles.demoBannerArrow}>{'\u203A'}</Text>
           </LinearGradient>
-        </TouchableOpacity>
+          <View style={styles.demoBannerButtons}>
+            <TouchableOpacity style={styles.demoBannerSwitchBtn} onPress={() => setShowPersonaPicker(true)} activeOpacity={0.7}>
+              <Text style={styles.demoBannerSwitchText}>Switch Persona</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.demoBannerSetupBtn} onPress={handleStartOnboarding} activeOpacity={0.7}>
+              <Text style={styles.demoBannerSetupText}>Set Up My Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
       <SetupChecklist />
 
@@ -759,6 +810,42 @@ export default function HomeScreen() {
         <BadgeStrip />
       </View>
 
+      {/* ═══════════════ PERSONA PICKER MODAL ═══════════════ */}
+      <Modal visible={showPersonaPicker} transparent animationType="slide" onRequestClose={() => setShowPersonaPicker(false)}>
+        <TouchableOpacity style={styles.personaOverlay} activeOpacity={1} onPress={() => setShowPersonaPicker(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <LinearGradient colors={['#1a2240', '#121830', '#0c1020']} style={styles.personaModalBox}>
+              <Text style={styles.personaModalTitle}>Choose a Persona</Text>
+              <Text style={styles.personaModalSub}>Your real profile is saved and will restore when you exit demo mode.</Text>
+              <ScrollView style={{ maxHeight: 400 }}>
+                {DEMO_PERSONAS.map(persona => (
+                  <TouchableOpacity
+                    key={persona.id}
+                    style={[
+                      styles.personaCard,
+                      activePersona === persona.id && { borderColor: persona.color, backgroundColor: persona.color + '15' },
+                    ]}
+                    onPress={() => handleSwitchPersona(persona)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 28 }}>{persona.emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.personaCardName, { color: persona.color }]}>{persona.name}</Text>
+                      <Text style={styles.personaCardDesc}>{persona.description}</Text>
+                    </View>
+                    {activePersona === persona.id && (
+                      <Text style={{ color: persona.color, fontWeight: '800', fontSize: 16 }}>{'\u2713'}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity style={styles.personaCancelBtn} onPress={() => setShowPersonaPicker(false)}>
+                <Text style={styles.personaCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
     </View>
   );
@@ -874,7 +961,22 @@ const styles = StyleSheet.create({
   demoBannerEmoji: { fontSize: 28 },
   demoBannerTitle: { fontSize: 15, fontWeight: '700', color: '#f4c430', marginBottom: 2 },
   demoBannerSub: { fontSize: 12, color: '#b0b0b8', lineHeight: 17 },
-  demoBannerArrow: { fontSize: 24, color: '#f4c430', fontWeight: '300' },
+  demoBannerButtons: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 12 },
+  demoBannerSwitchBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#f4c43060', alignItems: 'center' },
+  demoBannerSwitchText: { fontSize: 13, fontWeight: '600', color: '#f4c430' },
+  demoBannerSetupBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: '#f4c430', alignItems: 'center' },
+  demoBannerSetupText: { fontSize: 13, fontWeight: '700', color: '#0c1020' },
+
+  // Persona picker modal
+  personaOverlay: { flex: 1, backgroundColor: '#00000088', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  personaModalBox: { borderRadius: 16, padding: 20, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#ffffff15' },
+  personaModalTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
+  personaModalSub: { fontSize: 13, color: '#b0b0b8', marginBottom: 16 },
+  personaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ffffff15', marginBottom: 8 },
+  personaCardName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  personaCardDesc: { fontSize: 12, color: '#b0b0b8' },
+  personaCancelBtn: { marginTop: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#ffffff20', alignItems: 'center' },
+  personaCancelText: { fontSize: 14, fontWeight: '600', color: '#b0b0b8' },
 
   // Health badge
   healthBadge: {

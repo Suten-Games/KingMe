@@ -220,8 +220,10 @@ const styles = StyleSheet.create({
   },
   sidebarOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingBottom: 30,
+    paddingRight: 30,
   },
   scoreCircleSidebar: {
     width: 160,
