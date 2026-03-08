@@ -196,12 +196,21 @@ export default function ProfileScreen() {
           resetStore();
           log('[RESET] Store reset');
 
-          // 3. Navigate to onboarding after store is clean
-          router.replace('/onboarding/intro');
+          // 3. On web, do a full page reload to cleanly restart the app.
+          //    router.replace races with root index.tsx redirect and causes blank page.
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.href = '/';
+          } else {
+            router.replace('/onboarding/intro');
+          }
         } catch (err) {
           logError('[RESET] Error during reset:', err);
           resetStore();
-          try { router.replace('/onboarding/intro'); } catch {}
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.href = '/';
+          } else {
+            try { router.replace('/onboarding/intro'); } catch {}
+          }
         }
       }
     );
