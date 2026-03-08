@@ -82,7 +82,7 @@ function WebVideo({ source }: { source: any }) {
   });
 }
 
-export function FreedomScore({ days, formatted, state, avatarType, isKinged, layout, children }: FreedomScoreProps) {
+export function FreedomScore({ days, formatted, state, avatarType, isKinged, layout, onCirclePress, children }: FreedomScoreProps) {
   const avatarImage = AVATAR_IMAGES[avatarType][state];
   const animatedAvatar = useStore(s => s.settings.animatedAvatar ?? false);
   const mode = layout ?? defaultLayout();
@@ -96,7 +96,6 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
   }
 
   // ── shared score circle ─────────────────────────────────────────────────
-  const { onCirclePress } = props;
   const circleContent = (
     <View style={mode === 'sidebar' ? styles.scoreCircleSidebar : styles.scoreCircle}>
       <Text style={mode === 'sidebar' ? styles.scoreNumberSidebar : styles.scoreNumber}>
