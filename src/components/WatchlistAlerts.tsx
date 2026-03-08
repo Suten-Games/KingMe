@@ -168,7 +168,13 @@ export default function WatchlistAlerts() {
     }
   }, [autoTrackHeldCoins]);
 
-  useEffect(() => { load(); }, [load]);
+  // Clear stale alerts immediately when assets change (e.g. persona switch),
+  // then re-load fresh data from AsyncStorage
+  useEffect(() => {
+    setAlerts([]);
+    setDismissed(new Set());
+    load();
+  }, [load]);
 
   const handleDismiss = async (alertId: string) => {
     const next = new Set(dismissed);

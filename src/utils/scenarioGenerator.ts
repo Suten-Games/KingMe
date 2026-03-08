@@ -178,6 +178,25 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (fractionalScenario) scenarios.push(fractionalScenario);
 
+  // 16. SIDE HUSTLE — for low-income or paycheck-to-paycheck users
+  const sideHustleScenario = generateSideHustleScenario(
+    incomeSources,
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (sideHustleScenario) scenarios.push(sideHustleScenario);
+
+  // 17. START A BUSINESS — suggest launching a small venture
+  const businessScenario = generateStartBusinessScenario(
+    incomeSources,
+    profile.bankAccounts || [],
+    currentMonthlyIncome,
+    currentFreedom,
+    currentMonthlyNeeds
+  );
+  if (businessScenario) scenarios.push(businessScenario);
+
   // Sort by impact (biggest freedom gain first)
   scenarios.sort((a, b) => b.impact.freedomDelta - a.impact.freedomDelta);
 
@@ -2203,6 +2222,159 @@ function generateFractionalStockScenario(
       `Search for ${primaryPick.symbol} (${primaryPick.name})`,
       `Set up a recurring buy of $${weeklyAmount}/week`,
       'Turn on dividend reinvestment (DRIP) so dividends buy more shares automatically',
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 16. SIDE HUSTLE — suggest income-boosting gigs for low earners
+// ═══════════════════════════════════════════════════════════════
+
+function generateSideHustleScenario(
+  incomeSources: IncomeSource[],
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Only suggest for users with tight cash flow (freedom < 1.5x needs)
+  if (monthlyNeeds === 0) return null;
+  if (currentFreedom > 1.5) return null;
+  // Don't suggest if they already have multiple income sources
+  if (incomeSources.length >= 3) return null;
+
+  // Estimate side hustle income: $500-1500/mo depending on current income
+  const hustleIncome = currentMonthlyIncome < 2000 ? 500 : currentMonthlyIncome < 4000 ? 800 : 1200;
+  const newMonthlyIncome = currentMonthlyIncome + hustleIncome;
+  const newFreedom = monthlyNeeds > 0 ? newMonthlyIncome / monthlyNeeds : 0;
+
+  // Suggest relevant hustles based on income level
+  const isLowIncome = currentMonthlyIncome < 2500;
+  const hustleIdeas = isLowIncome
+    ? 'freelance gigs (Fiverr, Upwork), food delivery (DoorDash), or reselling (eBay, Poshmark)'
+    : 'freelance consulting, tutoring, content creation, or weekend gig work';
+
+  return {
+    id: 'side_hustle',
+    type: 'side_hustle',
+    title: `Add $${hustleIncome}/mo with a side hustle`,
+    description: `Even ${isLowIncome ? '10-15' : '5-10'} hours/week of ${isLowIncome ? 'gig work' : 'freelancing'} can dramatically change your cash flow`,
+    emoji: '💪',
+    difficulty: 'medium',
+    timeframe: 'This month',
+    changes: {
+      addIncomeSources: [{
+        source: 'other' as any,
+        name: 'Side Hustle Income',
+        amount: hustleIncome,
+        frequency: 'monthly' as any,
+      }],
+    },
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: hustleIncome,
+      annualIncomeDelta: hustleIncome * 12,
+      investmentRequired: 0,
+    },
+    reasoning: `Your monthly burn is $${Math.round(monthlyNeeds)} but you're only bringing in $${Math.round(currentMonthlyIncome)}. Adding $${hustleIncome}/mo from ${hustleIdeas} would give you breathing room and money to start investing. The fastest path to freedom is increasing income, not just cutting costs.`,
+    risks: [
+      'Side hustles take time to ramp up — first month may be slow',
+      'Trading time for money isn\'t passive, but it bootstraps your investment capital',
+      'Tax implications — set aside ~25% of gig income for taxes',
+    ],
+    steps: [
+      isLowIncome
+        ? 'Sign up for 2-3 gig platforms: DoorDash, Instacart, TaskRabbit, or Fiverr'
+        : 'List your skills on Upwork or Fiverr, or start freelance consulting',
+      `Block out ${isLowIncome ? '10-15' : '5-10'} hours/week specifically for side hustle work`,
+      `Target $${hustleIncome}/month — that's $${Math.round(hustleIncome / 4)}/week`,
+      'Funnel 100% of side hustle income into investing or debt payoff',
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 17. START A BUSINESS — suggest launching a small venture
+// ═══════════════════════════════════════════════════════════════
+
+function generateStartBusinessScenario(
+  incomeSources: IncomeSource[],
+  bankAccounts: Array<{ id: string; name: string; type: string; currentBalance: number; institution: string }>,
+  currentMonthlyIncome: number,
+  currentFreedom: number,
+  monthlyNeeds: number
+): WhatIfScenario | null {
+  // Suggest for users who are employed but could scale income
+  if (monthlyNeeds === 0) return null;
+  if (currentFreedom > 2.0) return null;
+  // Need at least one income source (they have a job to sustain them)
+  if (incomeSources.length === 0) return null;
+  // Don't suggest if they already have business income
+  const hasBusinessIncome = incomeSources.some(s =>
+    s.source === 'business' || (s.name || '').toLowerCase().includes('business')
+  );
+  if (hasBusinessIncome) return null;
+
+  const totalSavings = bankAccounts
+    .filter(a => a.type === 'savings' || a.type === 'investment')
+    .reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+
+  // Low-cost business ideas based on financial situation
+  const isBootstrap = totalSavings < 1000;
+  const startupCost = isBootstrap ? 0 : 500;
+  const monthlyBusinessIncome = isBootstrap ? 1000 : 2000;
+
+  const newMonthlyIncome = currentMonthlyIncome + monthlyBusinessIncome;
+  const newFreedom = monthlyNeeds > 0 ? newMonthlyIncome / monthlyNeeds : 0;
+
+  const businessIdea = isBootstrap
+    ? 'a service-based business (cleaning, tutoring, social media management, or personal training)'
+    : 'an online business (dropshipping, digital products, content creation, or a niche service)';
+
+  return {
+    id: 'start_business',
+    type: 'start_business',
+    title: `Start a small business → $${monthlyBusinessIncome}/mo`,
+    description: `Launch ${businessIdea} to build a second income stream that can scale beyond trading time for money`,
+    emoji: '🚀',
+    difficulty: 'hard',
+    timeframe: '1-3 months',
+    changes: {
+      addIncomeSources: [{
+        source: 'business' as any,
+        name: 'Small Business',
+        amount: monthlyBusinessIncome,
+        frequency: 'monthly' as any,
+      }],
+    },
+    impact: {
+      freedomBefore: currentFreedom,
+      freedomAfter: newFreedom,
+      freedomDelta: newFreedom - currentFreedom,
+      monthlyIncomeBefore: currentMonthlyIncome,
+      monthlyIncomeAfter: newMonthlyIncome,
+      monthlyIncomeDelta: monthlyBusinessIncome,
+      annualIncomeDelta: monthlyBusinessIncome * 12,
+      investmentRequired: startupCost,
+    },
+    reasoning: `A job pays bills but a business builds wealth. Even a small side business doing $${monthlyBusinessIncome}/month changes your trajectory — that's $${(monthlyBusinessIncome * 12).toLocaleString()}/year in extra income you can invest. Unlike a side hustle, a business can eventually run without you. KingMe's Business Dashboard can help you track revenue, expenses, and profit as you grow.`,
+    risks: [
+      'Businesses take time to become profitable — expect 1-3 months before consistent income',
+      `${isBootstrap ? 'Zero upfront cost but requires time investment' : `Small upfront investment (~$${startupCost}) for tools and setup`}`,
+      'Not all businesses work — be ready to pivot if your first idea doesn\'t gain traction',
+      'Keep your day job until the business consistently covers at least half your expenses',
+    ],
+    steps: [
+      'Pick one business idea that matches your skills and available time',
+      isBootstrap
+        ? 'Start with zero capital — offer services on social media or to your network first'
+        : 'Set aside $500 for basic setup (domain, tools, initial inventory)',
+      'Get your first paying customer within 2 weeks — speed beats perfection',
+      'Use KingMe\'s Business Dashboard to track income, expenses, and profit margins',
+      'Reinvest early profits to grow — pay yourself once revenue is consistent',
     ],
   };
 }

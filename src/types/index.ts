@@ -217,6 +217,7 @@ export type ScenarioType =
   | 'drift_withdraw'
   | 'kamino_lending'
   | 'start_fractional'
+  | 'start_business'
   | 'custom';
 
 export interface WhatIfScenario {
