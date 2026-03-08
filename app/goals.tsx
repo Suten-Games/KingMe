@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '../src/store/useStore';
+import { parseNumber } from '../src/utils/parseNumber';
 import ConfirmModal from '../src/components/ConfirmModal';
 import { SwapEvents } from '../src/utils/swapEvents';
 import TargetIcon from '../src/components/icons/TargetIcon';
@@ -170,9 +171,9 @@ export default function GoalsScreen() {
 
   const handleSave = async () => {
     if (!formName.trim()) return xAlert('Give your goal a name');
-    const target = parseFloat(formTarget);
+    const target = parseNumber(formTarget);
     if (!target || target <= 0) return xAlert('Set a target amount');
-    const current = parseFloat(formCurrent) || 0;
+    const current = parseNumber(formCurrent) || 0;
 
     // Build autoSource if linked
     let autoSource = undefined;
@@ -262,7 +263,7 @@ export default function GoalsScreen() {
 
   const handleQuickBank = async () => {
     const acct = bankAccounts.find(a => a.id === quickBankId);
-    const target = parseFloat(quickBankTarget);
+    const target = parseNumber(quickBankTarget);
     if (!acct) return xAlert('Select an account');
     if (!target || target <= 0) return xAlert('Set a target balance');
     await addGoal(makeSavingsGoal(acct, target));
@@ -278,7 +279,7 @@ export default function GoalsScreen() {
   };
 
   const handleUpdateManual = async (goal: GoalWithProgress, newAmount: string) => {
-    const val = parseFloat(newAmount);
+    const val = parseNumber(newAmount);
     if (isNaN(val)) return;
     await updateGoal(goal.id, { currentAmount: val });
     refresh();
@@ -710,13 +711,13 @@ export default function GoalsScreen() {
               />
 
               {/* Preview */}
-              {parseFloat(formTarget) > 0 && (
+              {parseNumber(formTarget) > 0 && (
                 <View style={st.previewBox}>
                   <Text style={st.previewText}>
                     {formEmoji} {formName || '(name)'} —{' '}
                     {formStrategy === 'extract'
-                      ? `$${parseFloat(formCurrent || '0').toLocaleString()} → $0`
-                      : `${formatNum(parseFloat(formCurrent || '0'))} → ${formatNum(parseFloat(formTarget))} ${formUnit}`
+                      ? `$${parseNumber(formCurrent || '0').toLocaleString()} → $0`
+                      : `${formatNum(parseNumber(formCurrent || '0'))} → ${formatNum(parseNumber(formTarget))} ${formUnit}`
                     }
                   </Text>
                 </View>

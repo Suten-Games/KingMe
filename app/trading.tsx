@@ -8,6 +8,7 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
+import { parseNumber } from '../src/utils/parseNumber';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
@@ -121,9 +122,9 @@ export default function TradingScreen() {
   }, [showModal]);
 
   // ── derived ────────────────────────────────────────────────────────────────
-  const tokens = parseFloat(sizeInTokens) || 0;
-  const entry = parseFloat(entryPrice) || 0;
-  const exit = parseFloat(exitPrice) || 0;
+  const tokens = parseNumber(sizeInTokens);
+  const entry = parseNumber(entryPrice);
+  const exit = parseNumber(exitPrice);
   const sizeUsd = tokens * entry;
 
   const calcTheoreticalPnL = (): number => {
@@ -132,16 +133,16 @@ export default function TradingScreen() {
   };
 
   const theoreticalPnL = calcTheoreticalPnL();
-  const realPnL = parseFloat(actualPnL) || 0;
+  const realPnL = parseNumber(actualPnL);
   const fees = theoreticalPnL - realPnL;
   const isProfitable = realPnL > 0;
 
-  const goalAllocTotal = Object.values(goalAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const goalAllocTotal = Object.values(goalAmounts).reduce((s, v) => s + (parseNumber(v)), 0);
   const totalAllocated =
-    (parseFloat(allocCryptoComCard) || 0) +
-    (parseFloat(allocBank) || 0) +
-    (parseFloat(allocCryptoBuys) || 0) +
-    (parseFloat(allocLeftInDrift) || 0) +
+    (parseNumber(allocCryptoComCard)) +
+    (parseNumber(allocBank)) +
+    (parseNumber(allocCryptoBuys)) +
+    (parseNumber(allocLeftInDrift)) +
     goalAllocTotal;
 
   const allocationGap = isProfitable ? realPnL - totalAllocated : 0;
@@ -297,7 +298,7 @@ export default function TradingScreen() {
   const buildGoalAllocations = (): GoalAllocation[] => {
     const allocs: GoalAllocation[] = [];
     for (const [goalId, amtStr] of Object.entries(goalAmounts)) {
-      const amt = parseFloat(amtStr) || 0;
+      const amt = parseNumber(amtStr);
       if (amt <= 0) continue;
       const goal = goals.find(g => g.id === goalId);
       if (!goal) continue;
@@ -333,7 +334,7 @@ export default function TradingScreen() {
 
   // ── auto-fill remaining to drift ───────────────────────────────────────
   const autoFillDrift = () => {
-    const used = (parseFloat(allocCryptoComCard) || 0) + (parseFloat(allocBank) || 0) + (parseFloat(allocCryptoBuys) || 0) + goalAllocTotal;
+    const used = (parseNumber(allocCryptoComCard)) + (parseNumber(allocBank)) + (parseNumber(allocCryptoBuys)) + goalAllocTotal;
     const remaining = Math.max(0, realPnL - used);
     setAllocLeftInDrift(remaining > 0 ? remaining.toFixed(2) : '');
   };
@@ -364,10 +365,10 @@ export default function TradingScreen() {
       platform: isDrift ? 'drift' : (otherPlatformName.trim() || 'manual'),
       allocation: isProfitable
         ? {
-            toCryptoComCard: parseFloat(allocCryptoComCard) || 0,
-            toBankAccounts: parseFloat(allocBank) || 0,
-            toCryptoBuys: parseFloat(allocCryptoBuys) || 0,
-            leftInDrift: parseFloat(allocLeftInDrift) || 0,
+            toCryptoComCard: parseNumber(allocCryptoComCard),
+            toBankAccounts: parseNumber(allocBank),
+            toCryptoBuys: parseNumber(allocCryptoBuys),
+            leftInDrift: parseNumber(allocLeftInDrift),
             goalAllocations: buildGoalAllocations(),
           }
         : undefined,
@@ -626,7 +627,7 @@ export default function TradingScreen() {
             <TouchableOpacity style={pf.driftBtn} onPress={chooseDrift}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Image source={{ uri: DRIFT_LOGO }} style={{ width: 32, height: 32, borderRadius: 8 }} />
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={pf.driftBtnText}>Drift <Text style={{ color: '#888', fontWeight: '400', fontSize: 12 }}>(Recommended)</Text></Text>
                   <Text style={pf.driftBtnSub}>Decentralized perps on Solana — auto-sync trades on-chain</Text>
                 </View>
@@ -680,41 +681,39 @@ export default function TradingScreen() {
         {/* Trade List Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Trade Journal</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {isDrift && (
-              <>
-                <TouchableOpacity
-                  style={pf.openDriftBtn}
-                  onPress={() => Linking.openURL('https://app.drift.trade')}
-                >
-                  <Text style={pf.openDriftText}>Open Drift</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.syncButton}
-                  onPress={handleSync}
-                  disabled={isSyncing}
-                >
-                  {isSyncing ? (
-                    <ActivityIndicator size="small" color="#60a5fa" />
-                  ) : (
-                    <Text style={styles.syncButtonText}>Sync Drift</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-            {hasChosenPlatform && (
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  resetForm();
-                  setShowModal(true);
-                }}
-              >
-                <Text style={styles.addButtonText}>+ Log Trade</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {hasChosenPlatform && (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                resetForm();
+                setShowModal(true);
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Log</Text>
+            </TouchableOpacity>
+          )}
         </View>
+        {isDrift && (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity
+              style={pf.openDriftBtn}
+              onPress={() => Linking.openURL('https://app.drift.trade')}
+            >
+              <Text style={pf.openDriftText}>Open Drift</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.syncButton}
+              onPress={handleSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#60a5fa" />
+              ) : (
+                <Text style={styles.syncButtonText}>Sync Drift</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
         {sortedTrades.length === 0 && hasChosenPlatform ? (
           <View style={styles.emptyCard}>

@@ -39,13 +39,16 @@ export function useBadgeChecker() {
     if (now - lastCheck.current < 5000) return;
     lastCheck.current = now;
 
-    // Calculate freedom score
-    const assetIncome = assets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
-    const totalIncome = (income.salary || 0) + (income.otherIncome || 0) + assetIncome;
+    // Calculate freedom score (defensive guards for mid-reset store)
+    const safeAssets = assets || [];
+    const safeObligations = obligations || [];
+    const safeDebts = debts || [];
+    const assetIncome = safeAssets.reduce((sum: number, a: any) => sum + (a.annualIncome || 0), 0);
+    const totalIncome = (income?.salary || 0) + (income?.otherIncome || 0) + assetIncome;
     const monthlyIncome = totalIncome / 12;
-    const monthlyObligations = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0)
-      + debts.reduce((sum, d) => sum + d.monthlyPayment, 0);
-    const totalAssets = assets.reduce((sum, a) => sum + a.value, 0);
+    const monthlyObligations = safeObligations.reduce((sum: number, o: any) => sum + obligationMonthlyAmount(o), 0)
+      + safeDebts.reduce((sum: number, d: any) => sum + d.monthlyPayment, 0);
+    const totalAssets = safeAssets.reduce((sum: number, a: any) => sum + a.value, 0);
     const dailyNeeds = monthlyObligations / 30;
     const dailyAssetIncome = assetIncome / 365;
     const freedomDays = dailyNeeds > 0

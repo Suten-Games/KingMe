@@ -2551,7 +2551,7 @@ export const useFreedomScore = () => {
   }));
 
   const bankAccounts = useStore((state) => state.bankAccounts);
-  const bankTotal = bankAccounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+  const bankTotal = (bankAccounts || []).reduce((sum: number, a: any) => sum + (a.balance || 0), 0);
 
   return calculateFreedom(profile as UserProfile, bankTotal);
 };

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { BankAccount } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { S, T } from '../../src/styles/onboarding';
 import KingMeFooter from '../../src/components/KingMeFooter';
 
@@ -33,7 +34,7 @@ export default function BankAccountsScreen() {
       name: accountName,
       institution: institution || 'Unknown',
       type: accountType,
-      currentBalance: parseFloat(currentBalance),
+      currentBalance: parseNumber(currentBalance),
       isPrimaryIncome: isPrimary || bankAccounts.length === 0,
     };
     addBankAccount(newAccount);

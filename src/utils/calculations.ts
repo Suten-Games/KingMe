@@ -152,10 +152,18 @@ export function getFreedomState(days: number): FreedomState {
  * Main freedom calculation function
  */
 export function calculateFreedom(profile: UserProfile, bankBalance?: number): FreedomResult {
-  const assetIncome = calculateAssetIncome(profile.assets);
-  const totalObligations = calculateAnnualObligations(profile);
-  const totalDesires = calculateAnnualDesires(profile);
-  const debtService = calculateAnnualDebtService(profile);
+  // Defensive: guard against undefined arrays during store resets
+  const safeProfile = {
+    ...profile,
+    assets: profile.assets || [],
+    obligations: profile.obligations || [],
+    desires: profile.desires || [],
+    debts: profile.debts || [],
+  };
+  const assetIncome = calculateAssetIncome(safeProfile.assets);
+  const totalObligations = calculateAnnualObligations(safeProfile);
+  const totalDesires = calculateAnnualDesires(safeProfile);
+  const debtService = calculateAnnualDebtService(safeProfile);
 
   const totalAnnualNeeds = totalObligations + totalDesires + debtService;
   const dailyNeeds = totalAnnualNeeds / 365;
@@ -176,7 +184,7 @@ export function calculateFreedom(profile: UserProfile, bankBalance?: number): Fr
     isKinged = true;
   } else {
     // Calculate runway based on liquid assets (includes bank accounts)
-    const liquidAssets = calculateLiquidAssets(profile.assets, bankBalance);
+    const liquidAssets = calculateLiquidAssets(safeProfile.assets, bankBalance);
     const dailyBurn = dailyNeeds - dailyAssetIncome;
 
     if (dailyBurn <= 0 || liquidAssets <= 0) {

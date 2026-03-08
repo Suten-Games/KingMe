@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import type { Asset, InvestmentThesis, ThesisInvalidator, ThesisTimeHorizon } from '../types';
+import { parseNumber } from '../utils/parseNumber';
 
 interface ThesisModalProps {
   visible: boolean;
@@ -83,21 +84,21 @@ export default function ThesisModal({
       return;
     }
     
-    const entry = parseFloat(entryPrice) || currentPrice;
-    const target = parseFloat(targetPrice) || undefined;
+    const entry = parseNumber(entryPrice) || currentPrice;
+    const target = parseNumber(targetPrice) || undefined;
     
     // Build invalidators
     const finalInvalidators: Omit<ThesisInvalidator, 'id'>[] = [...invalidators];
     
     // Add stop-loss
     if (enableStopLoss && stopLossPercent) {
-      const percent = parseFloat(stopLossPercent) / 100;
+      const percent = parseNumber(stopLossPercent) / 100;
       const triggerPrice = entry * (1 - percent);
       
       finalInvalidators.push({
         type: 'price_drop',
         triggerPrice,
-        triggerPercent: -parseFloat(stopLossPercent),
+        triggerPercent: -parseNumber(stopLossPercent),
         isTriggered: false,
         description: `Stop-loss at -${stopLossPercent}% ($${triggerPrice.toFixed(4)})`,
       });
@@ -105,7 +106,7 @@ export default function ThesisModal({
     
     // Add deadline
     if (enableDeadline && deadline) {
-      const milestoneTarget = parseFloat(milestonePrice) || target;
+      const milestoneTarget = parseNumber(milestonePrice) || target;
       
       finalInvalidators.push({
         type: 'time_based',
@@ -263,7 +264,7 @@ export default function ThesisModal({
                     <Text style={styles.percentSymbol}>%</Text>
                   </View>
                   <Text style={styles.triggerHelper}>
-                    Trigger: ${(parseFloat(entryPrice || '0') * (1 - parseFloat(stopLossPercent || '0') / 100)).toFixed(4)}
+                    Trigger: ${(parseNumber(entryPrice || '0') * (1 - parseNumber(stopLossPercent || '0') / 100)).toFixed(4)}
                   </Text>
                 </View>
               )}

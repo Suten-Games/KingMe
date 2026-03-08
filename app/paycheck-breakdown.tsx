@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '../src/store/useStore';
 import type { PreTaxDeduction, PreTaxDeductionType, Tax, TaxType, PostTaxDeduction, PostTaxDeductionType } from '../src/types';
+import { parseNumber } from '../src/utils/parseNumber';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
 
@@ -95,7 +96,7 @@ export default function PaycheckBreakdownScreen() {
       id: Date.now().toString(),
       name: preTaxName,
       type: preTaxType,
-      perPayPeriod: parseFloat(preTaxAmount),
+      perPayPeriod: parseNumber(preTaxAmount),
       frequency: preTaxFreq,
     });
     setPreTaxName(''); setPreTaxAmount(''); setPreTaxType('medical_coverage'); setPreTaxFreq('biweekly');
@@ -108,7 +109,7 @@ export default function PaycheckBreakdownScreen() {
       id: Date.now().toString(),
       name: taxName,
       type: taxType,
-      perPayPeriod: parseFloat(taxAmount),
+      perPayPeriod: parseNumber(taxAmount),
       frequency: taxFreq,
     });
     setTaxName(''); setTaxAmount(''); setTaxType('federal_withholding'); setTaxFreq('biweekly');
@@ -121,7 +122,7 @@ export default function PaycheckBreakdownScreen() {
       id: Date.now().toString(),
       name: postTaxName,
       type: postTaxType,
-      perPayPeriod: parseFloat(postTaxAmount),
+      perPayPeriod: parseNumber(postTaxAmount),
       frequency: postTaxFreq,
     });
     setPostTaxName(''); setPostTaxAmount(''); setPostTaxType('401k_loan'); setPostTaxFreq('biweekly');
@@ -386,8 +387,8 @@ export default function PaycheckBreakdownScreen() {
                 ))}
               </View>
 
-              {parseFloat(preTaxAmount) > 0 && (
-                <Text style={[styles.monthlyPreview, { color: '#c084fc' }]}>= ${toMonthly(parseFloat(preTaxAmount), preTaxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo pre-tax</Text>
+              {parseNumber(preTaxAmount) > 0 && (
+                <Text style={[styles.monthlyPreview, { color: '#c084fc' }]}>= ${toMonthly(parseNumber(preTaxAmount), preTaxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo pre-tax</Text>
               )}
 
               <View style={styles.modalButtons}>
@@ -451,8 +452,8 @@ export default function PaycheckBreakdownScreen() {
                 ))}
               </View>
 
-              {parseFloat(taxAmount) > 0 && (
-                <Text style={[styles.monthlyPreview, { color: '#f87171' }]}>= ${toMonthly(parseFloat(taxAmount), taxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo tax</Text>
+              {parseNumber(taxAmount) > 0 && (
+                <Text style={[styles.monthlyPreview, { color: '#f87171' }]}>= ${toMonthly(parseNumber(taxAmount), taxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo tax</Text>
               )}
 
               <View style={styles.modalButtons}>
@@ -516,8 +517,8 @@ export default function PaycheckBreakdownScreen() {
                 ))}
               </View>
 
-              {parseFloat(postTaxAmount) > 0 && (
-                <Text style={[styles.monthlyPreview, { color: '#fb923c' }]}>= ${toMonthly(parseFloat(postTaxAmount), postTaxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo post-tax</Text>
+              {parseNumber(postTaxAmount) > 0 && (
+                <Text style={[styles.monthlyPreview, { color: '#fb923c' }]}>= ${toMonthly(parseNumber(postTaxAmount), postTaxFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo post-tax</Text>
               )}
 
               <View style={styles.modalButtons}>

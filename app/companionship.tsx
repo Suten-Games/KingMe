@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
+import { parseNumber } from '../src/utils/parseNumber';
 import { useStore } from '../src/store/useStore';
 import {
   generateCompanionshipInsights, getInsightColor,
@@ -252,7 +253,7 @@ export default function CompanionshipTracker() {
       id: editingExpenseId || Date.now().toString(),
       date: expDate || new Date().toISOString().slice(0, 10),
       category: expCategory,
-      amount: parseFloat(expAmount),
+      amount: parseNumber(expAmount),
       description: expDesc,
       notes: expNotes || undefined,
       paymentMethod: expPayment,
@@ -306,8 +307,8 @@ export default function CompanionshipTracker() {
     save({
       ...data,
       settings: {
-        monthlyBudget: parseFloat(settingsBudget) || 0,
-        monthlyIncome: parseFloat(settingsIncome) || 0,
+        monthlyBudget: parseNumber(settingsBudget) || 0,
+        monthlyIncome: parseNumber(settingsIncome) || 0,
       },
     });
     setShowSettingsModal(false);

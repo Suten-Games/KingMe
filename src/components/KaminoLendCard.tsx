@@ -12,6 +12,7 @@ import { executeKaminoDeposit, executeKaminoWithdraw, fetchKaminoBalances } from
 import { fetchLiveBalances } from '../services/jupiterSwap';
 import { useSwapToast } from './SwapToast';
 import type { Asset } from '../types';
+import { parseNumber } from '../utils/parseNumber';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -40,7 +41,7 @@ export default function KaminoLendCard({ asset, kaminoApy }: Props) {
   const [loading, setLoading] = useState(false);
   const [kaminoBalance, setKaminoBalance] = useState<number | null>(null);
 
-  const numAmount = parseFloat(amount) || 0;
+  const numAmount = parseNumber(amount) || 0;
   const apy = kaminoApy || currentApy || 0;
   const projectedAnnual = numAmount > 0 ? numAmount * (meta?.priceUSD || 1) * (apy / 100) : 0;
 

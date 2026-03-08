@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Keyboard, Touchabl
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { S, T } from '../../src/styles/onboarding';
 import KingMeFooter from '../../src/components/KingMeFooter';
 
@@ -15,7 +16,7 @@ export default function IncomeScreen() {
   const [otherIncome, setOtherIncome] = useState(income.otherIncome > 0 ? income.otherIncome.toString() : '');
 
   const handleContinue = () => {
-    setIncome({ salary: parseFloat(salary) || 0, otherIncome: parseFloat(otherIncome) || 0 });
+    setIncome({ salary: parseNumber(salary), otherIncome: parseNumber(otherIncome) });
     router.push('/onboarding/assets');
   };
   const handleSkip = () => router.push('/onboarding/assets');

@@ -13,7 +13,6 @@ import {
   SYSVAR_RENT_PUBKEY,
 } from '@solana/web3.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import { getAuthParams } from './walletStorage';
 import { getApiBase } from './apiBase';
 import { log, warn, error as logError } from '../utils/logger';
@@ -125,8 +124,6 @@ export async function payForAddOn(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
 ): Promise<PaymentResult> {
-  const isWeb = Platform.OS === 'web';
-
   try {
     const payer = new PublicKey(userPublicKey);
     const payerAta = getAssociatedTokenAddress(payer, USDC_MINT);
@@ -168,8 +165,8 @@ export async function payForAddOn(
     // Sign and send
     let signature: string;
 
-    if (isWeb && signAndSendTransaction) {
-      log('[PAYMENT] Using signAndSendTransaction (web)...');
+    if (signAndSendTransaction) {
+      log('[PAYMENT] Using signAndSendTransaction...');
       const result = await signAndSendTransaction(tx);
       signature = result.signature;
     } else {
@@ -289,7 +286,6 @@ export async function payForAddOnWithSKR(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
   signAndSendTransaction?: (transaction: any) => Promise<{ signature: string }>,
 ): Promise<PaymentResult> {
-  const isWeb = Platform.OS === 'web';
   const skrAmount = usdToSkr(priceUsd);
 
   try {
@@ -330,7 +326,7 @@ export async function payForAddOnWithSKR(
     // Sign and send
     let signature: string;
 
-    if (isWeb && signAndSendTransaction) {
+    if (signAndSendTransaction) {
       const result = await signAndSendTransaction(tx);
       signature = result.signature;
     } else {

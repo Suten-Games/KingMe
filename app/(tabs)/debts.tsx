@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore } from '../../src/store/useStore';
 import { useRouter } from 'expo-router';
 import type { Debt, BankAccount  } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
 import { getPaymentEventsForMonth, getMonthlyPaymentStatus } from '../../src/utils/paymentCalendar';
@@ -275,10 +276,10 @@ export default function DebtsScreen() {
     addDebt({
       id: Date.now().toString(),
       name: addName,
-      principal: parseFloat(addPrincipal),
-      monthlyPayment: parseFloat(addMonthlyPayment),
-      minimumPayment: parseFloat(addMonthlyPayment),
-      interestRate: addInterestRate ? parseFloat(addInterestRate) / 100 : 0,
+      principal: parseNumber(addPrincipal),
+      monthlyPayment: parseNumber(addMonthlyPayment),
+      minimumPayment: parseNumber(addMonthlyPayment),
+      interestRate: addInterestRate ? parseNumber(addInterestRate) / 100 : 0,
       dueDate: addDueDate ? parseInt(addDueDate) : 1,
       ...(addBankAccountId && { bankAccountId: addBankAccountId }),
       ...(addPayee && { payee: addPayee }),
@@ -310,10 +311,10 @@ export default function DebtsScreen() {
     if (!selectedDebt) return;
     updateDebt(selectedDebt.id, {
       name: editName,
-      principal: parseFloat(editPrincipal) || selectedDebt.principal,
-      monthlyPayment: parseFloat(editMonthlyPayment) || selectedDebt.monthlyPayment,
-      minimumPayment: parseFloat(editMonthlyPayment) || selectedDebt.minimumPayment,
-      interestRate: editInterestRate ? parseFloat(editInterestRate) / 100 : 0,
+      principal: parseNumber(editPrincipal) || selectedDebt.principal,
+      monthlyPayment: parseNumber(editMonthlyPayment) || selectedDebt.monthlyPayment,
+      minimumPayment: parseNumber(editMonthlyPayment) || selectedDebt.minimumPayment,
+      interestRate: editInterestRate ? parseNumber(editInterestRate) / 100 : 0,
       bankAccountId: editBankAccountId || undefined,
       dueDate: editDueDate ? parseInt(editDueDate) : selectedDebt.dueDate ?? 1,
       payee: editPayee || undefined,

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView 
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import type { DailyExpense, DailyExpenseCategory, BankAccount } from '../types';
+import { parseNumber } from '../utils/parseNumber';
 import KingMeFooter from './KingMeFooter';
 import type { BankTransaction, CustomCategoryDef } from '../types/bankTransactionTypes';
 import { TRANSACTION_CATEGORY_META } from '../types/bankTransactionTypes';
@@ -229,7 +230,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
       date: date,
       category,
       description,
-      amount: parseFloat(amount),
+      amount: parseNumber(amount),
       notes: notes || undefined,
     });
     
@@ -245,7 +246,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
       date: date, // Keep as YYYY-MM-DD string
       category,
       description,
-      amount: parseFloat(amount),
+      amount: parseNumber(amount),
       notes: notes || undefined,
     };
 
@@ -586,7 +587,7 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                 style={[styles.modalAddBtn, !depositAmount && styles.modalBtnDisabled]}
                 onPress={() => {
                   if (depositAmount) {
-                    addCardDeposit(parseFloat(depositAmount));
+                    addCardDeposit(parseNumber(depositAmount));
                     setDepositAmount('');
                     setShowDepositModal(false);
                   }
@@ -629,9 +630,9 @@ export function DailyExpenseTracker({ obligations }: DailyExpenseTrackerProps) {
                 onPress={() => {
                   if (balanceInput) {
                     if (linkedAccount) {
-                      updateBankAccount(linkedAccount.id, { currentBalance: parseFloat(balanceInput) });
+                      updateBankAccount(linkedAccount.id, { currentBalance: parseNumber(balanceInput) });
                     } else {
-                      setCryptoCardBalance(parseFloat(balanceInput));
+                      setCryptoCardBalance(parseNumber(balanceInput));
                     }
                     setBalanceInput('');
                     setShowBalanceModal(false);

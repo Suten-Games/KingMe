@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Debt, BankAccount } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { S, T } from '../../src/styles/onboarding';
 import KingMeFooter from '../../src/components/KingMeFooter';
 
@@ -65,10 +66,10 @@ export default function DebtsScreen() {
 
   const handleAddDebt = () => {
     if (!name || !balance || !monthlyPayment) return;
-    const bal = parseFloat(balance);
-    const monthly = parseFloat(monthlyPayment);
-    const minimum = minimumPayment ? parseFloat(minimumPayment) : monthly;
-    const rate = interestRate ? parseFloat(interestRate) / 100 : 0; // User enters %, store as decimal
+    const bal = parseNumber(balance);
+    const monthly = parseNumber(monthlyPayment);
+    const minimum = minimumPayment ? parseNumber(minimumPayment) : monthly;
+    const rate = interestRate ? parseNumber(interestRate) / 100 : 0; // User enters %, store as decimal
     const newDebt: Debt = {
       id: Date.now().toString(),
       name,

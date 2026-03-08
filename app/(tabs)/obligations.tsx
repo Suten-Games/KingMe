@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useStore, useFreedomScore } from '../../src/store/useStore';
 import type { Obligation, ObligationFrequency } from '../../src/types';
 import { obligationMonthlyAmount } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { BankTransactionCategory, TRANSACTION_CATEGORY_META, TRANSACTION_GROUP_META, CATEGORY_OPTIONS } from '../../src/types/bankTransactionTypes';
 import PaymentCalendar from '../../src/components/PaymentCalendar';
 import DayPaymentsList from '../../src/components/DayPaymentsList';
@@ -257,7 +258,7 @@ export default function ObligationsScreen() {
     if (!name || !amount) return;
     addObligation({
       id: Date.now().toString(), name, payee: payee || 'Various',
-      amount: parseFloat(amount), frequency, category: 'other', isRecurring: true,
+      amount: parseNumber(amount), frequency, category: 'other', isRecurring: true,
       dueDate: dueDate ? parseInt(dueDate) : 1,
       bankAccountId: accountId || undefined,
       ...(transactionCategory && { transactionCategory }),
@@ -281,7 +282,7 @@ export default function ObligationsScreen() {
   const handleSaveEdit = () => {
     if (!editingObligation || !name || !amount) return;
     updateObligation(editingObligation.id, {
-      name, payee: payee || 'Various', amount: parseFloat(amount), frequency,
+      name, payee: payee || 'Various', amount: parseNumber(amount), frequency,
       bankAccountId: accountId || undefined,
       dueDate: dueDate ? parseInt(dueDate) : undefined,
       transactionCategory: transactionCategory || undefined,
@@ -631,7 +632,7 @@ export default function ObligationsScreen() {
                 ))}
               </View>
               {frequency !== 'monthly' && amount ? (
-                <Text style={s.freqEquiv}>${obligationMonthlyAmount({ amount: parseFloat(amount) || 0, frequency }).toFixed(2)}/mo equivalent</Text>
+                <Text style={s.freqEquiv}>${obligationMonthlyAmount({ amount: parseNumber(amount) || 0, frequency }).toFixed(2)}/mo equivalent</Text>
               ) : null}
 
               <Text style={s.label}>Due Day of Month (Optional)</Text>

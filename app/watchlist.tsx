@@ -26,6 +26,7 @@ import {
 } from '../src/services/jupiterSwap';
 import { useSwapToast } from '../src/components/SwapToast';
 import { postSwapUpdate } from '../src/utils/postSwapUpdate';
+import { parseNumber } from '../src/utils/parseNumber';
 import {
   fetchPrices, recordPriceSnapshot, getTokenPriceData,
   getWatchlist, addToWatchlist, removeFromWatchlist,
@@ -505,7 +506,7 @@ export default function WatchlistScreen() {
     setSwapQuote(null);
     setSwapError(null);
 
-    const num = parseFloat(swapAmount) || 0;
+    const num = parseNumber(swapAmount) || 0;
     if (!swapModal || num <= 0 || !connected || !publicKey) return;
 
     setSwapQuoting(true);
@@ -534,7 +535,7 @@ export default function WatchlistScreen() {
   }, [swapAmount, swapModal, connected, publicKey]);
 
   const handleSwapExecute = useCallback(async () => {
-    const num = parseFloat(swapAmount) || 0;
+    const num = parseNumber(swapAmount) || 0;
     if (!swapModal || num <= 0 || !connected || !publicKey) return;
 
     setSwapLoading(true);
@@ -1082,10 +1083,10 @@ export default function WatchlistScreen() {
                 style={{
                   flex: 1, padding: 14, borderRadius: 12, alignItems: 'center',
                   backgroundColor: '#60a5fa',
-                  opacity: (!connected || swapLoading || !(parseFloat(swapAmount) > 0)) ? 0.4 : 1,
+                  opacity: (!connected || swapLoading || !(parseNumber(swapAmount) > 0)) ? 0.4 : 1,
                 }}
                 onPress={handleSwapExecute}
-                disabled={!connected || swapLoading || !(parseFloat(swapAmount) > 0)}
+                disabled={!connected || swapLoading || !(parseNumber(swapAmount) > 0)}
               >
                 {swapLoading ? (
                   <ActivityIndicator size="small" color="#0a0e1a" />
@@ -1153,9 +1154,9 @@ function SettingsEditor({ ext, onSave, onCancel }: {
       <TouchableOpacity
         style={st.settingsSave}
         onPress={() => onSave({
-          maxAllocationPct: parseFloat(alloc) || 5,
-          takeProfitPct: parseFloat(tp) || 100,
-          stopLossPct: -(parseFloat(sl) || 25),
+          maxAllocationPct: parseNumber(alloc) || 5,
+          takeProfitPct: parseNumber(tp) || 100,
+          stopLossPct: -(parseNumber(sl) || 25),
           notes,
         })}
       >

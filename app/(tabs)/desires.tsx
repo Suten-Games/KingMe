@@ -8,6 +8,7 @@ import { generateActionPlan } from '../../src/services/desirePlanner';
 import type { ActionPlan, ActionStep } from '../../src/services/desirePlanner';
 import ActionPlanCard from '../../src/components/ActionPlanCard';
 import type { Desire } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { ResponsiveContainer } from '@/components/ResponsiveContainer';
 import { T } from '../../src/theme';
 import ProGate from '../../src/components/ProGate';
@@ -125,7 +126,7 @@ export default function DesiresScreen() {
     addDesire({
       id: Date.now().toString(),
       name: desireName,
-      estimatedCost: parseFloat(manualCost) || 0,
+      estimatedCost: parseNumber(manualCost),
       priority: 'medium',
       category: 'other',
     });

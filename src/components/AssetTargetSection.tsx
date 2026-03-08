@@ -21,6 +21,7 @@ import {
   addGoal, loadGoals, removeGoal, makeTokenGoal, formatNum,
 } from '@/services/goals';
 import { addToWatchlist } from '@/services/priceTracker';
+import { parseNumber } from '../utils/parseNumber';
 import TargetIcon from './icons/TargetIcon';
 import ConfirmModal from './ConfirmModal';
 
@@ -142,15 +143,15 @@ export default function AssetTargetSection({ asset }: Props) {
               />
 
               {/* Preview */}
-              {parseFloat(targetInput) > 0 && (
+              {parseNumber(targetInput) > 0 && (
                 <View style={st.preview}>
                   <Text style={st.previewText}>
-                    📦 {balance.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {parseFloat(targetInput).toLocaleString()} {symbol}
-                    {' '}({((balance / parseFloat(targetInput)) * 100).toFixed(0)}%)
+                    📦 {balance.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {parseNumber(targetInput).toLocaleString()} {symbol}
+                    {' '}({((balance / parseNumber(targetInput)) * 100).toFixed(0)}%)
                   </Text>
                   {pricePerToken > 0 && (
                     <Text style={st.previewText}>
-                      🛒 Need {formatNum(Math.max(0, parseFloat(targetInput) - balance))} more ≈ ${(Math.max(0, parseFloat(targetInput) - balance) * pricePerToken).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      🛒 Need {formatNum(Math.max(0, parseNumber(targetInput) - balance))} more ≈ ${(Math.max(0, parseNumber(targetInput) - balance) * pricePerToken).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </Text>
                   )}
                 </View>
@@ -164,9 +165,9 @@ export default function AssetTargetSection({ asset }: Props) {
                   style={[st.saveBtn, !targetInput && { opacity: 0.5 }]}
                   disabled={!targetInput}
                   onPress={async () => {
-                    const target = parseFloat(targetInput.replace(/,/g, ''));
+                    const target = parseNumber(targetInput);
                     if (!target || target <= 0) return xAlert('Enter a target amount');
-                    const avgPrice = parseFloat(avgPriceInput) || 0;
+                    const avgPrice = parseNumber(avgPriceInput) || 0;
                     const initialEntries = avgPrice > 0 && balance > 0
                       ? [{ action: 'buy' as const, date: new Date().toISOString(), tokenAmount: balance, pricePerToken: avgPrice, totalUSD: balance * avgPrice, notes: 'Existing position' }]
                       : [];
@@ -329,10 +330,10 @@ export default function AssetTargetSection({ asset }: Props) {
               onChangeText={setEntryPrice}
             />
 
-            {parseFloat(entryTokens) > 0 && parseFloat(entryPrice) > 0 && (
+            {parseNumber(entryTokens) > 0 && parseNumber(entryPrice) > 0 && (
               <View style={st.preview}>
                 <Text style={st.previewText}>
-                  Total: ${(parseFloat(entryTokens) * parseFloat(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  Total: ${(parseNumber(entryTokens) * parseNumber(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </Text>
               </View>
             )}
@@ -354,8 +355,8 @@ export default function AssetTargetSection({ asset }: Props) {
                 style={[st.saveBtn, (!entryTokens || !entryPrice) && { opacity: 0.5 }]}
                 disabled={!entryTokens || !entryPrice}
                 onPress={async () => {
-                  const tokens = parseFloat(entryTokens.replace(/,/g, ''));
-                  const price = parseFloat(entryPrice);
+                  const tokens = parseNumber(entryTokens);
+                  const price = parseNumber(entryPrice);
                   if (!tokens || !price) return;
                   await addEntry(mint, {
                     action: entryType,

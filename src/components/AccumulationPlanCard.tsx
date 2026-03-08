@@ -17,6 +17,7 @@ import {
   type AccumulationPlan, type PlanStats, type AccSignal, type AccEntry,
 } from '../services/accumulationPlan';
 import { fetchPrices } from '../services/priceTracker';
+import { parseNumber } from '../utils/parseNumber';
 import ConfirmModal from './ConfirmModal';
 import TargetIcon from './icons/TargetIcon';
 import { log, warn, error } from '../utils/logger';
@@ -112,11 +113,11 @@ export default function AccumulationPlanCard({
 
   // Create plan
   const handleCreate = async () => {
-    const target = parseFloat(setupTarget);
+    const target = parseNumber(setupTarget);
     if (!target || target <= 0) return xAlert('Enter a target token amount');
 
-    const initialTokens = parseFloat(setupInitialTokens) || 0;
-    const initialPrice = parseFloat(setupInitialPrice) || currentPrice;
+    const initialTokens = parseNumber(setupInitialTokens) || 0;
+    const initialPrice = parseNumber(setupInitialPrice) || currentPrice;
 
     const initialEntries: Omit<AccEntry, 'id'>[] = [];
     if (initialTokens > 0 && initialPrice > 0) {
@@ -171,7 +172,7 @@ export default function AccumulationPlanCard({
 
   // Add entry
   const handleAddEntry = async () => {
-    const tokens = parseFloat(entryTokens);
+    const tokens = parseNumber(entryTokens);
     if (!tokens || tokens <= 0) return xAlert('Enter token amount');
 
     let price: number;
@@ -179,20 +180,20 @@ export default function AccumulationPlanCard({
 
     if (entryMode === 'total_spent') {
       if (entrySubMode === 'token') {
-        const spentAmt = parseFloat(entrySpentAmount);
-        const spentPrice = parseFloat(entrySpentPrice);
+        const spentAmt = parseNumber(entrySpentAmount);
+        const spentPrice = parseNumber(entrySpentPrice);
         if (!spentAmt || spentAmt <= 0) return xAlert('Enter amount of token spent');
         if (!spentPrice || spentPrice <= 0) return xAlert('Enter USD price of token spent');
         totalUSD = spentAmt * spentPrice;
         price = totalUSD / tokens;
       } else {
-        const total = parseFloat(entryTotalUSD);
+        const total = parseNumber(entryTotalUSD);
         if (!total || total <= 0) return xAlert('Enter total amount spent');
         price = total / tokens;
         totalUSD = total;
       }
     } else {
-      price = parseFloat(entryPrice) || currentPrice;
+      price = parseNumber(entryPrice) || currentPrice;
       if (!price || price <= 0) return xAlert('Enter price per token');
       totalUSD = tokens * price;
     }
@@ -266,9 +267,9 @@ export default function AccumulationPlanCard({
                 value={setupTarget}
                 onChangeText={setSetupTarget}
               />
-              {parseFloat(setupTarget) > 0 && currentPrice > 0 && (
+              {parseNumber(setupTarget) > 0 && currentPrice > 0 && (
                 <Text style={st.fieldHint}>
-                  ≈ ${(parseFloat(setupTarget) * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })} at current price
+                  ≈ ${(parseNumber(setupTarget) * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })} at current price
                 </Text>
               )}
 
@@ -598,9 +599,9 @@ export default function AccumulationPlanCard({
                   value={entryPrice}
                   onChangeText={setEntryPrice}
                 />
-                {parseFloat(entryTokens) > 0 && parseFloat(entryPrice) > 0 && (
+                {parseNumber(entryTokens) > 0 && parseNumber(entryPrice) > 0 && (
                   <Text style={st.fieldHint}>
-                    = ${(parseFloat(entryTokens) * parseFloat(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total
+                    = ${(parseNumber(entryTokens) * parseNumber(entryPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total
                   </Text>
                 )}
               </>
@@ -634,9 +635,9 @@ export default function AccumulationPlanCard({
                       value={entryTotalUSD}
                       onChangeText={setEntryTotalUSD}
                     />
-                    {parseFloat(entryTokens) > 0 && parseFloat(entryTotalUSD) > 0 && (
+                    {parseNumber(entryTokens) > 0 && parseNumber(entryTotalUSD) > 0 && (
                       <Text style={st.fieldHint}>
-                        = ${(parseFloat(entryTotalUSD) / parseFloat(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token
+                        = ${(parseNumber(entryTotalUSD) / parseNumber(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token
                       </Text>
                     )}
                   </>
@@ -673,9 +674,9 @@ export default function AccumulationPlanCard({
                       value={entrySpentPrice}
                       onChangeText={setEntrySpentPrice}
                     />
-                    {parseFloat(entrySpentAmount) > 0 && parseFloat(entrySpentPrice) > 0 && parseFloat(entryTokens) > 0 && (
+                    {parseNumber(entrySpentAmount) > 0 && parseNumber(entrySpentPrice) > 0 && parseNumber(entryTokens) > 0 && (
                       <Text style={st.fieldHint}>
-                        {`= $${(parseFloat(entrySpentAmount) * parseFloat(entrySpentPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total · $${(parseFloat(entrySpentAmount) * parseFloat(entrySpentPrice) / parseFloat(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token`}
+                        {`= $${(parseNumber(entrySpentAmount) * parseNumber(entrySpentPrice)).toLocaleString(undefined, { maximumFractionDigits: 2 })} total · $${(parseNumber(entrySpentAmount) * parseNumber(entrySpentPrice) / parseNumber(entryTokens)).toLocaleString(undefined, { maximumFractionDigits: 8 })} per token`}
                       </Text>
                     )}
                   </>

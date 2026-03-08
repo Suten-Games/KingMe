@@ -10,6 +10,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { parseCSVTransactions } from '../../utils/csvBankImport';
 import { useStore } from '../../store/useStore';
+import { parseNumber } from '../../utils/parseNumber';
 import type { BankTransaction } from '../../types/bankTransactionTypes';
 import {
   type BusinessData, type BusinessInfo, type EntityType,
@@ -152,7 +153,7 @@ export function BankModal({ visible, onClose, data, onSave }: {
             <TouchableOpacity style={ms.cancel} onPress={onClose}><Text style={ms.cancelText}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity style={ms.save} onPress={() => {
               if (!name || !bal) return;
-              onSave({ bankAccount: { name, institution: inst, balance: parseFloat(bal), lastUpdated: new Date().toISOString() } });
+              onSave({ bankAccount: { name, institution: inst, balance: parseNumber(bal), lastUpdated: new Date().toISOString() } });
               onClose();
             }}><Text style={ms.saveText}>Save</Text></TouchableOpacity>
           </View>
@@ -184,7 +185,7 @@ export function ExpenseModal({ visible, onClose, data, onSave, editId }: {
 
   const handleSave = () => {
     if (!name || !amount) return;
-    const expense = { id: editId || Date.now().toString(), name, amount: parseFloat(amount), frequency: freq, category: cat as any, notes: notes || undefined };
+    const expense = { id: editId || Date.now().toString(), name, amount: parseNumber(amount), frequency: freq, category: cat as any, notes: notes || undefined };
     const newExpenses = editId ? data.expenses.map(e => e.id === editId ? expense : e) : [...data.expenses, expense];
     onSave({ expenses: newExpenses });
     onClose();
@@ -238,7 +239,7 @@ export function DistributionModal({ visible, onClose, data, onSave }: {
   useEffect(() => { if (visible) { setAmount(''); setNotes(''); } }, [visible]);
 
   const handleRecord = () => {
-    const val = parseFloat(amount);
+    const val = parseNumber(amount);
     if (!val || val <= 0) return;
     const dist = { id: Date.now().toString(), amount: val, date: new Date().toISOString(), notes: notes || undefined };
     onSave({ distributions: [...data.distributions, dist] });
@@ -292,7 +293,7 @@ export function ContributionModal({ visible, onClose, data, onSave }: {
           <View style={ms.btns}>
             <TouchableOpacity style={ms.cancel} onPress={onClose}><Text style={ms.cancelText}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity style={ms.save} onPress={() => {
-              const val = parseFloat(amount);
+              const val = parseNumber(amount);
               if (!val || val <= 0) return;
               onSave({ contributions: [...(data.contributions || []), { id: Date.now().toString(), amount: val, date: new Date().toISOString(), notes: notes || undefined }] });
               onClose();

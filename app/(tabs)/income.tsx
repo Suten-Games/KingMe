@@ -8,6 +8,7 @@ import { getMonthlyPreTaxDeductions } from '../../src/services/cashflow';
 import { fetchSKRHolding, calcSKRIncome } from '../../src/services/skr';
 import PaycheckBreakdownModal from '../paycheck';
 import type { IncomeSource } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import type { SKRHolding, SKRIncomeSnapshot } from '../../src/services/skr';
 import CollapsibleSection from '../../src/components/CollapsibleSection';
 import { T } from '../../src/theme';
@@ -75,7 +76,7 @@ export default function IncomeScreen() {
 
   const handleAddIncome = () => {
     if (!srcName || !srcAmount || !srcAccountId) return;
-    const amt = parseFloat(srcAmount);
+    const amt = parseNumber(srcAmount);
     const finalAmount = srcIsLoss ? -Math.abs(amt) : Math.abs(amt);
     addIncomeSource({ id: Date.now().toString(), source: srcType, name: srcName, amount: finalAmount, frequency: srcFreq, bankAccountId: srcAccountId });
     setSrcName(''); setSrcAmount(''); setSrcType('salary'); setSrcFreq('biweekly'); setSrcAccountId(''); setSrcIsLoss(false);
@@ -370,9 +371,9 @@ export default function IncomeScreen() {
                 ))}
               </View>
 
-              {parseFloat(srcAmount) > 0 && (
+              {parseNumber(srcAmount) > 0 && (
                 <Text style={[s.monthlyPreview, srcIsLoss && { color: '#f87171' }]}>
-                  = {srcIsLoss ? '-' : ''}${toMonthly(parseFloat(srcAmount), srcFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
+                  = {srcIsLoss ? '-' : ''}${toMonthly(parseNumber(srcAmount), srcFreq).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
                 </Text>
               )}
 

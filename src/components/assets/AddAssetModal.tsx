@@ -7,6 +7,7 @@ import type {
   Asset, AssetType,
   CryptoAsset, StockAsset, RealEstateAsset, BusinessAsset, RetirementAsset, OtherAsset,
 } from '../../types';
+import { parseNumber } from '../../utils/parseNumber';
 
 // ── Helpers ────────────────────────────────────────────────
 const isCryptoLike = (t: AssetType) => t === 'crypto' || t === 'defi';
@@ -123,14 +124,14 @@ export default function AddAssetModal({
   const [bankIsPrimary, setBankIsPrimary] = useState(false);
 
   // ── Computed ─────────────────────────────────────────────
-  const retMonthlyContribution = (parseFloat(retContribution) || 0) * getFrequencyMultiplier(retFrequency);
-  const retMatchPct = parseFloat(retMatchPercent) || 0;
+  const retMonthlyContribution = (parseNumber(retContribution) || 0) * getFrequencyMultiplier(retFrequency);
+  const retMatchPct = parseNumber(retMatchPercent) || 0;
 
   // ── Auto-calculate value from amount × price ─────────────
   useEffect(() => {
     if (tokenAmount && tokenPrice) {
-      const amt = parseFloat(tokenAmount);
-      const prc = parseFloat(tokenPrice);
+      const amt = parseNumber(tokenAmount);
+      const prc = parseNumber(tokenPrice);
       if (!isNaN(amt) && !isNaN(prc)) {
         setValue((amt * prc).toFixed(2));
       }
@@ -235,9 +236,9 @@ export default function AddAssetModal({
 
   // ── Build typed metadata ─────────────────────────────────
   const buildMetadata = (): Asset['metadata'] => {
-    const qty = parseFloat(tokenAmount) || undefined;
-    const price = parseFloat(tokenPrice) || undefined;
-    const apyNum = parseFloat(apy) || undefined;
+    const qty = parseNumber(tokenAmount) || undefined;
+    const price = parseNumber(tokenPrice) || undefined;
+    const apyNum = parseNumber(apy) || undefined;
     const sym = symbol.trim().toUpperCase() || undefined;
     const logo = logoUri || undefined;
     const mint = selectedToken?.mint || mintAddress.trim() || undefined;
@@ -258,10 +259,10 @@ export default function AddAssetModal({
           // DeFi leverage fields (only for defi)
           ...(type === 'defi' ? {
             positionType: positionType || 'token',
-            supplied: parseFloat(supplied) || undefined,
-            borrowed: parseFloat(borrowed) || undefined,
-            leverage: parseFloat(leverage) || undefined,
-            healthFactor: parseFloat(healthFactor) || undefined,
+            supplied: parseNumber(supplied) || undefined,
+            borrowed: parseNumber(borrowed) || undefined,
+            leverage: parseNumber(leverage) || undefined,
+            healthFactor: parseNumber(healthFactor) || undefined,
           } : {}),
         };
         return meta;
@@ -275,10 +276,10 @@ export default function AddAssetModal({
           dividendYield: apyNum, apy: apyNum,
           description: name, mint,
           ...(hasUnvestedShares ? {
-            vestedShares: parseFloat(vestedShares) || 0,
-            unvestedShares: parseFloat(unvestedShares) || 0,
+            vestedShares: parseNumber(vestedShares) || 0,
+            unvestedShares: parseNumber(unvestedShares) || 0,
             vestingSchedule: {
-              sharesPerVest: parseFloat(sharesPerVest) || 0,
+              sharesPerVest: parseNumber(sharesPerVest) || 0,
               frequency: vestingFrequency,
               nextVestDate: nextVestDate || undefined,
             },
@@ -289,7 +290,7 @@ export default function AddAssetModal({
       case 'real_estate': {
         const meta: RealEstateAsset = {
           type: 'real_estate',
-          currentValue: parseFloat(value) || undefined,
+          currentValue: parseNumber(value) || undefined,
           isPrimaryResidence,
           description: name,
           apy: apyNum,
@@ -299,14 +300,14 @@ export default function AddAssetModal({
       case 'business': {
         const meta: BusinessAsset = {
           type: 'business',
-          annualDistributions: parseFloat(annualIncome) || undefined,
+          annualDistributions: parseNumber(annualIncome) || undefined,
           description: name, apy: apyNum,
         };
         return meta;
       }
       case 'retirement': {
-        const contribAmount = parseFloat(retContribution) || 0;
-        const matchPct = parseFloat(retMatchPercent) || 0;
+        const contribAmount = parseNumber(retContribution) || 0;
+        const matchPct = parseNumber(retMatchPercent) || 0;
         const matchDollars = matchPct > 0 && contribAmount > 0
           ? (contribAmount * matchPct / 100) : 0;
         const meta: RetirementAsset = {
@@ -317,7 +318,7 @@ export default function AddAssetModal({
           contributionFrequency: retFrequency,
           employerMatchPercent: matchPct || undefined,
           employerMatchDollars: matchDollars || undefined,
-          apy: parseFloat(retGrowthRate) || undefined,
+          apy: parseNumber(retGrowthRate) || undefined,
         };
         return meta;
       }
@@ -341,7 +342,7 @@ export default function AddAssetModal({
           id: 'bank_' + Date.now().toString(),
           name,
           type: bankAccountType,
-          currentBalance: parseFloat(bankBalance) || 0,
+          currentBalance: parseNumber(bankBalance) || 0,
           institution: bankInstitution,
           isPrimaryIncome: bankIsPrimary,
         });
@@ -355,8 +356,8 @@ export default function AddAssetModal({
       const retLabel = retAccountType === '401k' ? '401(k)'
         : retAccountType === 'roth_401k' ? 'Roth 401(k)'
         : retAccountType === 'ira' ? 'IRA' : 'Roth IRA';
-      const balance = parseFloat(retBalance);
-      const growthRate = parseFloat(retGrowthRate) || 0;
+      const balance = parseNumber(retBalance);
+      const growthRate = parseNumber(retGrowthRate) || 0;
       // Annual income = expected growth on current balance
       const growthIncome = growthRate > 0 ? (balance * growthRate / 100) : 0;
       const newAsset: Asset = {
@@ -373,14 +374,14 @@ export default function AddAssetModal({
     }
 
     if (!name || !value) return;
-    let calculatedIncome = parseFloat(annualIncome) || 0;
+    let calculatedIncome = parseNumber(annualIncome) || 0;
     if (apy && !annualIncome) {
-      calculatedIncome = parseFloat(value) * (parseFloat(apy) / 100);
+      calculatedIncome = parseNumber(value) * (parseNumber(apy) / 100);
     }
     const newAsset: Asset = {
       id: Date.now().toString(),
       name, type,
-      value: parseFloat(value),
+      value: parseNumber(value),
       annualIncome: calculatedIncome,
       isLiquid: isCryptoLike(type),
       metadata: buildMetadata(),
@@ -394,8 +395,8 @@ export default function AddAssetModal({
     if (!editingAsset || !onUpdateAsset) return;
     if (type === 'retirement') {
       if (!retInstitution || !retBalance) return;
-      const balance = parseFloat(retBalance);
-      const growthRate = parseFloat(retGrowthRate) || 0;
+      const balance = parseNumber(retBalance);
+      const growthRate = parseNumber(retGrowthRate) || 0;
       const growthIncome = growthRate > 0 ? (balance * growthRate / 100) : 0;
       onUpdateAsset(editingAsset.id, {
         value: balance,
@@ -404,9 +405,9 @@ export default function AddAssetModal({
       });
     } else {
       if (!name || !value) return;
-      const assetValue = parseFloat(value);
-      const assetApy = parseFloat(apy) || 0;
-      let calculatedIncome = parseFloat(annualIncome) || 0;
+      const assetValue = parseNumber(value);
+      const assetApy = parseNumber(apy) || 0;
+      let calculatedIncome = parseNumber(annualIncome) || 0;
       if (apy && !annualIncome) {
         calculatedIncome = assetValue * (assetApy / 100);
       }
@@ -595,7 +596,7 @@ export default function AddAssetModal({
                   ))}
                 </View>
 
-                {parseFloat(retContribution) > 0 && (
+                {parseNumber(retContribution) > 0 && (
                   <Text style={styles.retPreview}>= ${retMonthlyContribution.toFixed(0)}/mo pre-tax</Text>
                 )}
 
@@ -615,11 +616,11 @@ export default function AddAssetModal({
                   <Text style={styles.suffix}>%</Text>
                 </View>
 
-                {(parseFloat(retBalance) > 0 && parseFloat(retGrowthRate) > 0) && (
+                {(parseNumber(retBalance) > 0 && parseNumber(retGrowthRate) > 0) && (
                   <View style={[styles.helperBox, { borderLeftColor: '#4ade80' }]}>
                     <Text style={[styles.helperBoxText, { color: '#4ade80' }]}>
-                      Estimated growth: ${((parseFloat(retBalance) * parseFloat(retGrowthRate)) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
-                      {parseFloat(retContribution) > 0 && ` · Contributions: $${(retMonthlyContribution * 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr`}
+                      Estimated growth: ${((parseNumber(retBalance) * parseNumber(retGrowthRate)) / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
+                      {parseNumber(retContribution) > 0 && ` · Contributions: $${(retMonthlyContribution * 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr`}
                     </Text>
                   </View>
                 )}
@@ -743,8 +744,8 @@ export default function AddAssetModal({
                             keyboardType="numeric" value={supplied}
                             onChangeText={(t) => {
                               setSupplied(t);
-                              const s = parseFloat(t) || 0;
-                              const b = parseFloat(borrowed) || 0;
+                              const s = parseNumber(t);
+                              const b = parseNumber(borrowed) || 0;
                               if (s > 0) setValue(Math.max(0, s - b).toFixed(2));
                             }} />
                         </View>
@@ -757,17 +758,17 @@ export default function AddAssetModal({
                             keyboardType="numeric" value={borrowed}
                             onChangeText={(t) => {
                               setBorrowed(t);
-                              const s = parseFloat(supplied) || 0;
-                              const b = parseFloat(t) || 0;
+                              const s = parseNumber(supplied) || 0;
+                              const b = parseNumber(t);
                               if (s > 0) setValue(Math.max(0, s - b).toFixed(2));
                               if (s > 0 && b > 0) setLeverage((s / (s - b)).toFixed(1));
                             }} />
                         </View>
 
-                        {parseFloat(supplied) > 0 && parseFloat(borrowed) > 0 && (
+                        {parseNumber(supplied) > 0 && parseNumber(borrowed) > 0 && (
                           <View style={[styles.helperBox, { borderLeftColor: '#ff9f43' }]}>
                             <Text style={[styles.helperBoxText, { color: '#ff9f43' }]}>
-                              Net Equity: ${(parseFloat(supplied) - parseFloat(borrowed)).toFixed(2)} · Leverage: {(parseFloat(supplied) / (parseFloat(supplied) - parseFloat(borrowed))).toFixed(1)}x
+                              Net Equity: ${(parseNumber(supplied) - parseNumber(borrowed)).toFixed(2)} · Leverage: {(parseNumber(supplied) / (parseNumber(supplied) - parseNumber(borrowed))).toFixed(1)}x
                             </Text>
                           </View>
                         )}

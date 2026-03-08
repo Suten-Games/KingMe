@@ -25,8 +25,17 @@ import { ExportIcon, ImportIcon, CloudBackupIcon, CloudRestoreIcon, CrownIcon } 
 import { DEMO_PERSONAS, seedDemoWatchlist, type DemoPersona } from '../src/utils/demoPersonas';
 import { log, warn, error as logError } from '@/utils/logger';
 import ConfirmModal from '../src/components/ConfirmModal';
+import ErrorBoundary from '../src/components/ErrorBoundary';
 
 export default function ProfileScreen() {
+  return (
+    <ErrorBoundary fallbackTitle="Profile crashed">
+      <ProfileScreenInner />
+    </ErrorBoundary>
+  );
+}
+
+function ProfileScreenInner() {
   const [fontsLoaded] = useFonts({ Cinzel_700Bold });
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -174,7 +183,7 @@ export default function ProfileScreen() {
   };
 
   // ── Confirmation state (for delete) ──────────────────────────────────────
-  const totalBalance = bankAccounts.reduce((sum, a) => sum + (a.currentBalance ?? 0), 0);
+  const totalBalance = (bankAccounts || []).reduce((sum: number, a: any) => sum + (a.currentBalance ?? 0), 0);
 
   const handleResetOnboarding = () => {
     crossConfirm(

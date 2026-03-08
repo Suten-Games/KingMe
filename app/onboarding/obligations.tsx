@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Obligation, BankAccount } from '../../src/types';
 import { obligationMonthlyAmount } from '../../src/types';
+import { parseNumber } from '../../src/utils/parseNumber';
 import { S, T } from '../../src/styles/onboarding';
 import KingMeFooter from '../../src/components/KingMeFooter';
 
@@ -62,7 +63,7 @@ export default function ObligationsScreen() {
     if (!name || !amount) return;
     const newObligation: Obligation = {
       id: Date.now().toString(), name, payee: payee || 'Various',
-      amount: parseFloat(amount), category: 'other', isRecurring: true,
+      amount: parseNumber(amount), category: 'other', isRecurring: true,
       ...(modalBankAccountId && { bankAccountId: modalBankAccountId }),
     };
     addObligation(newObligation);
@@ -72,7 +73,7 @@ export default function ObligationsScreen() {
 
   const calculateMonthlyTotal = () => {
     let total = obligations.reduce((sum, o) => sum + obligationMonthlyAmount(o), 0);
-    if (dailyAllowance) total += parseFloat(dailyAllowance) * 30;
+    if (dailyAllowance) total += parseNumber(dailyAllowance) * 30;
     return total;
   };
 
@@ -80,7 +81,7 @@ export default function ObligationsScreen() {
     if (dailyAllowance) {
       const dailyObligation: Obligation = {
         id: 'daily-allowance', name: 'Daily Living Allowance', payee: 'Various',
-        amount: parseFloat(dailyAllowance) * 30, category: 'daily_living', isRecurring: true,
+        amount: parseNumber(dailyAllowance) * 30, category: 'daily_living', isRecurring: true,
         ...(dailyBankAccountId && { bankAccountId: dailyBankAccountId }),
       };
       if (!obligations.find(o => o.id === 'daily-allowance')) addObligation(dailyObligation);

@@ -18,6 +18,7 @@ import type { Asset } from '../types';
 import { postSwapUpdate } from '../utils/postSwapUpdate';
 import { useSwapToast } from './SwapToast';
 import { log, warn, error } from '../utils/logger';
+import { parseNumber } from '../utils/parseNumber';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -57,7 +58,7 @@ export default function SwapSection({ asset }: Props) {
   const output = OUTPUT_OPTIONS[outputIdx];
   const tokenAmount = pct
     ? balance * (pct / 100)
-    : parseFloat(customAmount) || 0;
+    : parseNumber(customAmount) || 0;
   const dollarValue = tokenAmount * pricePerToken;
 
   const handleQuote = useCallback(async () => {

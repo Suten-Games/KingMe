@@ -17,6 +17,7 @@ import { postSwapUpdate } from '../utils/postSwapUpdate';
 import { useSwapToast } from './SwapToast';
 import { lookupToken } from '../utils/tokenRegistry';
 import { log, warn, error } from '../utils/logger';
+import { parseNumber } from '../utils/parseNumber';
 
 function xAlert(t: string, m?: string) {
   Platform.OS === 'web' ? window.alert(m ? `${t}\n\n${m}` : t) : RNAlert.alert(t, m);
@@ -82,7 +83,7 @@ export default function JupiterSwap({ asset }: Props) {
   const outputSymbol = flipped ? symbol : output.label;
   const inputLogo = flipped ? outputLogoURI : logoURI;
   const inputBalance = flipped ? paymentBalance : balance;
-  const numAmount = parseFloat(amount) || 0;
+  const numAmount = parseNumber(amount) || 0;
 
   // Fetch payment token balance when in buy mode
   useEffect(() => {

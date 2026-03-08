@@ -19,6 +19,7 @@ import BadgeToast from '../src/components/BadgeToast';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 // @vercel/analytics imported dynamically in useEffect below (crashes Android at import time)
 import { useStore } from '../src/store/useStore';
+import ErrorBoundary from '../src/components/ErrorBoundary';
 
 /** Runs hooks that depend on WalletProvider context. */
 function WalletHooks() {
@@ -69,6 +70,7 @@ export default function RootLayout() {
   }
 
   return (
+    <ErrorBoundary fallbackTitle="App crashed">
     <PrivyWrapper>
       <BadgeToast />
       <WalletProvider>
@@ -102,6 +104,7 @@ export default function RootLayout() {
           <Stack.Screen name="divorce-simulator" options={{ headerShown: false }} />
           <Stack.Screen name="companionship" options={{ headerShown: false }} />
           <Stack.Screen name="bank-consolidation" options={{ headerShown: false }} />
+          <Stack.Screen name="pro-upgrade" options={{ headerShown: false }} />
           <Stack.Screen name="badges" options={{ title: 'Badges' }} />
           <Stack.Screen name="watchlist" options={{ headerShown: false }} />
           <Stack.Screen name="goals" options={{ headerShown: false }} />
@@ -115,6 +118,7 @@ export default function RootLayout() {
         </Stack>
       </WalletProvider>
     </PrivyWrapper>
+    </ErrorBoundary>
   );
 }
 
