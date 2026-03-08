@@ -3,6 +3,7 @@
 import { log, warn, error as logError } from '../utils/logger';
 
 const API_BASE = 'https://kingme-api.vercel.app/api/skr';
+const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
 
 export interface SKRHolding {
   totalBalance: number;
@@ -73,7 +74,7 @@ export async function buildStakeTransaction(
 ): Promise<{ transaction: string; message: string }> {
   const res = await fetch(`${API_BASE}/stake`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
     body: JSON.stringify({ wallet: walletAddress, amount }),
   });
 
@@ -94,7 +95,7 @@ export async function buildUnstakeTransaction(
 ): Promise<{ transaction: string; message: string }> {
   const res = await fetch(`${API_BASE}/unstake`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
     body: JSON.stringify({ wallet: walletAddress, amount }),
   });
 

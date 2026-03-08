@@ -19,6 +19,7 @@ import { log, warn, error as logError } from '../utils/logger';
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme-api.vercel.app';
 const RPC_URL = process.env.EXPO_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
 
 // ── Types ────────────────────────────────────────────────────
 export interface DriftWithdrawParams {
@@ -79,7 +80,7 @@ export async function executeDriftWithdraw(
     try {
       response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({ wallet, subAccount, amount, symbol }),
       });
     } catch (networkError: any) {

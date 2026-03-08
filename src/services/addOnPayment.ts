@@ -21,6 +21,7 @@ import { log, warn, error as logError } from '../utils/logger';
 // ── Config ───────────────────────────────────────────────────
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
 const RPC_PROXY = `${API_BASE}/api/rpc/send`;
+const KINGME_API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
 
 const TREASURY_WALLET = new PublicKey('AY9orTn5i8jbHU4RyC1k4MhzXchJaMpmQahpMrLfQCXi');
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -222,12 +223,11 @@ export async function payForAddOn(
     try {
       const verifyRes = await fetch(`${API_BASE}/api/addons/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': KINGME_API_KEY },
         body: JSON.stringify({
           signature,
           addonId,
           walletAddress: userPublicKey,
-          expectedAmount: priceUsd,
         }),
       });
       const verifyData = await verifyRes.json();
@@ -377,6 +377,26 @@ export async function payForAddOnWithSKR(
     }
 
     log(`[PAYMENT-SKR] Confirmed: ${signature}`);
+
+    // Verify on-chain via API
+    try {
+      const verifyRes = await fetch(`${API_BASE}/api/addons/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': KINGME_API_KEY },
+        body: JSON.stringify({
+          signature,
+          addonId,
+          walletAddress: userPublicKey,
+          token: 'SKR',
+        }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.verified) {
+        warn('[PAYMENT-SKR] API verification failed, but tx confirmed on-chain. Unlocking anyway.');
+      }
+    } catch (verifyErr) {
+      warn('[PAYMENT-SKR] Could not reach verify API, unlocking based on on-chain confirmation:', verifyErr);
+    }
 
     // Store unlock locally
     await unlockAddOn(addonId);
