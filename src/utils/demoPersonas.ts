@@ -64,7 +64,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true, avatarType: 'male-medium' },
     },
     demoWatchlist: [
       { mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', symbol: 'WIF', addedPrice: 0.32, notes: 'Dog meme coin, bought the dip' },
@@ -115,7 +115,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true, avatarType: 'female-medium' },
     },
   },
   {
@@ -184,7 +184,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', perPayPeriod: 185, frequency: 'biweekly', type: 'state_withholding' },
       ],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true, avatarType: 'male-dark' },
     },
     demoWatchlist: [
       { mint: '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4', symbol: 'JupSOL', addedPrice: 140, notes: 'Staked SOL via Jupiter, earning ~7.5% APY' },
@@ -252,7 +252,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true, tradingPlatform: 'drift' },
+      settings: { debtsConfirmedNone: false, walletDeclined: false, localBackupDone: true, tradingPlatform: 'drift', avatarType: 'male-medium' },
     },
     demoWatchlist: [
       { mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', symbol: 'WIF', addedPrice: 1.85, notes: 'Dog meta leader, watching for re-entry below $1.50' },
@@ -334,7 +334,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', perPayPeriod: 450, frequency: 'biweekly', type: 'state_withholding' },
       ],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true, avatarType: 'female-medium' },
     },
   },
   {
@@ -393,7 +393,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
         { id: 'tax_4', name: 'State W/H', perPayPeriod: 350, frequency: 'biweekly', type: 'state_withholding' },
       ],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: false, walletDeclined: true, localBackupDone: true, avatarType: 'male-dark' },
     },
   },
   {
@@ -450,7 +450,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
       preTaxDeductions: [],
       taxes: [],
       postTaxDeductions: [],
-      settings: { debtsConfirmedNone: true, walletDeclined: true, localBackupDone: true },
+      settings: { debtsConfirmedNone: true, walletDeclined: true, localBackupDone: true, avatarType: 'male-medium' },
     },
   },
 ];
