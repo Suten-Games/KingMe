@@ -75,9 +75,13 @@ export default function WhatIfCard({ scenario, onPress, onDismiss }: WhatIfCardP
         <View style={styles.impactDivider} />
 
         <View style={styles.impactItem}>
-          <Text style={styles.impactLabel}>Income</Text>
+          <Text style={styles.impactLabel}>
+            {impact.monthlyIncomeDelta > 0 ? 'Income' : (impact as any).monthlySavings > 0 ? 'Savings' : 'Income'}
+          </Text>
           <Text style={styles.impactValue}>
-            +${Math.round(impact.monthlyIncomeDelta)}/mo
+            {(impact as any).monthlySavings > 0 && impact.monthlyIncomeDelta === 0
+              ? `+$${Math.round((impact as any).monthlySavings)}/mo`
+              : `+$${Math.round(impact.monthlyIncomeDelta)}/mo`}
           </Text>
         </View>
 
