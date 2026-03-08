@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AVATAR_PREVIEWS } from '../../src/utils/constants';
 import { isSeeker } from '../../src/utils/device';
 import Svg, { Path, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { useWallet } from '../../src/providers/wallet-provider';
@@ -21,6 +20,8 @@ import { useStore } from '../../src/store/useStore';
 import WalletPickerModal from '../../src/components/WalletPickerModal';
 import { T } from '../../src/theme';
 import { log, warn, error as logError } from '@/utils/logger';
+import { DEMO_PERSONAS, type DemoPersona } from '../../src/utils/demoPersonas';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_WIDTH = Platform.OS === 'web' ? Math.min(SCREEN_WIDTH, 480) : SCREEN_WIDTH;
@@ -35,6 +36,29 @@ export default function OnboardingIntro() {
   const [restoreError, setRestoreError] = useState('');
 
   const { signMessage, publicKey, connected, connect } = useWallet();
+  const importBackup = useStore(s => s.importBackup);
+  const exportBackup = useStore(s => s.exportBackup);
+
+  const handleTryPersona = async (persona: DemoPersona) => {
+    try {
+      // Save current (empty) state so exit demo can restore
+      const backup = exportBackup();
+      await AsyncStorage.setItem('_demo_saved_profile', backup);
+      await AsyncStorage.setItem('_demo_active', 'true');
+      await AsyncStorage.setItem('_demo_persona_id', persona.id);
+
+      // Load persona data
+      importBackup(JSON.stringify({
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        profile: { ...persona.profile, onboardingComplete: true },
+      }));
+
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      logError('Failed to load demo persona:', err);
+    }
+  };
 
   const handleRestore = async () => {
     if (!connected || !publicKey) return;
@@ -292,44 +316,42 @@ export default function OnboardingIntro() {
           </View>
         </View>
 
-        {/* ── Page 6: Demo + CTA ───────────────────────────── */}
+        {/* ── Page 6: Try It + CTA ──────────────────────────── */}
         <View style={[st.page, { width: PAGE_WIDTH }]}>
-          <View style={st.pageInner}>
-            <Text style={st.pageTitle}>This Could Be You</Text>
-            <Text style={st.pageSub}>A fully set up dashboard tracking everything</Text>
-            <View style={st.demoContainer}>
-              <View style={st.demoHeader}>
-                <Image source={AVATAR_PREVIEWS['male-dark']} style={st.demoAvatar} resizeMode="cover" />
-                <View style={st.demoScoreBubble}>
-                  <Text style={st.demoScoreValue}>4.6y</Text>
-                  <Text style={st.demoScoreLabel}>freedom</Text>
-                </View>
-              </View>
-              <View style={st.demoMetricsRow}>
-                <DemoMetric label="Freedom" value="4.6 years" color={T.gold} />
-                <DemoMetric label="Runway" value="5.2 years" color={T.blue} />
-              </View>
-              <View style={st.demoMetricsRow}>
-                <DemoMetric label="Monthly In" value="$8,430" color={T.green} />
-                <DemoMetric label="Surplus" value="+$2,930" color={T.green} />
-              </View>
-              <View style={st.demoInsight}>
-                <Text style={st.demoInsightEmoji}>🟢</Text>
-                <Text style={st.demoInsightText}>Thriving · 55 months runway · Invest aggressively</Text>
-              </View>
-              <View style={st.demoBadges}>
-                <Text style={st.demoBadgeIcon}>😤</Text>
-                <Text style={st.demoBadgeIcon}>🐋</Text>
-                <Text style={st.demoBadgeIcon}>🔥</Text>
-                <Text style={st.demoBadgeIcon}>🌳</Text>
-                <Text style={st.demoBadgeIcon}>🏛️</Text>
-                <Text style={st.demoBadgePlus}>+12</Text>
-              </View>
-            </View>
-            <Text style={st.ctaText}>
-              It takes about 5 minutes to set up.{'\n'}Let's find out where you stand.
+          <ScrollView contentContainerStyle={[st.pageInner, { justifyContent: 'flex-start', paddingTop: 60 }]} showsVerticalScrollIndicator={false}>
+            <Text style={st.pageTitle}>See It In Action</Text>
+            <Text style={st.pageSub}>
+              Pick a persona to explore the app with real-looking data.{'\n'}No commitment — you can start your own setup anytime.
             </Text>
-          </View>
+
+            <View style={{ width: '100%', gap: 8, marginBottom: 20 }}>
+              {DEMO_PERSONAS.map(persona => (
+                <TouchableOpacity
+                  key={persona.id}
+                  style={[st.personaCard, { borderColor: persona.color + '40' }]}
+                  onPress={() => handleTryPersona(persona)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={st.personaEmoji}>{persona.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.personaName, { color: persona.color }]}>{persona.name}</Text>
+                    <Text style={st.personaDesc}>{persona.description}</Text>
+                  </View>
+                  <Text style={{ color: '#555', fontSize: 14 }}>{'\u203A'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={st.ctaDivider}>
+              <View style={st.ctaDividerLine} />
+              <Text style={st.ctaDividerText}>or</Text>
+              <View style={st.ctaDividerLine} />
+            </View>
+
+            <Text style={st.ctaText}>
+              Ready to set up your real profile?{'\n'}It takes about 5 minutes.
+            </Text>
+          </ScrollView>
         </View>
       </ScrollView>
 
@@ -398,15 +420,6 @@ function SecurityItem({ emoji, title, desc }: { emoji: string; title: string; de
         <Text style={st.securityItemTitle}>{title}</Text>
         <Text style={st.securityItemDesc}>{desc}</Text>
       </View>
-    </View>
-  );
-}
-
-function DemoMetric({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <View style={st.demoMetric}>
-      <Text style={st.demoMetricLabel}>{label}</Text>
-      <Text style={[st.demoMetricValue, { color }]}>{value}</Text>
     </View>
   );
 }
@@ -525,38 +538,23 @@ const st = StyleSheet.create({
   },
   securityBadgeText: { fontSize: 14, fontWeight: '800', color: T.green, textAlign: 'center' },
 
-  // Page 6: Demo
-  demoContainer: {
-    width: '100%', backgroundColor: T.bgCardAlt, borderRadius: T.radius.lg, padding: 16,
-    borderWidth: 1, borderColor: T.border, marginBottom: 20,
-  },
-  demoHeader: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 },
-  demoAvatar: { width: 64, height: 80, borderRadius: 10 },
-  demoScoreBubble: {
-    backgroundColor: `${T.bg}dd`, borderRadius: 50,
-    width: 80, height: 80, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: T.gold,
-  },
-  demoScoreValue: { fontSize: 22, fontWeight: '900', color: T.gold },
-  demoScoreLabel: { fontSize: 9, color: T.textPrimary },
-  demoMetricsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  demoMetric: {
-    flex: 1, backgroundColor: T.bgCard, borderRadius: T.radius.sm, padding: 10, alignItems: 'center',
-    borderWidth: 1, borderColor: T.borderSubtle,
-  },
-  demoMetricLabel: { fontSize: 9, color: T.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-  demoMetricValue: { fontSize: 16, fontWeight: '800' },
-  demoInsight: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: T.bgCard, borderRadius: T.radius.sm, padding: 10, marginBottom: 8,
-  },
-  demoInsightEmoji: { fontSize: 14 },
-  demoInsightText: { fontSize: 11, color: T.textMuted, flex: 1 },
-  demoBadges: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', marginTop: 4 },
-  demoBadgeIcon: { fontSize: 20 },
-  demoBadgePlus: { fontSize: 12, color: T.textMuted, fontWeight: '700' },
+  // (Page 6 styles moved to personaCard etc. above)
 
-  ctaText: { fontSize: 15, color: T.textSecondary, textAlign: 'center', lineHeight: 22 },
+  // Persona picker
+  personaCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 14,
+    borderWidth: 1,
+  },
+  personaEmoji: { fontSize: 28 },
+  personaName: { fontSize: 15, fontWeight: '800' },
+  personaDesc: { fontSize: 11, color: T.textMuted, marginTop: 2 },
+
+  ctaDivider: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', marginBottom: 16 },
+  ctaDividerLine: { flex: 1, height: 1, backgroundColor: T.border },
+  ctaDividerText: { fontSize: 12, color: T.textDim, fontWeight: '600' },
+
+  ctaText: { fontSize: 15, color: T.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
 
   // Bottom bar
   bottomBar: {

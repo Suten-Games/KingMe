@@ -454,7 +454,7 @@ export function analyzeAllAccounts(
   }
 
   if (monthlyDiscretionary === 0 && variableSpending.autoEstimate === 0 && totalMonthlyObligations > 0) {
-    recommendations.unshift('⚠️ Import bank transactions or set a variable spending estimate for accurate cash flow');
+    recommendations.unshift('⚠️ Tap the orange spending card below to set a variable spending estimate, or go to a bank account to import a CSV statement');
   }
 
   if (unassignedObligations.length > 0) {

@@ -79,6 +79,17 @@ export const BADGES: BadgeDefinition[] = [
     freedomBoost: 'Complete data means accurate freedom score and smart alerts',
   },
 
+  {
+    id: 'cloud_backup',
+    name: 'Anchored',
+    description: 'Complete your first encrypted cloud backup',
+    emoji: '⚓',
+    category: 'setup',
+    tier: 'pawn',
+    celebration: 'Anchored! Your data is encrypted and backed up to the cloud.',
+    freedomBoost: 'Cloud backup means you can restore your profile on any device with your wallet',
+  },
+
   // ── TRADING: Smart Moves ─────────────────────────────────────────────────
   {
     id: 'smart_trim',

@@ -58,6 +58,90 @@ function formatCurrency(amt: number): string {
   return `$${Math.abs(amt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// ─── Bank-specific CSV download instructions (mobile-friendly) ───────────────
+function getBankCsvInstructions(institution?: string): string[] {
+  const bank = (institution || '').toLowerCase();
+
+  if (bank.includes('chase')) return [
+    '📱 Chase — Mobile App',
+    '1. Open the Chase app → tap your account',
+    '2. Tap the search/filter icon (top right)',
+    '3. Set your date range and tap "Search"',
+    '4. Scroll down and tap "Download" → choose CSV',
+    '5. Open the downloaded file here or copy-paste the contents',
+  ];
+  if (bank.includes('bank of america') || bank.includes('boa') || bank.includes('bofa')) return [
+    '📱 Bank of America — Mobile Browser',
+    '1. Go to bankofamerica.com in Chrome and sign in',
+    '2. Tap your account → "Download Transactions"',
+    '3. Select date range, choose CSV format',
+    '4. Tap "Download" and open the file here',
+    '(The BofA app doesn\'t support CSV export — use the mobile website)',
+  ];
+  if (bank.includes('wells fargo') || bank.includes('wells')) return [
+    '📱 Wells Fargo — Mobile Browser',
+    '1. Go to wellsfargo.com in Chrome and sign in',
+    '2. Tap your account → "Download Activity"',
+    '3. Choose "Comma Delimited" format and date range',
+    '4. Tap "Download" and open the file here',
+    '(The Wells Fargo app doesn\'t support CSV — use mobile website)',
+  ];
+  if (bank.includes('capital one')) return [
+    '📱 Capital One — Mobile Browser',
+    '1. Go to capitalone.com in Chrome and sign in',
+    '2. Tap your account → "Download Transactions"',
+    '3. Select CSV and your date range',
+    '4. Tap "Download" and open the file here',
+  ];
+  if (bank.includes('citi')) return [
+    '📱 Citi — Mobile Browser',
+    '1. Go to online.citi.com in Chrome and sign in',
+    '2. Navigate to your account → "View Transactions"',
+    '3. Tap "Download" → select CSV and date range',
+    '4. Download and open the file here',
+  ];
+  if (bank.includes('usaa')) return [
+    '📱 USAA — Mobile App',
+    '1. Open the USAA app → tap your account',
+    '2. Tap "Manage" → "Download Transactions"',
+    '3. Choose CSV format and your date range',
+    '4. Open the downloaded file here',
+  ];
+  if (bank.includes('ally')) return [
+    '📱 Ally — Mobile Browser',
+    '1. Go to ally.com in Chrome and sign in',
+    '2. Tap your account → "Activity & Statements"',
+    '3. Tap "Export" → select CSV and date range',
+    '4. Download and open the file here',
+  ];
+  if (bank.includes('pnc')) return [
+    '📱 PNC — Mobile Browser',
+    '1. Go to pnc.com in Chrome and sign in',
+    '2. Tap your account → "Activity" → "Download"',
+    '3. Choose CSV format and date range',
+    '4. Download and open the file here',
+  ];
+  if (bank.includes('td') || bank.includes('td bank')) return [
+    '📱 TD Bank — Mobile Browser',
+    '1. Go to td.com in Chrome and sign in',
+    '2. Tap your account → "Download Transactions"',
+    '3. Select CSV and your date range',
+    '4. Download and open the file here',
+  ];
+  // Generic fallback
+  return [
+    '📱 How to export your bank CSV',
+    '1. Open your bank\'s app or website in Chrome',
+    '2. Navigate to your account → Transaction History',
+    '3. Look for "Download", "Export", or "⬇️" icon',
+    '4. Choose CSV (or "Comma Delimited") format',
+    '5. Select a date range (last 30-90 days works great)',
+    '6. Download the file, then tap "Choose CSV File" above',
+    '',
+    'Tip: If your bank app doesn\'t have a download option, try the mobile website in Chrome instead.',
+  ];
+}
+
 // Normalize: strip punctuation/special chars, collapse spaces, lowercase
 function normalize(str: string): string {
   return str.toLowerCase()
@@ -153,6 +237,7 @@ export default function BankAccountDetailScreen() {
   const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; summary: string; errors: string[] } | null>(null);
   const [importCreateSavings, setImportCreateSavings] = useState(true);
   const [importCreateDebts, setImportCreateDebts] = useState<Record<string, boolean>>({});
+  const [showCsvHelp, setShowCsvHelp] = useState(false);
 
   // Balance edit state
   const [showBalanceEdit, setShowBalanceEdit] = useState(false);
@@ -1566,11 +1651,24 @@ export default function BankAccountDetailScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={s.modalTitle}>📄 Import CSV</Text>
               <Text style={s.importHelp}>
-                Paste your bank statement CSV below. Most banks let you export transactions as CSV from their website.
+                Paste your bank statement CSV below, or pick a file. Supported: Chase, BoA, Wells Fargo, Capital One, and most standard CSVs.
               </Text>
-              <Text style={s.importHelp}>
-                Supported formats: Chase, BoA, Wells Fargo, Capital One, and most standard CSVs with Date, Description, and Amount columns.
-              </Text>
+
+              <TouchableOpacity onPress={() => setShowCsvHelp(!showCsvHelp)} style={{ marginBottom: 10 }}>
+                <Text style={{ fontSize: 13, color: '#60a5fa', fontWeight: '600' }}>
+                  {showCsvHelp ? '▲ Hide' : '💡 How do I get a CSV from my bank?'}
+                </Text>
+              </TouchableOpacity>
+
+              {showCsvHelp && (
+                <View style={{ backgroundColor: '#1a1f2e', borderRadius: 10, padding: 12, marginBottom: 12, gap: 10 }}>
+                  {getBankCsvInstructions(account?.institution).map((line, i) => (
+                    <Text key={i} style={{ fontSize: 12, color: i === 0 ? '#f4c430' : '#b0b0b8', lineHeight: 18, fontWeight: i === 0 ? '700' : '400' }}>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+              )}
 
               <TouchableOpacity style={s.pickFileBtn} onPress={handlePickCSVFile}>
                 <Text style={s.pickFileBtnText}>Choose CSV File</Text>

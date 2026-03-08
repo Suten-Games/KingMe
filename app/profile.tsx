@@ -50,6 +50,7 @@ export default function ProfileScreen() {
   const exportBackup      = useStore((state) => state.exportBackup);
   const importBackup      = useStore((state) => state.importBackup);
   const resetStore        = useStore((state) => state.resetStore);
+  const awardBadge        = useStore((state) => state.awardBadge);
 
   const freedom = useFreedomScore();
   
@@ -338,7 +339,8 @@ export default function ProfileScreen() {
       const txId = await saveBackup(fullBackup, signMessage, publicKey.toBase58());
       
       setLastSyncTime(new Date().toISOString());
-      
+      awardBadge('cloud_backup');
+
       crossAlert(
         'Backup Complete! 🌐',
         `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nIncludes: store data + ${Object.keys(fullBackup.asyncStorage).length} feature stores (goals, plans, snapshots, etc.)\n\nYou can restore on any device with this wallet.`

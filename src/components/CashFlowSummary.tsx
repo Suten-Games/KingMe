@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 2,
+    marginBottom: 8,
   },
   toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   toggleIcon: { fontSize: 18 },

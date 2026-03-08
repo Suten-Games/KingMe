@@ -29,6 +29,7 @@ import WatchlistAlerts from '@/components/WatchlistAlerts';
 import { log, warn, error } from '@/utils/logger';
 import TargetIcon from '@/components/icons/TargetIcon';
 import { getUnlockedAddOns } from '../../src/services/addOnPayment';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ── Next Level Helper ─────────────────────────────────────────────────────────
 const FREEDOM_LEVELS = [
@@ -105,6 +106,7 @@ export default function HomeScreen() {
   const [includeHouse, setIncludeHouse] = useState(false);
   const [showCashFlow, setShowCashFlow] = useState(false);
   const [unlockedAddOns, setUnlockedAddOns] = useState<Set<string>>(new Set());
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const scenarios = useStore(s => s.whatIfScenarios);
   const generateScenarios = useStore(s => s.generateScenarios);
@@ -138,6 +140,27 @@ export default function HomeScreen() {
 
   // Load unlocked paid add-ons
   useEffect(() => { getUnlockedAddOns().then(setUnlockedAddOns); }, []);
+
+  // Check if in demo mode
+  useEffect(() => {
+    AsyncStorage.getItem('_demo_active').then(flag => {
+      if (flag === 'true') setIsDemoMode(true);
+    });
+  }, []);
+
+  const handleStartOnboarding = async () => {
+    // Exit demo mode and start real onboarding
+    const savedProfile = await AsyncStorage.getItem('_demo_saved_profile');
+    if (savedProfile) {
+      useStore.getState().importBackup(savedProfile);
+    }
+    await AsyncStorage.removeItem('_demo_active');
+    await AsyncStorage.removeItem('_demo_persona_id');
+    await AsyncStorage.removeItem('_demo_saved_profile');
+    useStore.setState({ onboardingComplete: false });
+    await useStore.getState().saveProfile();
+    router.replace('/onboarding/welcome');
+  };
 
   // Auto-refresh stock/crypto prices if stale (>5min) or never fetched
   useEffect(() => {
@@ -348,6 +371,25 @@ export default function HomeScreen() {
 
   const dashboardBody = (
     <View style={styles.content}>
+      {isDemoMode && (
+        <TouchableOpacity
+          style={styles.demoBanner}
+          onPress={handleStartOnboarding}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#f4c43018', '#f4c43008', 'transparent']}
+            style={styles.demoBannerGradient}
+          >
+            <Text style={styles.demoBannerEmoji}>{'\u{1F3AD}'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.demoBannerTitle}>You're exploring demo data</Text>
+              <Text style={styles.demoBannerSub}>Tap here to set up your real profile — it takes about 5 minutes</Text>
+            </View>
+            <Text style={styles.demoBannerArrow}>{'\u203A'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
       <SetupChecklist />
 
 
@@ -820,6 +862,14 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1 },
   webDashboardScroll: { flex: 1, height: '100%' },
   content: { padding: 20 },
+
+  // Demo banner
+  demoBanner: { marginBottom: 16, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#f4c43040' },
+  demoBannerGradient: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  demoBannerEmoji: { fontSize: 28 },
+  demoBannerTitle: { fontSize: 15, fontWeight: '700', color: '#f4c430', marginBottom: 2 },
+  demoBannerSub: { fontSize: 12, color: '#b0b0b8', lineHeight: 17 },
+  demoBannerArrow: { fontSize: 24, color: '#f4c430', fontWeight: '300' },
 
   // Health badge
   healthBadge: {

@@ -28,6 +28,7 @@ export default function SetupChecklist() {
   const assets = useStore(s => s.assets);
   const debts = useStore(s => s.debts);
   const wallets = useStore(s => s.wallets);
+  const earnedBadges = useStore(s => s.earnedBadges || []);
 
   const assetIncome = assets.reduce((sum, a) => sum + (a.annualIncome || 0), 0);
   const hasIncome = income.salary > 0 || income.otherIncome > 0 || (income.sources?.length ?? 0) > 0 || assetIncome > 0;
@@ -36,6 +37,7 @@ export default function SetupChecklist() {
   const hasAssets = assets.length > 0;
   const hasDebts = debts.length > 0;
   const hasWallet = wallets.length > 0;
+  const hasCloudBackup = earnedBadges.some(b => b.badgeId === 'cloud_backup');
 
   const items: CheckItem[] = [
     { key: 'income',      label: 'Add your income',          done: hasIncome,       route: '/(tabs)/income',       emoji: '💰', priority: 'critical' },
@@ -44,6 +46,7 @@ export default function SetupChecklist() {
     { key: 'assets',      label: 'Add your assets',          done: hasAssets,        route: '/(tabs)/assets',       emoji: '📈', priority: 'recommended' },
     { key: 'debts',       label: 'Track your debts',         done: hasDebts,         route: '/(tabs)/debts',        emoji: 'optional' as any, priority: 'optional' },
     { key: 'wallet',      label: 'Connect a Solana wallet',  done: hasWallet,        route: '/wallet-setup',        emoji: '👛', priority: 'optional' },
+    { key: 'backup',      label: 'Cloud backup your data',   done: hasCloudBackup,   route: '/profile',             emoji: '⚓', priority: 'recommended' },
   ];
 
   const criticalMissing = items.filter(i => i.priority === 'critical' && !i.done);
@@ -112,7 +115,7 @@ export default function SetupChecklist() {
           ))}
         </View>
 
-        {/* Backup note when no wallet */}
+        {/* Backup note */}
         {!hasWallet && (
           <View style={st.backupNote}>
             <Text style={st.backupNoteIcon}>🔒</Text>
@@ -120,6 +123,14 @@ export default function SetupChecklist() {
               Without a Solana wallet, your data stays on this device only. Connect a wallet to unlock encrypted cloud backup.
             </Text>
           </View>
+        )}
+        {hasWallet && !hasCloudBackup && (
+          <TouchableOpacity style={st.backupNote} onPress={() => router.push('/profile' as any)} activeOpacity={0.7}>
+            <Text style={st.backupNoteIcon}>⚓</Text>
+            <Text style={[st.backupNoteText, { color: '#f4c430' }]}>
+              Your data is only on this device. Go to Profile → Encrypted Cloud Backup to back up your data.
+            </Text>
+          </TouchableOpacity>
         )}
       </LinearGradient>
     </View>

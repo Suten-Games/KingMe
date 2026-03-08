@@ -1,5 +1,5 @@
 // src/hooks/useAutoBackup.ts
-// Silently backs up to the cloud every hour when a wallet session is active.
+// Silently backs up to the cloud every 24 hours when a wallet session is active.
 
 import { useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,8 +9,8 @@ import { buildFullBackup } from '../services/fullBackup';
 import { saveBackup } from '../services/encryptedBackup';
 import { log, warn, error } from '../utils/logger';
 
-const BACKUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-const CHECK_INTERVAL_MS = 60 * 1000;        // Check every 60 seconds
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CHECK_INTERVAL_MS = 10 * 60 * 1000;        // Check every 10 minutes
 const ASYNC_KEY = 'lastAutoBackup';
 
 export function useAutoBackup() {

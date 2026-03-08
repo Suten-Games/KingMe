@@ -460,6 +460,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#ff9f43',
+    marginTop: 14,
     marginBottom: 12,
     overflow: 'hidden',
   },
