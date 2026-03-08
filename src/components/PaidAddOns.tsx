@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Modal, ActivityIndicator, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useWallet } from '../providers/wallet-provider';
@@ -86,6 +86,7 @@ const ADD_ONS: AddOn[] = [
 
 export default function PaidAddOns() {
   const router = useRouter();
+  const isPro = useStore(s => s.isPro);
   const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction } = useWallet();
   const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -223,11 +224,35 @@ export default function PaidAddOns() {
       <Text style={s.sectionTitle}>Premium Tools</Text>
       <Text style={s.sectionSub}>Advanced financial planning tools · long-press to hide</Text>
 
+      {isPro ? (
+        <View style={s.proBanner}>
+          <Image source={require('../assets/images/kingmelogo.jpg')} style={s.proBannerLogo} resizeMode="cover" />
+          <View style={{ flex: 1 }}>
+            <Text style={s.proBannerTitle}>KingMe Pro — Active</Text>
+            <Text style={s.proBannerSub}>All tools included</Text>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity style={s.proBundle} onPress={() => router.push('/pro-upgrade')} activeOpacity={0.8}>
+          <View style={s.proBundleRow}>
+            <Image source={require('../assets/images/kingmelogo.jpg')} style={s.proBundleLogo} resizeMode="cover" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.proBundleTitle}>KingMe Pro — $19.99</Text>
+              <Text style={s.proBundleSub}>All tools, now and future</Text>
+            </View>
+          </View>
+          <View style={s.proBundleButton}>
+            <Text style={s.proBundleButtonText}>Unlock Pro</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {visibleAddOns.map(addon => (
         <AddOnCard
           key={addon.id}
           addon={addon}
           isUnlocked={unlocked.has(addon.id)}
+          isPro={isPro}
           onPress={() => handlePress(addon)}
           onLongPress={() => handleLongPress(addon)}
         />
@@ -247,6 +272,7 @@ export default function PaidAddOns() {
               key={addon.id}
               addon={addon}
               isUnlocked={unlocked.has(addon.id)}
+              isPro={isPro}
               isHidden
               onPress={() => handlePress(addon)}
               onLongPress={() => handleLongPress(addon)}
@@ -371,9 +397,10 @@ export default function PaidAddOns() {
 
 // ─── Card Component ──────────────────────────────────────────────────────────
 
-function AddOnCard({ addon, isUnlocked, isHidden, onPress, onLongPress }: {
+function AddOnCard({ addon, isUnlocked, isPro, isHidden, onPress, onLongPress }: {
   addon: AddOn;
   isUnlocked: boolean;
+  isPro?: boolean;
   isHidden?: boolean;
   onPress: () => void;
   onLongPress: () => void;
@@ -403,6 +430,10 @@ function AddOnCard({ addon, isUnlocked, isHidden, onPress, onLongPress }: {
         ) : isUnlocked ? (
           <View style={s.unlockedBadge}>
             <Text style={s.unlockedText}>{'\u2713'}</Text>
+          </View>
+        ) : isPro ? (
+          <View style={s.includedBadge}>
+            <Text style={s.includedText}>Included</Text>
           </View>
         ) : (
           <View style={s.priceBadge}>
@@ -467,6 +498,36 @@ const s = StyleSheet.create({
   hiddenToggleText: { fontSize: 13, color: '#555', fontWeight: '600' },
 
   unhideHint: { fontSize: 10, color: '#555', marginTop: 6, textAlign: 'center' },
+
+  // ── Pro Banner (active) ──
+  proBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#f4c43015', borderRadius: 12, padding: 14,
+    marginBottom: 12, borderWidth: 1, borderColor: '#f4c43060',
+  },
+  proBannerLogo: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, borderColor: '#f4c43050' },
+  proBannerTitle: { fontSize: 15, fontWeight: '800', color: '#f4c430' },
+  proBannerSub: { fontSize: 12, color: '#888', marginTop: 2 },
+
+  // ── Pro Bundle card (non-Pro) ──
+  proBundle: {
+    backgroundColor: '#1a1f2e', borderRadius: 12, padding: 14,
+    marginBottom: 12, borderWidth: 1.5, borderColor: '#f4c43060',
+  },
+  proBundleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  proBundleLogo: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#f4c43050' },
+  proBundleTitle: { fontSize: 15, fontWeight: '800', color: '#f4c430' },
+  proBundleSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  proBundleButton: { backgroundColor: '#f4c430', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  proBundleButtonText: { color: '#0a0e1a', fontSize: 14, fontWeight: '800' },
+
+  // ── Included badge ──
+  includedBadge: {
+    backgroundColor: '#f4c43020', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#f4c43060',
+  },
+  includedText: { fontSize: 11, fontWeight: '700', color: '#f4c430' },
 
   // ── Payment Modal ──
   modalOverlay: {

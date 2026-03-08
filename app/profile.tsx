@@ -386,8 +386,8 @@ export default function ProfileScreen() {
         `Profile encrypted and backed up.\n\nTransaction: ${txId.slice(0, 12)}...\n\nIncludes: store data + ${Object.keys(fullBackup.asyncStorage).length} feature stores (goals, plans, snapshots, etc.)\n\nYou can restore on any device with this wallet.`
       );
     } catch (error: any) {
-      logError('Backup failed:', error);
-      crossAlert('Backup Failed', 'Could not save backup. Please check your connection and try again.');
+      logError('Backup failed:', error?.message || error);
+      crossAlert('Backup Failed', `Could not save backup.\n\n${error?.message || 'Unknown error'}`);
     } finally {
       setIsSyncing(false);
     }
@@ -523,6 +523,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Premium Tools ── */}
+        <View style={styles.section}>
+          <PaidAddOns />
+        </View>
+
         {/* ── Bank Accounts (managed in Assets tab) ─────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -587,11 +592,6 @@ export default function ProfileScreen() {
               <Text style={styles.value}>{obligations.length}</Text>
             </View>
           </View>
-        </View>
-
-        {/* ── Premium Tools ── */}
-        <View style={styles.section}>
-          <PaidAddOns />
         </View>
 
         {/* ── Settings ── */}

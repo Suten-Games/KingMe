@@ -27,6 +27,7 @@ export default function RevealScreen() {
 
   const avatarType = useStore((s) => s.settings.avatarType);
   const completeOnboarding = useStore((s) => s.completeOnboarding);
+  const isPro = useStore((s) => s.isPro);
   const bankAccounts = useStore((s) => s.bankAccounts);
   const incomeSources = useStore((s) => s.income.sources || []);
   const obligations = useStore((s) => s.obligations);
@@ -101,6 +102,18 @@ export default function RevealScreen() {
         </View>
       )}
 
+      {!isPro && (
+        <View style={st.proCard}>
+          <Text style={st.proHeadline}>Want to improve this score?</Text>
+          <View style={st.proFeature}><Text style={st.proCheck}>✓</Text><Text style={st.proFeatureText}>AI-powered action plans for your goals</Text></View>
+          <View style={st.proFeature}><Text style={st.proCheck}>✓</Text><Text style={st.proFeatureText}>Full What-If scenario breakdowns</Text></View>
+          <View style={st.proFeature}><Text style={st.proCheck}>✓</Text><Text style={st.proFeatureText}>All add-on tools included — now and future</Text></View>
+          <TouchableOpacity style={st.proButton} onPress={() => router.push('/pro-upgrade')}>
+            <Text style={st.proButtonText}>Unlock Pro — $19.99</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TouchableOpacity style={st.button} onPress={handleFinish}>
         <Image source={require('../../src/assets/images/kingmelogo.jpg')} style={{ width: 24, height: 24, borderRadius: 6, marginRight: 8 }} />
         <Text style={st.buttonText}>Enter Your Kingdom</Text>
@@ -108,6 +121,11 @@ export default function RevealScreen() {
       <TouchableOpacity style={st.secondaryButton} onPress={() => router.back()}>
         <Text style={st.secondaryButtonText}>Go Back & Edit</Text>
       </TouchableOpacity>
+      {!isPro && (
+        <TouchableOpacity style={st.maybeLater} onPress={handleFinish}>
+          <Text style={st.maybeLaterText}>Maybe later</Text>
+        </TouchableOpacity>
+      )}
     </>
   );
 
@@ -185,4 +203,18 @@ const st = StyleSheet.create({
     borderWidth: 1.5, borderColor: T.border,
   },
   secondaryButtonText: { fontSize: 16, color: T.textSecondary },
+
+  // Pro upsell
+  proCard: {
+    backgroundColor: T.bgCard, borderRadius: T.radius.md, padding: 16,
+    borderWidth: 1, borderColor: T.gold + '40', marginBottom: 20,
+  },
+  proHeadline: { fontSize: 16, fontWeight: 'bold', color: T.gold, marginBottom: 12 },
+  proFeature: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  proCheck: { fontSize: 13, color: T.gold, fontWeight: 'bold' },
+  proFeatureText: { fontSize: 13, color: T.textSecondary },
+  proButton: { backgroundColor: T.gold, padding: 14, borderRadius: T.radius.sm, alignItems: 'center', marginTop: 14 },
+  proButtonText: { fontSize: 15, fontWeight: 'bold', color: T.bg },
+  maybeLater: { padding: 14, alignItems: 'center', marginTop: 4 },
+  maybeLaterText: { fontSize: 14, color: T.textMuted },
 });
