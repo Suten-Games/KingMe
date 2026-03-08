@@ -156,6 +156,7 @@ interface AppState extends UserProfile {
   removeCustomCategory: (key: string) => void;
 
   resetStore: () => void;
+  loadPersonaProfile: (jsonString: string) => void;
   isPro: boolean;
   activatePro: () => Promise<void>;
   checkProStatus: () => Promise<void>;
@@ -2528,6 +2529,48 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   resetStore: () => set({ ...initialState, _isLoaded: true }),
+
+  // Atomic reset + import in a single set() to avoid intermediate re-render crashes
+  loadPersonaProfile: (jsonString: string) => {
+    try {
+      const imported = importProfile(jsonString);
+      const merged = {
+        ...initialState,
+        _isLoaded: true,
+        ...imported,
+        income: { ...initialState.income, ...(imported.income || {}) },
+        settings: { ...initialState.settings, ...(imported.settings || {}) },
+        bankAccounts: imported.bankAccounts ?? initialState.bankAccounts,
+        assets: imported.assets ?? initialState.assets,
+        obligations: imported.obligations ?? initialState.obligations,
+        desires: imported.desires ?? initialState.desires,
+        debts: imported.debts ?? initialState.debts,
+        paycheckDeductions: imported.paycheckDeductions ?? initialState.paycheckDeductions,
+        preTaxDeductions: imported.preTaxDeductions ?? initialState.preTaxDeductions,
+        taxes: imported.taxes ?? initialState.taxes,
+        postTaxDeductions: imported.postTaxDeductions ?? initialState.postTaxDeductions,
+        driftTrades: imported.driftTrades ?? initialState.driftTrades,
+        dailyExpenses: imported.dailyExpenses ?? initialState.dailyExpenses,
+        bankTransactions: imported.bankTransactions ?? initialState.bankTransactions,
+        cryptoCardBalance: imported.cryptoCardBalance ?? initialState.cryptoCardBalance,
+        freedomHistory: imported.freedomHistory ?? initialState.freedomHistory,
+        expenseTrackingMode: imported.expenseTrackingMode ?? initialState.expenseTrackingMode,
+        investmentTheses: imported.investmentTheses ?? [],
+        thesisAlerts: imported.thesisAlerts ?? [],
+        whatIfScenarios: imported.whatIfScenarios ?? [],
+        customCategories: imported.customCategories ?? initialState.customCategories,
+        earnedBadges: imported.earnedBadges ?? initialState.earnedBadges,
+        trimCount: imported.trimCount ?? 0,
+        importWeeks: imported.importWeeks ?? [],
+        appOpenDays: imported.appOpenDays ?? [],
+      };
+      set(merged);
+      log('Persona profile loaded atomically');
+    } catch (error) {
+      logError('Failed to load persona profile:', error);
+      throw error;
+    }
+  },
 
   activatePro: async () => {
     await unlockAddOn('pro_bundle');

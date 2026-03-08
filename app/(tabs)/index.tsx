@@ -229,9 +229,8 @@ export default function HomeScreen() {
       AsyncStorage.removeItem('dismissed_trade_insights'),
       AsyncStorage.removeItem('trading_warning_dismissed'),
     ]);
-    // Reset store fully before loading new persona
-    store.resetStore();
-    store.importBackup(JSON.stringify({
+    // Atomic reset + import in one set() call to prevent intermediate re-render crashes
+    store.loadPersonaProfile(JSON.stringify({
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
       profile: { ...persona.profile, onboardingComplete: true },

@@ -49,6 +49,7 @@ function ProfileScreenInner() {
   const exportBackup      = useStore((state) => state.exportBackup);
   const importBackup      = useStore((state) => state.importBackup);
   const resetStore        = useStore((state) => state.resetStore);
+  const loadPersonaProfile = useStore((state) => state.loadPersonaProfile);
   const awardBadge        = useStore((state) => state.awardBadge);
 
   const freedom = useFreedomScore();
@@ -145,9 +146,8 @@ function ProfileScreenInner() {
       AsyncStorage.setItem('_demo_persona_id', persona.id),
     ]);
     invalidateDemoCache(); // ensure auto-save picks up new demo flag
-    // Reset store fully before loading new persona to prevent stale data
-    resetStore();
-    importBackup(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
+    // Atomic reset + import in one set() call to prevent intermediate re-render crashes
+    loadPersonaProfile(JSON.stringify({ version: '1.0.0', exportedAt: new Date().toISOString(), profile: { ...persona.profile, onboardingComplete: true } }));
     await seedDemoWatchlist(persona);
     setActivePersona(persona.id);
     setIsDemoMode(true);
