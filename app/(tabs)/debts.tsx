@@ -170,6 +170,7 @@ export default function DebtsScreen() {
   const updateDebt = useStore((state) => state.updateDebt);
   const toggleDebtPaid = useStore((state) => state.toggleDebtPaid);
   const toggleObligationPaid = useStore((state) => state.toggleObligationPaid);
+  const debtsConfirmedNone = useStore((state) => state.settings?.debtsConfirmedNone ?? false);
 
   // ── Modal state ──
   const [showAddModal, setShowAddModal] = useState(false);
@@ -349,48 +350,52 @@ export default function DebtsScreen() {
     <View style={s.container}>
       <ScrollView style={s.scrollView}>
 
-        {/* ── Payment Status Banner ─────────────────────────────── */}
-        <PaymentStatusBanner
-          status={paymentStatus}
-          onShowCalendar={() => setShowCalendar(true)}
-        />
+        {normalizedDebts.length > 0 && (
+          <>
+            {/* ── Payment Status Banner ─────────────────────────────── */}
+            <PaymentStatusBanner
+              status={paymentStatus}
+              onShowCalendar={() => setShowCalendar(true)}
+            />
 
-        {/* ── Summary ───────────────────────────────────────────── */}
-        <LinearGradient colors={T.gradients.red} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[s.summaryBox, { borderColor: T.redBright + '80' }]}>
-          <View style={s.summaryRow}>
-            <View style={s.summaryItem}>
-              <Text style={s.summaryLabel}>Total Debt</Text>
-              <Text style={s.summaryDebt}>${totalDebt.toLocaleString()}</Text>
-            </View>
-            <View style={s.summaryItem}>
-              <Text style={s.summaryLabel}>Monthly Payments</Text>
-              <Text style={s.summaryPayment}>${monthlyTotal.toLocaleString()}/mo</Text>
-            </View>
-          </View>
-          <View style={s.summaryDivider} />
-          <View style={s.summaryRow}>
-            <View style={s.summaryItem}>
-              <Text style={s.summaryLabel}>Paid This Month</Text>
-              <Text style={s.summaryPaidCount}>{paidCount} of {normalizedDebts.length}</Text>
-            </View>
-            <View style={s.summaryItem}>
-              <Text style={s.summaryLabel}>Debt-Free ETA</Text>
-              <Text style={s.summaryEta}>
-                {totalDebt > 0 && monthlyTotal > 0
-                  ? `~${Math.ceil(totalDebt / monthlyTotal)} months`
-                  : 'N/A'}
-              </Text>
-            </View>
-          </View>
-        </LinearGradient>
+            {/* ── Summary ───────────────────────────────────────────── */}
+            <LinearGradient colors={T.gradients.red} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[s.summaryBox, { borderColor: T.redBright + '80' }]}>
+              <View style={s.summaryRow}>
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryLabel}>Total Debt</Text>
+                  <Text style={s.summaryDebt}>${totalDebt.toLocaleString()}</Text>
+                </View>
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryLabel}>Monthly Payments</Text>
+                  <Text style={s.summaryPayment}>${monthlyTotal.toLocaleString()}/mo</Text>
+                </View>
+              </View>
+              <View style={s.summaryDivider} />
+              <View style={s.summaryRow}>
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryLabel}>Paid This Month</Text>
+                  <Text style={s.summaryPaidCount}>{paidCount} of {normalizedDebts.length}</Text>
+                </View>
+                <View style={s.summaryItem}>
+                  <Text style={s.summaryLabel}>Debt-Free ETA</Text>
+                  <Text style={s.summaryEta}>
+                    {totalDebt > 0 && monthlyTotal > 0
+                      ? `~${Math.ceil(totalDebt / monthlyTotal)} months`
+                      : 'N/A'}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
 
-        {unassignedCount > 0 && (
-          <View style={s.unassignedBanner}>
-            <Text style={s.unassignedBannerText}>
-              ⚠️ {unassignedCount} debt{unassignedCount > 1 ? 's' : ''} not assigned to a bank account
-            </Text>
-          </View>
+            {unassignedCount > 0 && (
+              <View style={s.unassignedBanner}>
+                <Text style={s.unassignedBannerText}>
+                  ⚠️ {unassignedCount} debt{unassignedCount > 1 ? 's' : ''} not assigned to a bank account
+                </Text>
+              </View>
+            )}
+          </>
         )}
 
         {/* ── Debt List ─────────────────────────────────────────── */}
@@ -403,7 +408,29 @@ export default function DebtsScreen() {
           </View>
 
           {normalizedDebts.length === 0 ? (
-            <EmptyStateCard category="debts" onAction={() => setShowAddModal(true)} />
+            <>
+              <EmptyStateCard category="debts" onAction={() => setShowAddModal(true)} />
+              {!debtsConfirmedNone && (
+                <TouchableOpacity
+                  style={s.noDebtsBtn}
+                  onPress={() => {
+                    useStore.setState((st) => ({
+                      settings: { ...st.settings, debtsConfirmedNone: true },
+                    }));
+                    useStore.getState().saveProfile();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.noDebtsBtnText}>I have no debts</Text>
+                  <Text style={s.noDebtsBtnSub}>Mark this step as complete</Text>
+                </TouchableOpacity>
+              )}
+              {debtsConfirmedNone && (
+                <View style={s.noDebtsConfirmed}>
+                  <Text style={s.noDebtsConfirmedText}>✅ No debts — nice work!</Text>
+                </View>
+              )}
+            </>
           ) : (
             normalizedDebts.map((debt) => {
               const matchedTxns = debtTransactionMatches[debt.id] || [];
@@ -686,6 +713,19 @@ export default function DebtsScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: T.bg },
   scrollView: { flex: 1, padding: 20 },
+
+  // No debts confirmation
+  noDebtsBtn: {
+    backgroundColor: '#4ade8015', borderRadius: 12, padding: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: '#4ade8030', marginBottom: 16,
+  },
+  noDebtsBtnText: { fontSize: 16, fontWeight: '700', color: '#4ade80' },
+  noDebtsBtnSub: { fontSize: 12, color: '#888', marginTop: 4 },
+  noDebtsConfirmed: {
+    backgroundColor: '#4ade8010', borderRadius: 12, padding: 14,
+    alignItems: 'center', borderWidth: 1, borderColor: '#4ade8020', marginBottom: 16,
+  },
+  noDebtsConfirmedText: { fontSize: 14, fontWeight: '600', color: '#4ade80' },
 
   // Summary
   summaryBox: { ...T.cardBase, borderWidth: 1.5, padding: 20 },

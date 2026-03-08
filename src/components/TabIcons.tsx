@@ -136,6 +136,66 @@ export function CrownIcon({ color, size = 18 }: IconProps) {
   );
 }
 
+// ── Export — Chest with outward arrow (exporting treasure) ────────────────────
+export function ExportIcon({ color, size = 20 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Chest body */}
+      <Rect x="3" y="10" width="18" height="10" rx="2" stroke={color} strokeWidth={SW} />
+      {/* Chest lid */}
+      <Path d="M3 12 L3 9 Q12 4 21 9 L21 12" stroke={color} strokeWidth={SW} fill="none" />
+      {/* Clasp */}
+      <Rect x="10" y="13" width="4" height="3" rx="1" stroke={color} strokeWidth={SW} />
+      {/* Arrow out */}
+      <Path d="M12 8 L12 2 M9.5 4.5 L12 2 L14.5 4.5" stroke={color} strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ── Import — Chest with inward arrow (receiving treasure) ────────────────────
+export function ImportIcon({ color, size = 20 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Chest body */}
+      <Rect x="3" y="10" width="18" height="10" rx="2" stroke={color} strokeWidth={SW} />
+      {/* Chest lid */}
+      <Path d="M3 12 L3 9 Q12 4 21 9 L21 12" stroke={color} strokeWidth={SW} fill="none" />
+      {/* Clasp */}
+      <Rect x="10" y="13" width="4" height="3" rx="1" stroke={color} strokeWidth={SW} />
+      {/* Arrow in */}
+      <Path d="M12 2 L12 8 M9.5 5.5 L12 8 L14.5 5.5" stroke={color} strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ── Cloud Backup — Shield with cloud and up arrow ────────────────────────────
+export function CloudBackupIcon({ color, size = 20 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Shield */}
+      <Path d="M12 2 L4 6 L4 12 Q4 19 12 22 Q20 19 20 12 L20 6 Z" stroke={color} strokeWidth={SW} strokeLinejoin="round" fill="none" />
+      {/* Cloud */}
+      <Path d="M8 14 Q6 14 6 12.5 Q6 11 8 11 Q8 9 10.5 9 Q12 9 13 10 Q14 9 15.5 9.5 Q17 10 17 12 Q18.5 12 18.5 13.5 Q18.5 15 16.5 15 L8 15" stroke={color} strokeWidth={1.2} fill="none" />
+      {/* Arrow up */}
+      <Path d="M12 18 L12 15" stroke={color} strokeWidth={SW} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// ── Cloud Restore — Shield with cloud and down arrow ─────────────────────────
+export function CloudRestoreIcon({ color, size = 20 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Shield */}
+      <Path d="M12 2 L4 6 L4 12 Q4 19 12 22 Q20 19 20 12 L20 6 Z" stroke={color} strokeWidth={SW} strokeLinejoin="round" fill="none" />
+      {/* Cloud */}
+      <Path d="M8 11 Q6 11 6 9.5 Q6 8 8 8 Q8 6 10.5 6 Q12 6 13 7 Q14 6 15.5 6.5 Q17 7 17 9 Q18.5 9 18.5 10.5 Q18.5 12 16.5 12 L8 12" stroke={color} strokeWidth={1.2} fill="none" />
+      {/* Arrow down */}
+      <Path d="M12 13 L12 18 M9.5 15.5 L12 18 L14.5 15.5" stroke={color} strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 // ── Desires — 8-pointed compass star (aspiration, direction) ─────────────────
 export function DesiresIcon({ color, size = 24 }: IconProps) {
   return (

@@ -28,6 +28,7 @@ import TradeInsightCards from '@/components/TradeInsightCards';
 import WatchlistAlerts from '@/components/WatchlistAlerts';
 import { log, warn, error } from '@/utils/logger';
 import TargetIcon from '@/components/icons/TargetIcon';
+import { CrownIcon } from '@/components/TabIcons';
 import { getUnlockedAddOns } from '../../src/services/addOnPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -381,7 +382,7 @@ export default function HomeScreen() {
             colors={['#f4c43018', '#f4c43008', 'transparent']}
             style={styles.demoBannerGradient}
           >
-            <Text style={styles.demoBannerEmoji}>{'\u{1F3AD}'}</Text>
+            <CrownIcon color="#f4c430" size={28} />
             <View style={{ flex: 1 }}>
               <Text style={styles.demoBannerTitle}>You're exploring demo data</Text>
               <Text style={styles.demoBannerSub}>Tap here to set up your real profile — it takes about 5 minutes</Text>

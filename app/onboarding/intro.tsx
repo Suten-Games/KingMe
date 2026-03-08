@@ -41,17 +41,24 @@ export default function OnboardingIntro() {
 
   const handleTryPersona = async (persona: DemoPersona) => {
     try {
+      // Preserve wallet that was connected on page 1
+      const currentWallets = useStore.getState().wallets;
+
       // Save current (empty) state so exit demo can restore
       const backup = exportBackup();
       await AsyncStorage.setItem('_demo_saved_profile', backup);
       await AsyncStorage.setItem('_demo_active', 'true');
       await AsyncStorage.setItem('_demo_persona_id', persona.id);
 
-      // Load persona data
+      // Load persona data, keeping the user's connected wallet
       importBackup(JSON.stringify({
         version: '1.0.0',
         exportedAt: new Date().toISOString(),
-        profile: { ...persona.profile, onboardingComplete: true },
+        profile: {
+          ...persona.profile,
+          onboardingComplete: true,
+          wallets: currentWallets.length > 0 ? currentWallets : persona.profile.wallets,
+        },
       }));
 
       router.replace('/(tabs)');

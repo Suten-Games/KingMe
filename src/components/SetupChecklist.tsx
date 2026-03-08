@@ -35,18 +35,22 @@ export default function SetupChecklist() {
   const hasObligations = obligations.length > 0;
   const hasBankAccounts = bankAccounts.length > 0;
   const hasAssets = assets.length > 0;
-  const hasDebts = debts.length > 0;
-  const hasWallet = wallets.length > 0;
+  const debtsConfirmedNone = useStore(s => s.settings?.debtsConfirmedNone ?? false);
+  const hasDebts = debts.length > 0 || debtsConfirmedNone;
+  const walletDeclined = useStore(s => s.settings?.walletDeclined ?? false);
+  const hasWallet = wallets.length > 0 || walletDeclined;
+  const localBackupDone = useStore(s => s.settings?.localBackupDone ?? false);
   const hasCloudBackup = earnedBadges.some(b => b.badgeId === 'cloud_backup');
+  const hasBackup = hasCloudBackup || localBackupDone;
 
   const items: CheckItem[] = [
     { key: 'income',      label: 'Add your income',          done: hasIncome,       route: '/(tabs)/income',       emoji: '💰', priority: 'critical' },
     { key: 'obligations', label: 'Add your monthly bills',   done: hasObligations,  route: '/(tabs)/obligations',  emoji: '📋', priority: 'critical' },
     { key: 'bank',        label: 'Add a bank account',       done: hasBankAccounts,  route: '/(tabs)/assets',       emoji: '🏦', priority: 'recommended' },
     { key: 'assets',      label: 'Add your assets',          done: hasAssets,        route: '/(tabs)/assets',       emoji: '📈', priority: 'recommended' },
-    { key: 'debts',       label: 'Track your debts',         done: hasDebts,         route: '/(tabs)/debts',        emoji: 'optional' as any, priority: 'optional' },
+    { key: 'debts',       label: 'Track your debts',         done: hasDebts,         route: '/(tabs)/debts',        emoji: '💳', priority: 'optional' },
     { key: 'wallet',      label: 'Connect a Solana wallet',  done: hasWallet,        route: '/wallet-setup',        emoji: '👛', priority: 'optional' },
-    { key: 'backup',      label: 'Cloud backup your data',   done: hasCloudBackup,   route: '/profile',             emoji: '⚓', priority: 'recommended' },
+    { key: 'backup',      label: 'Backup your data',         done: hasBackup,        route: '/profile?scrollTo=backup', emoji: '⚓', priority: 'recommended' },
   ];
 
   const criticalMissing = items.filter(i => i.priority === 'critical' && !i.done);
@@ -95,7 +99,16 @@ export default function SetupChecklist() {
             <TouchableOpacity
               key={item.key}
               style={[st.item, item.done && st.itemDone]}
-              onPress={() => !item.done && router.push(item.route as any)}
+              onPress={() => {
+                if (item.done) return;
+                // Clear walletDeclined so Connect button shows again
+                if (item.key === 'wallet') {
+                  useStore.setState((s) => ({
+                    settings: { ...s.settings, walletDeclined: false },
+                  }));
+                }
+                router.push(item.route as any);
+              }}
               disabled={item.done}
               activeOpacity={0.7}
             >
@@ -116,16 +129,16 @@ export default function SetupChecklist() {
         </View>
 
         {/* Backup note */}
-        {!hasWallet && (
+        {wallets.length === 0 && !hasBackup && (
           <View style={st.backupNote}>
             <Text style={st.backupNoteIcon}>🔒</Text>
             <Text style={st.backupNoteText}>
-              Without a Solana wallet, your data stays on this device only. Connect a wallet to unlock encrypted cloud backup.
+              Without a Solana wallet, your data stays on this device only. Use Export Backup in Profile to save a local copy, or connect a wallet for encrypted cloud backup.
             </Text>
           </View>
         )}
-        {hasWallet && !hasCloudBackup && (
-          <TouchableOpacity style={st.backupNote} onPress={() => router.push('/profile' as any)} activeOpacity={0.7}>
+        {wallets.length > 0 && !hasBackup && (
+          <TouchableOpacity style={st.backupNote} onPress={() => router.push('/profile?scrollTo=backup' as any)} activeOpacity={0.7}>
             <Text style={st.backupNoteIcon}>⚓</Text>
             <Text style={[st.backupNoteText, { color: '#f4c430' }]}>
               Your data is only on this device. Go to Profile → Encrypted Cloud Backup to back up your data.

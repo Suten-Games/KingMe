@@ -176,15 +176,16 @@ export default function CryptoOpportunityCard() {
   const [showGuide, setShowGuide] = useState(false);
 
   const hasCrypto = assets.some(a => a.type === 'crypto');
-
-  // Don't show if they already have crypto or a wallet
-  if (hasCrypto || wallets.length > 0) return null;
+  const shouldHide = hasCrypto || wallets.length > 0;
 
   const { path, detail } = useMemo(
     () => detectPath(bankAccounts, assets),
     [bankAccounts, assets]
   );
   const steps = useMemo(() => getGuideSteps(path, detail), [path, detail]);
+
+  // Don't show if they already have crypto or a wallet
+  if (shouldHide) return null;
 
   // Context-aware subtitle
   const subtitle = path === 'cashapp'

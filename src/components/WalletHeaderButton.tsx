@@ -10,6 +10,7 @@ import { useWallet } from '../providers/wallet-provider';
 import { useRouter } from 'expo-router';
 import WalletPickerModal from './WalletPickerModal';
 import { log, warn, error as logError } from '../utils/logger';
+import { isSeeker } from '../utils/device';
 
 function SolanaLogo({ size = 14 }: { size?: number }) {
   return (
@@ -94,7 +95,10 @@ export default function WalletHeaderButton() {
     }
   };
 
+  const walletDeclined = useStore(s => s.settings?.walletDeclined ?? false);
+
   if (!isConnected) {
+    if (walletDeclined && !isSeeker) return null;
     return (
       <>
         <TouchableOpacity style={s.btnDisconnected} onPress={handleConnect} disabled={connecting}>

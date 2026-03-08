@@ -152,7 +152,7 @@ export default function DesiresScreen() {
             <View style={s.summaryRow}>
               <View style={s.summaryItem}>
                 <Text style={s.summaryLabel}>Total Desires</Text>
-                <Text style={s.summaryValue}>${totalDesires.toLocaleString()}</Text>
+                <Text style={s.summaryValue} numberOfLines={1} adjustsFontSizeToFit>${totalDesires.toLocaleString()}</Text>
               </View>
               <View style={s.summaryDivider} />
               <View style={s.summaryItem}>

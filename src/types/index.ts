@@ -541,6 +541,9 @@ export interface UserSettings {
   dailyExpenseAccountId?: string;
   tradingPlatform?: 'drift' | 'manual';  // which trading platform the user uses
   driftMinCollateral?: number;  // minimum USDC to keep in Drift for trading (default 5000)
+  debtsConfirmedNone?: boolean;  // user confirmed they have no debts
+  walletDeclined?: boolean;  // user explicitly chose not to connect a wallet
+  localBackupDone?: boolean;  // user has done at least one local export backup
 }
 
 export interface UserProfile {

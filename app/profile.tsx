@@ -1,7 +1,7 @@
 // app/(tabs)/profile.tsx
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, Platform, Switch, Image } from 'react-native';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
@@ -21,6 +21,7 @@ const BACKUP_API = process.env.EXPO_PUBLIC_BACKUP_API_URL || 'https://kingme-api
 import AssetSectionSettings from '../src/components/AssetSectionSettings';
 import PaidAddOns from '../src/components/PaidAddOns';
 import KingMeFooter from '../src/components/KingMeFooter';
+import { ExportIcon, ImportIcon, CloudBackupIcon, CloudRestoreIcon, CrownIcon } from '../src/components/TabIcons';
 import { DEMO_PERSONAS, type DemoPersona } from '../src/utils/demoPersonas';
 import { log, warn, error as logError } from '@/utils/logger';
 
@@ -53,9 +54,23 @@ export default function ProfileScreen() {
   const awardBadge        = useStore((state) => state.awardBadge);
 
   const freedom = useFreedomScore();
-  
+  const { scrollTo } = useLocalSearchParams<{ scrollTo?: string }>();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const backupSectionY = useRef(0);
+  const [showBackupHint, setShowBackupHint] = useState(false);
+
   // Wallet provider
   const { signMessage, publicKey, connected } = useWallet();
+
+  // Auto-scroll to backup section when navigated from checklist
+  useEffect(() => {
+    if (scrollTo === 'backup') {
+      setShowBackupHint(true);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 400);
+    }
+  }, [scrollTo]);
 
   // ── Add-account modal state ──────────────────────────────────────────────
   const [showBackupModal, setShowBackupModal] = useState(false);
@@ -169,24 +184,20 @@ export default function ProfileScreen() {
       'This will clear all your data and restart onboarding. Are you sure?',
       async () => {
         try {
-          // 1. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
+          // 1. Navigate away first so the user doesn't see a blank screen
+          router.replace('/onboarding/intro');
+
+          // 2. Clear all AsyncStorage keys (profile, snapshots, watchlist, etc.)
           await AsyncStorage.clear();
           log('[RESET] AsyncStorage cleared');
 
-          // 2. Reset zustand store to initial state
+          // 3. Reset zustand store to initial state
           resetStore();
           log('[RESET] Store reset');
-
-          // 3. Navigate to onboarding after delay so Root Layout remounts
-          setTimeout(() => {
-            try { router.replace('/onboarding/intro'); } catch {}
-          }, 800);
         } catch (err) {
           logError('[RESET] Error during reset:', err);
           resetStore();
-          setTimeout(() => {
-            try { router.replace('/onboarding/intro'); } catch {}
-          }, 800);
+          try { router.replace('/onboarding/intro'); } catch {}
         }
       }
     );
@@ -199,6 +210,11 @@ export default function ProfileScreen() {
       const fullBackup = await buildFullBackup(storeData);
       setBackupJson(JSON.stringify(fullBackup));
       setShowBackupModal(true);
+      // Mark local backup done for checklist
+      useStore.setState((s) => ({
+        settings: { ...s.settings, localBackupDone: true },
+      }));
+      useStore.getState().saveProfile();
     } catch (error) {
       crossAlert('Error', 'Failed to create backup. Please try again.');
     }
@@ -464,7 +480,7 @@ export default function ProfileScreen() {
         <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1.5, marginTop: 10, borderRadius: 1 }} />
       </LinearGradient>
 
-      <ScrollView style={styles.container}>
+      <ScrollView ref={scrollViewRef} style={styles.container}>
         <View style={styles.content}>
 
         {/* ── Wallets (connect/disconnect via header button) ── */}
@@ -592,6 +608,7 @@ export default function ProfileScreen() {
               />
             </View>
           </View>
+          <View style={{ height: 12 }} />
           <AssetSectionSettings />
         </View>
 
@@ -612,18 +629,30 @@ export default function ProfileScreen() {
             Export your data to keep it safe. You can reimport it anytime.
           </Text>
           
-          <TouchableOpacity style={styles.backupButton} onPress={handleExportBackup}>
-            <Text style={styles.backupButtonText}>📥 Export Backup</Text>
+          <TouchableOpacity style={[styles.backupButton, { flexDirection: 'row', justifyContent: 'center', gap: 8 }]} onPress={handleExportBackup}>
+            <ExportIcon color="#0a0e1a" size={18} />
+            <Text style={styles.backupButtonText}>Export Backup</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.restoreButton} onPress={() => setShowImportModal(true)}>
-            <Text style={styles.restoreButtonText}>📤 Import Backup</Text>
+
+          <TouchableOpacity style={[styles.restoreButton, { flexDirection: 'row', justifyContent: 'center', gap: 8 }]} onPress={() => setShowImportModal(true)}>
+            <ImportIcon color="#0a0e1a" size={18} />
+            <Text style={styles.restoreButtonText}>Import Backup</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Encrypted Sync ── */}
+        {showBackupHint && (
+          <View style={styles.backupHint}>
+            <Text style={styles.backupHintText}>
+              👇 Tap "Backup to Cloud" below to encrypt and save your profile. Only your wallet can decrypt it.
+            </Text>
+          </View>
+        )}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🌐 Encrypted Cloud Backup</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <CloudBackupIcon color="#e8e0d0" size={18} />
+            <Text style={styles.sectionTitle}>Encrypted Cloud Backup</Text>
+          </View>
           <Text style={styles.sectionSubtext}>
             Backup your profile permanently to encrypted cloud storage. Only you can decrypt it with your wallet.
           </Text>
@@ -643,7 +672,10 @@ export default function ProfileScreen() {
               {isSyncing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.backupButtonText}>📤 Backup to Cloud (encrypted)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <CloudBackupIcon color="#0a0e1a" size={18} />
+                  <Text style={styles.backupButtonText}>Backup to Cloud (encrypted)</Text>
+                </View>
               )}
             </TouchableOpacity>
             
@@ -655,7 +687,10 @@ export default function ProfileScreen() {
               {isSyncing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.restoreButtonText}>📥 Restore</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <CloudRestoreIcon color="#0a0e1a" size={18} />
+                  <Text style={styles.restoreButtonText}>Restore</Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -689,9 +724,7 @@ export default function ProfileScreen() {
           {isDemoMode ? (
             <View>
               <View style={styles.demoBanner}>
-                <Text style={styles.demoBannerEmoji}>
-                  {DEMO_PERSONAS.find(p => p.id === activePersona)?.emoji || '\u{1F3AD}'}
-                </Text>
+                <CrownIcon color="#f4c430" size={28} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.demoBannerTitle}>
                     Sandbox: {DEMO_PERSONAS.find(p => p.id === activePersona)?.name}
@@ -928,6 +961,11 @@ const styles = StyleSheet.create({
   lastSyncText: { fontSize: 12, color: '#4ade80', marginBottom: 12 },
   syncButtons: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   syncButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
+  backupHint: {
+    backgroundColor: '#f4c43015', borderRadius: 12, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: '#f4c43040',
+  },
+  backupHintText: { fontSize: 14, color: '#f4c430', textAlign: 'center', lineHeight: 20 },
   warningText: { fontSize: 12, color: '#ff9f43', textAlign: 'center', marginTop: 8 },
   // Modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
