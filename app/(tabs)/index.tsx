@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FreedomScore } from '../../src/components/FreedomScore';
 import CashFlowSummary from '../../src/components/CashFlowSummary';
-import { useStore, useFreedomScore } from '../../src/store/useStore';
+import { useStore, useFreedomScore, invalidateDemoCache } from '../../src/store/useStore';
 import { analyzeAllAccounts } from '../../src/services/cashflow';
 import WhatIfCard from '@/components/WhatIfCard';
 import WhatIfModal from '@/components/WhatIfModal';
@@ -158,17 +158,40 @@ export default function HomeScreen() {
     });
   }, []);
 
-  const handleStartOnboarding = async () => {
-    // Exit demo mode and start real onboarding
+  const handleExitDemo = async () => {
+    // Restore real profile and exit demo mode
     const savedProfile = await AsyncStorage.getItem('_demo_saved_profile');
-    if (savedProfile) {
-      useStore.getState().importBackup(savedProfile);
-    }
     await AsyncStorage.removeItem('_demo_active');
     await AsyncStorage.removeItem('_demo_persona_id');
     await AsyncStorage.removeItem('_demo_saved_profile');
-    useStore.setState({ onboardingComplete: false });
-    await useStore.getState().saveProfile();
+    invalidateDemoCache();
+    if (savedProfile) {
+      useStore.getState().importBackup(savedProfile);
+    }
+    // Restore saved goals & plans
+    try {
+      const [goals, plans] = await Promise.all([
+        AsyncStorage.getItem('_demo_saved_goals'),
+        AsyncStorage.getItem('_demo_saved_plans'),
+      ]);
+      await Promise.all([
+        AsyncStorage.setItem('kingme_goals', goals || '[]'),
+        AsyncStorage.setItem('accumulation_plans', plans || '{}'),
+        AsyncStorage.removeItem('_demo_saved_goals'),
+        AsyncStorage.removeItem('_demo_saved_plans'),
+      ]);
+    } catch {}
+    setIsDemoMode(false);
+    setActivePersona(null);
+  };
+
+  const handleStartOnboarding = async () => {
+    // Exit demo mode and start real onboarding
+    await AsyncStorage.removeItem('_demo_active');
+    await AsyncStorage.removeItem('_demo_persona_id');
+    await AsyncStorage.removeItem('_demo_saved_profile');
+    invalidateDemoCache();
+    useStore.getState().resetStore();
     router.replace('/onboarding/welcome');
   };
 
@@ -439,8 +462,8 @@ export default function HomeScreen() {
             <TouchableOpacity style={styles.demoBannerSwitchBtn} onPress={() => setShowPersonaPicker(true)} activeOpacity={0.7}>
               <Text style={styles.demoBannerSwitchText}>Switch Persona</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.demoBannerSetupBtn} onPress={handleStartOnboarding} activeOpacity={0.7}>
-              <Text style={styles.demoBannerSetupText}>Set Up My Profile</Text>
+            <TouchableOpacity style={styles.demoBannerSwitchBtn} onPress={handleExitDemo} activeOpacity={0.7}>
+              <Text style={styles.demoBannerSwitchText}>Exit Demo</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -321,9 +321,9 @@ export default function ProfileScreen() {
     }
 
     // In demo mode, don't actually backup demo data to their real wallet
-    if (isDemoMode) {
-      awardBadge('cloud_backup');
-      setDemoBackupDone(true);
+    const demoActive = await AsyncStorage.getItem('_demo_active');
+    if (isDemoMode || demoActive === 'true') {
+      crossAlert('Demo Mode Active', 'Cloud backup is disabled while in demo/sandbox mode. Exit demo first to backup your real data.');
       return;
     }
 
