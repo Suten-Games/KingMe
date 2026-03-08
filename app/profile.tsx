@@ -66,6 +66,7 @@ export default function ProfileScreen() {
   // Arweave sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [demoBackupDone, setDemoBackupDone] = useState(false);
 
   // Styled alert modal (replaces window.alert / Alert.alert)
   const [alertModal, setAlertModal] = useState<{ title: string; message?: string } | null>(null);
@@ -299,8 +300,15 @@ export default function ProfileScreen() {
       return;
     }
 
+    // In demo mode, don't actually backup demo data to their real wallet
+    if (isDemoMode) {
+      awardBadge('cloud_backup');
+      setDemoBackupDone(true);
+      return;
+    }
+
     setIsSyncing(true);
-    
+
     try {
       const storeData = {
         bankAccounts,
@@ -652,6 +660,21 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           
+          {demoBackupDone && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#4ade8015', borderRadius: 10, padding: 14, marginTop: 10, borderWidth: 1, borderColor: '#4ade8030' }}
+              onPress={() => router.push('/(tabs)' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#4ade80', textAlign: 'center', marginBottom: 4 }}>
+                Nice work! You've explored cloud backup.
+              </Text>
+              <Text style={{ fontSize: 12, color: '#888', textAlign: 'center' }}>
+                Tap here to head back to the dashboard
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {!connected && wallets.length > 0 && (
             <Text style={styles.warningText}>💡 Tap "Connect Wallet" above to unlock backup & restore for this session</Text>
           )}
