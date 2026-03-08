@@ -12,7 +12,7 @@ import { useStore } from '../src/store/useStore';
 import { payForAddOn, payForAddOnWithSKR, usdToSkr, SKR_PRICE_USD } from '../src/services/addOnPayment';
 import { T } from '../src/theme';
 
-const PRO_PRICE = 24.99;
+const PRO_PRICE = 19.99;
 const PRO_ID = 'pro_bundle';
 
 const PRO_FEATURES = [

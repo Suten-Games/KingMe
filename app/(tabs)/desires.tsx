@@ -1,5 +1,5 @@
 // app/(tabs)/desires.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -226,39 +226,50 @@ export default function DesiresScreen() {
       </ResponsiveContainer>
 
       {/* ═══ Add Modal ═══ */}
-      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
-        <View style={s.modalOverlay}>
-          <View style={s.modalContent}>
-            <Text style={s.modalTitle}>What do you want?</Text>
-            <Text style={s.label}>Describe what you're looking for</Text>
-            <TextInput
-              style={s.modalInput}
-              placeholder="e.g., a Cybertruck, gaming laptop, Hawaii vacation, pay off student loans..."
-              placeholderTextColor="#555"
-              value={desireName}
-              onChangeText={setDesireName}
-              multiline
-              autoFocus
-            />
-            <View style={s.modalButtons}>
-              <TouchableOpacity style={s.modalCancelButton} onPress={() => { setShowAddModal(false); setDesireName(''); }}>
-                <Text style={s.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <ProGate featureName="AI Desires Planner" lockMessage="Generate step-by-step AI action plans for your goals.">
-                <TouchableOpacity
-                  style={[s.modalAddButton, !desireName.trim() && s.modalAddButtonDisabled]}
-                  onPress={handleStartResearch}
-                  disabled={!desireName.trim()}
-                >
-                  <Text style={s.modalAddText}>🤖 Build Plan</Text>
-                </TouchableOpacity>
-              </ProGate>
-            </View>
-            <TouchableOpacity style={s.manualButton} onPress={handleManualAdd} disabled={!desireName.trim()}>
-              <Text style={s.manualButtonText}>Skip AI, add manually</Text>
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => { setShowAddModal(false); setDesireName(''); }}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => { Keyboard.dismiss(); setShowAddModal(false); setDesireName(''); }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss}>
+              <View style={s.modalContent}>
+                <Text style={s.modalTitle}>What do you want?</Text>
+                <Text style={s.label}>Describe what you're looking for</Text>
+                <TextInput
+                  style={s.modalInput}
+                  placeholder="e.g., a Cybertruck, gaming laptop, Hawaii vacation, pay off student loans..."
+                  placeholderTextColor="#555"
+                  value={desireName}
+                  onChangeText={setDesireName}
+                  multiline
+                  blurOnSubmit
+                  returnKeyType="done"
+                />
+
+                <ProGate featureName="AI Desires Planner" lockMessage="Generate step-by-step AI action plans for your goals.">
+                  <TouchableOpacity
+                    style={[s.modalAddButton, { marginTop: 16 }, !desireName.trim() && s.modalAddButtonDisabled]}
+                    onPress={handleStartResearch}
+                    disabled={!desireName.trim()}
+                  >
+                    <Text style={s.modalAddText}>🤖 Build Plan</Text>
+                  </TouchableOpacity>
+                </ProGate>
+
+                <View style={s.modalButtons}>
+                  <TouchableOpacity style={s.modalCancelButton} onPress={() => { setShowAddModal(false); setDesireName(''); }}>
+                    <Text style={s.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.modalAddButton, !desireName.trim() && s.modalAddButtonDisabled]}
+                    onPress={handleManualAdd}
+                    disabled={!desireName.trim()}
+                  >
+                    <Text style={s.modalAddText}>Skip AI, add manually</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </TouchableOpacity>
-          </View>
-        </View>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
       </Modal>
 
       {/* ═══ Manual Add Modal ═══ */}
@@ -460,7 +471,7 @@ const s = StyleSheet.create({
   modalAddButton: { flex: 1, padding: 16, borderRadius: T.radius.md, backgroundColor: T.gold, alignItems: 'center' },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddText: { color: T.bg, fontSize: 16, fontFamily: T.fontBold },
-  manualButton: { padding: 12, alignItems: 'center', marginTop: 12 },
+  manualButton: { padding: 12, alignItems: 'center', marginTop: 12 },  // kept for reference
   manualButtonText: { color: T.textMuted, fontSize: 14, fontFamily: T.fontRegular },
 
   // Manual modal

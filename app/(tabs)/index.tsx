@@ -19,6 +19,7 @@ import PositionAlertCards from '@/components/PositionAlertCards';
 import BadgeStrip from '@/components/BadgeStrip';
 import { FREEDOM_THRESHOLDS } from '@/utils/constants';
 import SetupChecklist from '@/components/SetupChecklist';
+import ProDiscoveryCard from '@/components/ProDiscoveryCard';
 import AccumulationAlerts from '@/components/AccumulationAlerts';
 import GoalsStrip from '@/components/GoalsStrip';
 import PortfolioTrendCard from '@/components/PortfolioTrendCard';
@@ -475,8 +476,7 @@ export default function HomeScreen() {
         </View>
       )}
       <SetupChecklist />
-
-
+      <ProDiscoveryCard />
 
       <PositionAlertCards  />
             {windfallAlerts

@@ -88,7 +88,7 @@ export async function signAndSendTransaction(
 export async function signMessage(message: Uint8Array): Promise<Uint8Array> {
   if (!authToken || !walletAccount) throw new Error('Not connected via MWA');
 
-  const [signature] = await transact(async (wallet) => {
+  const [signedPayload] = await transact(async (wallet) => {
     await wallet.reauthorize({
       auth_token: authToken!,
       identity: APP_IDENTITY,
@@ -99,7 +99,12 @@ export async function signMessage(message: Uint8Array): Promise<Uint8Array> {
     });
   });
 
-  return signature;
+  // MWA returns signed_payload = signature (64 bytes) + original message.
+  // Extract just the 64-byte ed25519 detached signature.
+  if (signedPayload.length > 64) {
+    return signedPayload.slice(0, 64);
+  }
+  return signedPayload;
 }
 
 // ─── Disconnect ─────────────────────────────────────────────────────────────

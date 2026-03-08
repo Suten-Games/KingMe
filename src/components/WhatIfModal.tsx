@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { isOnChainScenario, formatSwapAmount, MINTS } from '@/services/jupiterSwap';
 import type { SwapScenarioState } from '@/hooks/useSwapScenario';
+import { useStore } from '../store/useStore';
 import ProGate from './ProGate';
 
 interface WhatIfModalProps {
@@ -24,6 +25,8 @@ export default function WhatIfModal({
   onApply,
   swapState,
 }: WhatIfModalProps) {
+  const isPro = useStore(s => s.isPro);
+
   if (!scenario) return null;
 
   const { impact, emoji, title, description, reasoning = '', risks = [], steps = [] } = scenario;
@@ -220,33 +223,35 @@ export default function WhatIfModal({
         </ScrollView>
 
         {/* ── Footer / Apply Button ────────────────────────────── */}
-        <View style={styles.footer}>
-          {isComplete ? (
-            <TouchableOpacity
-              style={[styles.applyButton, styles.applyButtonSuccess]}
-              onPress={onClose}
-            >
-              <Text style={styles.applyButtonText}>✅ Done — Close</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={getButtonStyle()}
-              onPress={() => onApply(scenario)}
-              disabled={isProcessing}
-            >
-              {isProcessing && (
-                <ActivityIndicator
-                  color={onChain ? '#f4c430' : '#0a0e1a'}
-                  size="small"
-                  style={styles.buttonSpinner}
-                />
-              )}
-              <Text style={getButtonTextStyle()}>
-                {getButtonLabel()}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {isPro && (
+          <View style={styles.footer}>
+            {isComplete ? (
+              <TouchableOpacity
+                style={[styles.applyButton, styles.applyButtonSuccess]}
+                onPress={onClose}
+              >
+                <Text style={styles.applyButtonText}>✅ Done — Close</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={getButtonStyle()}
+                onPress={() => onApply(scenario)}
+                disabled={isProcessing}
+              >
+                {isProcessing && (
+                  <ActivityIndicator
+                    color={onChain ? '#f4c430' : '#0a0e1a'}
+                    size="small"
+                    style={styles.buttonSpinner}
+                  />
+                )}
+                <Text style={getButtonTextStyle()}>
+                  {getButtonLabel()}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     </Modal>
   );
