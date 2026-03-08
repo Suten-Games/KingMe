@@ -3,7 +3,7 @@
 // instead of silently crashing to the splash screen.
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 
 interface Props {
   children: React.ReactNode;
@@ -30,13 +30,14 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       return (
         <View style={s.container}>
-          <Text style={s.title}>{this.props.fallbackTitle || 'Something went wrong'}</Text>
-          <ScrollView style={s.scroll}>
-            <Text style={s.error}>{this.state.error?.message || 'Unknown error'}</Text>
-            <Text style={s.stack}>{this.state.error?.stack?.slice(0, 800)}</Text>
-          </ScrollView>
+          <Image
+            source={require('../assets/images/kingmelogo.jpg')}
+            style={s.logo}
+            resizeMode="contain"
+          />
+          <Text style={s.title}>KingMe</Text>
           <TouchableOpacity style={s.btn} onPress={() => this.setState({ hasError: false, error: null })}>
-            <Text style={s.btnText}>Try Again</Text>
+            <Text style={s.btnText}>Continue</Text>
           </TouchableOpacity>
         </View>
       );
@@ -51,37 +52,30 @@ const s = StyleSheet.create({
     backgroundColor: '#0a0e1a',
     padding: 24,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#f87171',
-    marginBottom: 16,
-  },
-  scroll: {
-    maxHeight: 300,
-    marginBottom: 20,
-  },
-  error: {
-    fontSize: 14,
-    color: '#fbbf24',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  stack: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'monospace',
+    color: '#f4c430',
+    marginBottom: 32,
   },
   btn: {
     backgroundColor: '#f4c430',
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 12,
     alignItems: 'center',
   },
   btnText: {
     color: '#0a0e1a',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
   },
 });
