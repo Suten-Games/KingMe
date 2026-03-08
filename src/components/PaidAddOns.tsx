@@ -299,22 +299,7 @@ export default function PaidAddOns() {
                 <Text style={s.modalTitle}>Unlock {paymentAddon?.name}</Text>
                 <Text style={s.modalDesc}>{paymentAddon?.description}</Text>
 
-                {isAndroid && (
-                  <View style={s.tokenToggle}>
-                    <TouchableOpacity
-                      style={[s.tokenOption, !payWithSKR && s.tokenOptionActive]}
-                      onPress={() => setPayWithSKR(false)}
-                    >
-                      <Text style={[s.tokenOptionText, !payWithSKR && s.tokenOptionTextActive]}>USDC</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[s.tokenOption, payWithSKR && s.tokenOptionActiveSKR]}
-                      onPress={() => setPayWithSKR(true)}
-                    >
-                      <Text style={[s.tokenOptionText, payWithSKR && s.tokenOptionTextActive]}>SKR</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                {/* SKR payment temporarily disabled — Token-2022 compatibility WIP */}
 
                 <View style={[s.priceBox, payWithSKR && s.priceBoxSKR]}>
                   <Text style={s.priceLabel}>One-time purchase</Text>
