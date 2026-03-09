@@ -3,16 +3,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '@/store/useStore';
 import PortfolioTrendCard from '@/components/PortfolioTrendCard';
-import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import SubpageHeader from '../src/components/SubpageHeader';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { getSnapshots, type PortfolioSnapshot } from '@/services/portfolioSnapshots';
 
@@ -38,9 +33,6 @@ function monthLabel(ym: string): string {
 }
 
 export default function NetWorthPage() {
-  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
   const assets = useStore(s => s.assets) || [];
   const bankAccounts = useStore(s => s.bankAccounts) || [];
   const debts = useStore(s => s.debts) || [];
@@ -157,32 +149,7 @@ export default function NetWorthPage() {
   const canGoNewer = allMonths.indexOf(selectedMonth) > 0;
   const canGoOlder = allMonths.indexOf(selectedMonth) < allMonths.length - 1;
 
-  const brandedHeader = (
-    <LinearGradient
-      colors={['#10162a', '#0c1020', '#080c18']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[s.kmHeader, { paddingTop: Math.max(insets.top, 14) }]}
-    >
-      <View style={s.kmHeaderRow}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={s.kmBackButton}>
-          <Text style={s.kmBackText}>{'\u2190'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.kmBrand} activeOpacity={0.7} onPress={() => router.replace('/')}>
-          <Image source={require('../src/assets/images/kingmelogo.jpg')} style={s.kmLogo} resizeMode="cover" />
-          <MaskedView maskElement={<Text style={[s.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>KingMe</Text>}>
-            <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <Text style={[s.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}>KingMe</Text>
-            </LinearGradient>
-          </MaskedView>
-        </TouchableOpacity>
-        <View style={{ marginLeft: 'auto' }}>
-          <WalletHeaderButton />
-        </View>
-      </View>
-      <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.kmAccent} />
-    </LinearGradient>
-  );
+  const brandedHeader = <SubpageHeader />;
 
   return (
     <View style={s.container}>
@@ -341,16 +308,6 @@ export default function NetWorthPage() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
-
-  // Header
-  kmHeader: { paddingHorizontal: 16, paddingBottom: 8 },
-  kmHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  kmBackButton: { padding: 8, marginRight: 2 },
-  kmBackText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
-  kmBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  kmLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
-  kmTitle: { fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24 },
-  kmAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
 
   // Body
   body: { flex: 1 },

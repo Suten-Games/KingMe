@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import { useStore, useFreedomScore } from '../src/store/useStore';
+import SubpageHeader from '../src/components/SubpageHeader';
 
 const STATE_RULES: Record<string, { alimonyPct: number; childBasePct: number; childAddPct: number; community: boolean; durMult: number }> = {
   AZ: { alimonyPct: 0.20, childBasePct: 0.20, childAddPct: 0.05, community: true, durMult: 0.33 },
@@ -20,7 +20,6 @@ const STATE_RULES: Record<string, { alimonyPct: number; childBasePct: number; ch
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'];
 
 export default function DivorceSimulator() {
-  const router = useRouter();
   const assets = useStore(s => s.assets);
   const debts = useStore(s => s.debts);
   const bankAccounts = useStore(s => s.bankAccounts);
@@ -119,9 +118,8 @@ export default function DivorceSimulator() {
 
   return (
     <ScrollView style={s.container}>
+      <SubpageHeader />
       <View style={s.content}>
-        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}><Text style={s.back}>← Back</Text></TouchableOpacity>
-        <Text style={s.title}>Divorce Simulator</Text>
         <Text style={s.sub}>Estimate the financial impact of separation</Text>
 
         <View style={s.disc}><Text style={s.discText}>⚠️ Rough estimates only. State laws vary. Judges have discretion. Consult a family law attorney for real numbers.</Text></View>
@@ -233,8 +231,6 @@ export default function DivorceSimulator() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 60 },
-  back: { color: '#f4c430', fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  title: { fontSize: 28, fontWeight: '800', color: '#f87171', fontFamily: 'Inter_800ExtraBold' },
   sub: { fontSize: 14, color: '#888', marginBottom: 12 },
   disc: { backgroundColor: '#2a1a1a', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#f8717130', marginBottom: 20 },
   discText: { color: '#f0a0a0', fontSize: 12, lineHeight: 18 },

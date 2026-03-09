@@ -5,8 +5,8 @@ import {
   Platform, ActivityIndicator, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import SubpageHeader from '../src/components/SubpageHeader';
 import { useWallet } from '../src/providers/wallet-provider';
 import { useStore } from '../src/store/useStore';
 import { payForAddOn, payForAddOnWithSKR, usdToSkr, SKR_PRICE_USD } from '../src/services/addOnPayment';
@@ -24,7 +24,6 @@ const PRO_FEATURES = [
 
 export default function ProUpgradeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { connected, publicKey, signTransaction, signMessage, signAndSendTransaction } = useWallet();
   const activatePro = useStore((s) => s.activatePro);
 
@@ -62,15 +61,8 @@ export default function ProUpgradeScreen() {
   };
 
   return (
-    <View style={[s.container, { paddingTop: Math.max(insets.top, 14) }]}>
-      {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backButton}>
-          <Text style={s.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>KingMe Crowned</Text>
-        <View style={{ width: 36 }} />
-      </View>
+    <View style={s.container}>
+      <SubpageHeader />
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
         {/* Hero */}
@@ -177,13 +169,6 @@ export default function ProUpgradeScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: T.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingBottom: 12,
-  },
-  backButton: { padding: 8 },
-  backText: { fontSize: 20, color: T.blue, fontFamily: T.fontSemiBold },
-  headerTitle: { fontSize: 20, color: T.gold, fontFamily: T.fontExtraBold, letterSpacing: 0.8 },
   scroll: { flex: 1, paddingHorizontal: 20 },
 
   // Hero

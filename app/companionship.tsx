@@ -8,15 +8,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, ActivityIndicator, LayoutAnimation,
-  Platform, UIManager, Image,
+  Platform, UIManager,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import SubpageHeader from '../src/components/SubpageHeader';
 import KingMeFooter from '../src/components/KingMeFooter';
 import { parseNumber } from '../src/utils/parseNumber';
 import { useStore } from '../src/store/useStore';
@@ -133,9 +129,6 @@ function currentMonthKey(): string {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function CompanionshipTracker() {
-  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const storeIncome = useStore(s => s.income);
   const bankTransactions = useStore(s => s.bankTransactions || []);
 
@@ -392,28 +385,7 @@ export default function CompanionshipTracker() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0a0e1a' }}>
-      <LinearGradient
-        colors={['#10162a', '#0c1020', '#080c18']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ paddingHorizontal: 16, paddingBottom: 8, paddingTop: Math.max(insets.top, 14) }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={{ padding: 8, marginRight: 2 }}>
-            <Text style={{ fontSize: 20, color: '#60a5fa', fontWeight: '600' }}>←</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} activeOpacity={0.7} onPress={() => router.replace('/')}>
-            <Image source={require('../src/assets/images/kingmelogo.jpg')} style={{ width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' }} resizeMode="cover" />
-            <MaskedView maskElement={<Text style={{ fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>}>
-              <LinearGradient colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24, opacity: 0, ...(fontsLoaded && { fontFamily: 'Cinzel_700Bold' }) }}>KingMe</Text>
-              </LinearGradient>
-            </MaskedView>
-          </TouchableOpacity>
-          <View style={{ marginLeft: 'auto' }}><WalletHeaderButton /></View>
-        </View>
-        <LinearGradient colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: 1.5, marginTop: 10, borderRadius: 1 }} />
-      </LinearGradient>
+      <SubpageHeader />
 
       <ScrollView style={st.container} contentContainerStyle={{ paddingBottom: 60 }}>
         {/* ── Companion name ──────────────────────────────────── */}
@@ -760,8 +732,6 @@ const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a', paddingHorizontal: 16 },
   loadingContainer: { flex: 1, backgroundColor: '#0a0e1a', justifyContent: 'center', alignItems: 'center' },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 4 },
-  backBtn: { fontSize: 16, color: '#c084fc', fontWeight: '600' },
   pageTitle: { fontSize: 24, fontWeight: '800', color: '#c084fc' },
   subLabel: { fontSize: 12, color: '#666', marginBottom: 16, paddingLeft: 4 },
 

@@ -3,15 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput,
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
 import { parseNumber } from '../src/utils/parseNumber';
 import type { DriftTrade, DriftTradeDirection, DriftTradeAsset, GoalAllocation } from '../src/types';
 import { loadGoals, type Goal, type GoalWithProgress, calcGoalProgress, sortByReachability } from '../src/services/goals';
-import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import SubpageHeader from '../src/components/SubpageHeader';
 import KingMeFooter from '../src/components/KingMeFooter';
 
 const DRIFT_LOGO = 'https://drift-public.s3.eu-central-1.amazonaws.com/drift.png';
@@ -31,8 +27,6 @@ function formatCurrency(amt: number): string {
 
 // ─── component ────────────────────────────────────────────────────────────────
 export default function TradingScreen() {
-  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const driftTrades = useStore((s) => s.driftTrades || []);
   const addDriftTrade = useStore((s) => s.addDriftTrade);
@@ -401,59 +395,7 @@ export default function TradingScreen() {
 
   return (
     <View style={styles.container}>
-      {/* KingMe branded header */}
-      <LinearGradient
-        colors={['#10162a', '#0c1020', '#080c18']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.headerBrand}
-            activeOpacity={0.7}
-            onPress={() => router.replace('/')}
-          >
-            <Image
-              source={require('../src/assets/images/kingmelogo.jpg')}
-              style={styles.headerLogo}
-              resizeMode="cover"
-            />
-            <MaskedView
-              maskElement={
-                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>
-                  KingMe
-                </Text>
-              }
-            >
-              <LinearGradient
-                colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}>
-                  KingMe
-                </Text>
-              </LinearGradient>
-            </MaskedView>
-          </TouchableOpacity>
-
-          <View style={{ marginLeft: 'auto' }}>
-            <WalletHeaderButton />
-          </View>
-        </View>
-
-        <LinearGradient
-          colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.headerAccent}
-        />
-      </LinearGradient>
+      <SubpageHeader />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Drift Trading label + Month Navigation */}
@@ -1167,14 +1109,6 @@ export default function TradingScreen() {
 // ─── styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backButton: { padding: 8, marginRight: 2 },
-  backText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
-  headerBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerLogo: { width: 32, height: 32, borderRadius: 7, borderWidth: 1, borderColor: '#f4c43040' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#f4c430', letterSpacing: 1, lineHeight: 24 },
-  headerAccent: { height: 1.5, marginTop: 10, borderRadius: 1 },
   scroll: { flex: 1, padding: 20 },
   monthNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   driftLabel: { flexDirection: 'row', alignItems: 'center', gap: 6 },

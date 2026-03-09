@@ -4,10 +4,7 @@ import {
   TextInput, Linking, useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SubpageHeader from '../../src/components/SubpageHeader';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -15,7 +12,6 @@ import ThesisModal from '../../src/components/ThesisModal';
 import ConfirmModal from '../../src/components/ConfirmModal';
 import AddAssetModal from '../../src/components/assets/AddAssetModal';
 import AssetTargetSection from '@/components/AssetTargetSection';
-import WalletHeaderButton from '../../src/components/WalletHeaderButton';
 import JupiterSwap from '../../src/components/JupiterSwap';
 import KaminoLendCard from '../../src/components/KaminoLendCard';
 import SparklineChart from '../../src/components/SparklineChart';
@@ -35,9 +31,6 @@ export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
-  const insets = useSafeAreaInsets();
-
   const { publicKey, signTransaction, signAndSendTransaction, connected } = useWallet();
   const { showToast, ToastComponent } = useSwapToast();
 
@@ -281,59 +274,7 @@ export default function AssetDetailScreen() {
 
   return (
     <View style={styles.container}>
-      {/* KingMe branded header */}
-      <LinearGradient
-        colors={['#10162a', '#0c1020', '#080c18']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.backButton}>
-            <Text style={styles.backText}>←</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.headerBrand}
-            activeOpacity={0.7}
-            onPress={() => router.replace('/')}
-          >
-            <Image
-              source={require('../../src/assets/images/kingmelogo.jpg')}
-              style={styles.headerLogo}
-              resizeMode="cover"
-            />
-            <MaskedView
-              maskElement={
-                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>
-                  KingMe
-                </Text>
-              }
-            >
-              <LinearGradient
-                colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}>
-                  KingMe
-                </Text>
-              </LinearGradient>
-            </MaskedView>
-          </TouchableOpacity>
-
-          <View style={styles.headerActions}>
-            <WalletHeaderButton />
-          </View>
-        </View>
-
-        <LinearGradient
-          colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.headerAccent}
-        />
-      </LinearGradient>
+      <SubpageHeader />
 
       {/* Action buttons */}
       <View style={styles.actionBar}>
@@ -1252,45 +1193,6 @@ export default function AssetDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
-  header: {
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  backButton: { padding: 8, marginRight: 2 },
-  backText: { fontSize: 20, color: '#60a5fa', fontWeight: '600' },
-  headerBrand: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  headerLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: '#f4c43040',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#f4c430',
-    letterSpacing: 1.2,
-    lineHeight: 28,
-  },
-  headerAccent: {
-    height: 1.5,
-    marginTop: 10,
-    borderRadius: 1,
-  },
-  headerActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  editHeaderButton: { padding: 6 },
-  editHeaderText: { fontSize: 14, color: '#4ade80', fontWeight: '600' },
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

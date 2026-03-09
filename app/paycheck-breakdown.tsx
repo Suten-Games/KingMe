@@ -1,15 +1,10 @@
 // app/paycheck-breakdown.tsx - Full page for managing paycheck deductions
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import MaskedView from '@react-native-masked-view/masked-view';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import { useStore } from '../src/store/useStore';
 import type { PreTaxDeduction, PreTaxDeductionType, Tax, TaxType, PostTaxDeduction, PostTaxDeductionType } from '../src/types';
 import { parseNumber } from '../src/utils/parseNumber';
-import WalletHeaderButton from '../src/components/WalletHeaderButton';
+import SubpageHeader from '../src/components/SubpageHeader';
 import KingMeFooter from '../src/components/KingMeFooter';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -54,10 +49,6 @@ const POSTTAX_LABELS: Record<PostTaxDeductionType, string> = {
 };
 
 export default function PaycheckBreakdownScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [fontsLoaded] = useFonts({ Cinzel_700Bold });
-
   const preTaxDeductions = useStore((s) => s.preTaxDeductions || []);
   const taxes = useStore((s) => s.taxes || []);
   const postTaxDeductions = useStore((s) => s.postTaxDeductions || []);
@@ -136,55 +127,7 @@ export default function PaycheckBreakdownScreen() {
 
   return (
     <View style={styles.container}>
-      {/* KingMe Header */}
-      <LinearGradient
-        colors={['#10162a', '#0c1020', '#080c18']}
-        style={{ paddingTop: Math.max(insets.top, 14) }}
-      >
-        <View style={styles.kmHeaderRow}>
-          <TouchableOpacity
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-            style={styles.kmBackButton}
-          >
-            <Text style={styles.kmBackText}>{'\u2190'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.kmBrand} activeOpacity={0.7} onPress={() => router.replace('/')}>
-            <Image
-              source={require('../src/assets/images/kingmelogo.jpg')}
-              style={styles.kmLogo}
-              resizeMode="cover"
-            />
-            <MaskedView
-              maskElement={
-                <Text style={[styles.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }]}>
-                  KingMe
-                </Text>
-              }
-            >
-              <LinearGradient
-                colors={['#ffe57a', '#f4c430', '#c8860a', '#f4c430', '#ffe57a']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text
-                  style={[styles.kmTitle, fontsLoaded && { fontFamily: 'Cinzel_700Bold' }, { opacity: 0 }]}
-                >
-                  KingMe
-                </Text>
-              </LinearGradient>
-            </MaskedView>
-          </TouchableOpacity>
-          <View style={{ marginLeft: 'auto' }}>
-            <WalletHeaderButton />
-          </View>
-        </View>
-        <LinearGradient
-          colors={['transparent', '#f4c43060', '#f4c430', '#f4c43060', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.kmAccent}
-        />
-      </LinearGradient>
+      <SubpageHeader />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Summary */}
@@ -543,19 +486,6 @@ export default function PaycheckBreakdownScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0e1a' },
-  kmHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 10,
-  },
-  kmBackButton: { paddingRight: 4, paddingVertical: 4 },
-  kmBackText: { color: '#f4c430', fontSize: 22, fontWeight: '600' },
-  kmBrand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  kmLogo: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, borderColor: '#f4c43040' },
-  kmTitle: { fontSize: 22, fontWeight: '800', color: '#f4c430', letterSpacing: 1 },
-  kmAccent: { height: 1.5, borderRadius: 1 },
   scroll: { flex: 1, padding: 20 },
 
   // Summary
