@@ -11,6 +11,8 @@ export const config = {
 const JUPITER_REFERRAL_ACCOUNT = process.env.JUPITER_REFERRAL_ACCOUNT || '';
 const PLATFORM_FEE_BPS = parseInt(process.env.JUPITER_FEE_BPS || '50'); // 0.5% default
 const JUPITER_API_KEY = process.env.JUPITER_API_KEY || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const ALERT_EMAIL = process.env.ALERT_EMAIL || '';
 // ── Well-known Solana token mints ────────────────────────────
 const KNOWN_MINTS: Record<string, string> = {
   SOL:  'So11111111111111111111111111111111111111112',
@@ -57,6 +59,14 @@ export default async function handler(request: Request) {
     } = body;
 
     const applyFee = !skipFee && !!JUPITER_REFERRAL_ACCOUNT && PLATFORM_FEE_BPS > 0;
+
+    // If client retried with skipFee, a referral token account is missing — alert
+    if (skipFee && action === 'swap' && RESEND_API_KEY && ALERT_EMAIL) {
+      const tokenName = Object.entries(KNOWN_MINTS).find(([, v]) => v === outputMint)?.[0] || outputMint;
+      sendFeeAlert(tokenName, outputMint).catch(err =>
+        console.error('[SWAP] Alert email failed:', err.message)
+      );
+    }
 
     if (!inputMint || !outputMint || !amount || !userPublicKey) {
       return jsonResponse({
@@ -248,5 +258,30 @@ function jsonResponse(data: any, status = 200) {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
     },
+  });
+}
+
+async function sendFeeAlert(tokenName: string, mint: string) {
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'KingMe Alerts <alerts@sutengames.com>',
+      to: ALERT_EMAIL,
+      subject: `Missing referral token account: ${tokenName}`,
+      text: [
+        `A swap just fell back to no-fee because the Jupiter referral token account is missing for:`,
+        ``,
+        `Token: ${tokenName}`,
+        `Mint: ${mint}`,
+        `Referral: ${JUPITER_REFERRAL_ACCOUNT}`,
+        ``,
+        `Add this token account in the Jupiter Referral dashboard so you collect fees on ${tokenName} swaps.`,
+        `https://referral.jup.ag/dashboard`,
+      ].join('\n'),
+    }),
   });
 }
