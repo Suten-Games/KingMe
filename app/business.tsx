@@ -212,8 +212,8 @@ export default function BusinessDashboard() {
       })).filter(t => t.valueUSD > 0.01);
       const walletTotalUSD = (solBalance * solPrice) + usdcBalance + otherWithValue.reduce((s, t) => s + t.valueUSD, 0);
 
-      // ── 2. Fetch claimable referral fees (if wallet connected) ──
-      let claimableFees = data.claimableFees;
+      // ── 2. Fetch claimable referral fees ──────────────────
+      let claimableFees: typeof data.claimableFees = data.claimableFees;
       if (connected && publicKey) {
         try {
           const KINGME_API = 'https://kingme-api.vercel.app';
@@ -224,20 +224,23 @@ export default function BusinessDashboard() {
             body: JSON.stringify({ userPublicKey: publicKey.toBase58(), action: 'preview' }),
           });
           const preview = await res.json();
-          if (!preview.error) {
-            const claims = preview.claims || [];
-            let claimSol = 0, claimUsdc = 0;
-            const claimOther: { symbol: string; amount: number; valueUSD: number }[] = [];
-            for (const c of claims) {
-              if (c.symbol === 'SOL') claimSol = c.uiAmount;
-              else if (c.symbol === 'USDC') claimUsdc = c.uiAmount;
-              else claimOther.push({ symbol: c.symbol, amount: c.uiAmount, valueUSD: c.valueUSD });
-            }
-            claimableFees = { sol: claimSol, usdc: claimUsdc, other: claimOther, totalUSD: preview.totalValueUSD || 0, lastFetched: now };
+          if (preview.error) {
+            console.warn('[REFERRAL] Preview error:', preview.error);
           }
+          const claims = preview.claims || [];
+          let claimSol = 0, claimUsdc = 0;
+          const claimOther: { symbol: string; amount: number; valueUSD: number }[] = [];
+          for (const c of claims) {
+            if (c.symbol === 'SOL') claimSol = c.uiAmount;
+            else if (c.symbol === 'USDC') claimUsdc = c.uiAmount;
+            else claimOther.push({ symbol: c.symbol, amount: c.uiAmount, valueUSD: c.valueUSD });
+          }
+          claimableFees = { sol: claimSol, usdc: claimUsdc, other: claimOther, totalUSD: preview.totalValueUSD || 0, lastFetched: now };
         } catch (err) {
           logError('Claimable fees fetch failed:', err);
         }
+      } else {
+        console.warn('[REFERRAL] Wallet not connected — skipping claimable fees check');
       }
 
       await save({
@@ -811,7 +814,7 @@ export default function BusinessDashboard() {
       {(data.swapReferralsEnabled || data.referralWallet) ? (
         <View style={st.section}>
           <View style={st.sectionHeader}>
-            <Text style={st.sectionTitle}>Swap Referral Fees</Text>
+            <Text style={st.sectionTitle}>Jupiter Swap Referral Fees</Text>
             {data.referralWallet && (
               <TouchableOpacity onPress={syncReferralWallet} disabled={syncing}>
                 {syncing ? <ActivityIndicator size="small" color="#f4c430" /> : <Text style={st.syncBtn}>Sync</Text>}
