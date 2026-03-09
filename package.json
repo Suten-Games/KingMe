@@ -17,7 +17,6 @@
     "@expo-google-fonts/cinzel": "^0.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/playfair-display": "^0.4.2",
-    "@jup-ag/referral-sdk": "^0.3.0",
     "@noble/ed25519": "^3.0.0",
     "@privy-io/expo": "^0.63.5",
     "@privy-io/expo-native-extensions": "^0.0.7",

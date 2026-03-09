@@ -236,18 +236,21 @@ export default function BusinessDashboard() {
       return;
     }
 
-    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+    const KINGME_API = 'https://kingme-api.vercel.app';
+    const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
+    const APP_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
     const partnerKey = publicKey.toBase58();
     const businessWallet = data.referralWallet;
+    const apiHeaders = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
 
     setClaiming(true);
     setClaimStatus('Checking claimable fees...');
 
     try {
       // 1. Preview — see what's claimable
-      const previewRes = await fetch(`${API_BASE}/api/referral/claim`, {
+      const previewRes = await fetch(`${KINGME_API}/api/referral/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders,
         body: JSON.stringify({ userPublicKey: partnerKey, action: 'preview' }),
       });
       const preview = await previewRes.json();
@@ -276,9 +279,9 @@ export default function BusinessDashboard() {
 
       // 3. Build transactions
       setClaimStatus('Building transactions...');
-      const buildRes = await fetch(`${API_BASE}/api/referral/claim`, {
+      const buildRes = await fetch(`${KINGME_API}/api/referral/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders,
         body: JSON.stringify({
           userPublicKey: partnerKey,
           businessWallet,
@@ -289,7 +292,7 @@ export default function BusinessDashboard() {
       if (buildData.error) throw new Error(buildData.error);
 
       const { claimTransactions, transferTransactions, claims } = buildData;
-      const rpcProxy = `${API_BASE}/api/rpc/send`;
+      const rpcProxy = `${APP_BASE}/api/rpc/send`;
 
       // Helper: deserialize, sign, send, confirm
       const signAndSend = async (b64Tx: string, label: string) => {
