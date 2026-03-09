@@ -1,12 +1,13 @@
 // api/swap/quote.ts - Jupiter Swap Quote & Transaction Builder
 // ==============================================================
-// Vercel edge function that proxies Jupiter's Ultra + Swap APIs.
+// Vercel serverless function that proxies Jupiter's Swap APIs.
 // Keeps referral fee config server-side so it can't be stripped client-side.
+// Uses Node.js runtime (not edge) for @solana/web3.js compatibility.
 
 import { PublicKey } from '@solana/web3.js';
 
 export const config = {
-  runtime: 'edge',
+  runtime: 'nodejs',
 };
 
 const JUPITER_REFERRAL_PROGRAM = new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
