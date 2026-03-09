@@ -34,9 +34,6 @@ import {
 import { log, warn, error as logError } from '@/utils/logger';
 
 const STORAGE_KEY = 'business_dashboard_data';
-const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
-const SOL_MINT = 'So11111111111111111111111111111111111111112';
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
 // ─── Auto-sync business → personal asset ─────────────────────────────────────
 
@@ -115,6 +112,10 @@ export default function BusinessDashboard() {
   // P&L snapshots
   const [showSnapshotHistory, setShowSnapshotHistory] = useState(false);
 
+  // Setup tips (expandable for newbies)
+  const [showEINTip, setShowEINTip] = useState(false);
+  const [showBankTip, setShowBankTip] = useState(false);
+
   // Break-even calculator
   const [revenuePerUser, setRevenuePerUser] = useState('4.99');
 
@@ -146,75 +147,48 @@ export default function BusinessDashboard() {
     save({ ...data, ...updates });
   }, [data, save]);
 
-  // ── Sync Referral Wallet ───────────────────────────────────
+  // ── Sync Claimable Referral Fees (via Jupiter preview) ────
   const syncReferralWallet = async () => {
-    if (!data.referralWallet) {
-      Alert.alert('No Wallet', 'Set your referral wallet address first.');
+    if (!connected || !publicKey) {
+      Alert.alert('Connect Wallet', 'Connect your personal wallet first — it must be the one registered as the Jupiter referral partner.');
       return;
     }
     setSyncing(true);
     try {
-      const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
-      const rpcProxy = `${API_BASE}/api/rpc/send`;
+      const KINGME_API = 'https://kingme-api.vercel.app';
+      const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
+      const partnerKey = publicKey.toBase58();
 
-      // SOL balance
-      const balResp = await fetch(rpcProxy, {
+      const res = await fetch(`${KINGME_API}/api/referral/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getBalance', params: [data.referralWallet] }),
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ userPublicKey: partnerKey, action: 'preview' }),
       });
-      const balData = await balResp.json();
-      const solBalance = (balData.result?.value || 0) / 1e9;
+      const preview = await res.json();
+      if (preview.error) throw new Error(preview.error);
 
-      // Token accounts
-      const tokResp = await fetch(rpcProxy, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 2,
-          method: 'getTokenAccountsByOwner',
-          params: [data.referralWallet, { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }, { encoding: 'jsonParsed' }],
-        }),
-      });
-      const tokData = await tokResp.json();
-      const tokenAccounts = tokData.result?.value || [];
+      const claims = preview.claims || [];
+      let solAmount = 0;
+      let usdcAmount = 0;
+      const otherTokens: { symbol: string; amount: number; valueUSD: number }[] = [];
 
-      let usdcBalance = 0;
-      const otherTokens: { symbol: string; mint: string; amount: number }[] = [];
-      for (const acct of tokenAccounts) {
-        const info = acct.account?.data?.parsed?.info;
-        if (!info) continue;
-        const amount = info.tokenAmount?.uiAmount || 0;
-        if (amount === 0) continue;
-        if (info.mint === USDC_MINT) { usdcBalance = amount; }
-        else { otherTokens.push({ symbol: info.mint.slice(0, 6), mint: info.mint, amount }); }
+      for (const c of claims) {
+        if (c.symbol === 'SOL') { solAmount = c.uiAmount; }
+        else if (c.symbol === 'USDC') { usdcAmount = c.uiAmount; }
+        else { otherTokens.push({ symbol: c.symbol, amount: c.uiAmount, valueUSD: c.valueUSD }); }
       }
-
-      // Prices
-      const mintsToPrice = [SOL_MINT, ...otherTokens.map(t => t.mint)];
-      let prices: Record<string, number> = {};
-      try {
-        const priceResp = await fetch(`${JUPITER_PRICE_API}?ids=${mintsToPrice.join(',')}`);
-        const priceData = await priceResp.json();
-        for (const [mint, info] of Object.entries(priceData.data || {})) {
-          prices[mint] = parseFloat((info as any).price || '0');
-        }
-      } catch {}
-
-      const solPrice = prices[SOL_MINT] || 0;
-      const otherWithValue = otherTokens.map(t => ({
-        symbol: t.symbol, amount: t.amount, valueUSD: t.amount * (prices[t.mint] || 0),
-      })).filter(t => t.valueUSD > 0.01);
-
-      const totalUSD = (solBalance * solPrice) + usdcBalance + otherWithValue.reduce((s, t) => s + t.valueUSD, 0);
 
       await save({
         ...data,
-        referralBalance: { sol: solBalance, usdc: usdcBalance, other: otherWithValue, totalUSD, lastFetched: new Date().toISOString() },
+        referralBalance: {
+          sol: solAmount, usdc: usdcAmount, other: otherTokens,
+          totalUSD: preview.totalValueUSD || 0,
+          lastFetched: new Date().toISOString(),
+        },
       });
     } catch (err: any) {
       logError('Referral sync error:', err);
-      Alert.alert('Sync Failed', 'Could not sync referral data. Please check your connection and try again.');
+      Alert.alert('Sync Failed', err.message || 'Could not fetch claimable referral fees.');
     } finally {
       setSyncing(false);
     }
@@ -405,11 +379,20 @@ export default function BusinessDashboard() {
     return sum;
   }, 0);
 
-  const totalRevenue = data.referralBalance?.totalUSD || 0;
+  // Income from imported transactions (CSV bank imports, referral claims, add-on revenue)
+  // Excludes capital contributions which have their own section
+  const contributionIds = new Set((data.contributions || []).map(c => c.id));
+  const incomeTransactions = (data.transactions || []).filter(t =>
+    t.type === 'income' && !contributionIds.has(t.id)
+  );
+  const totalTransactionIncome = incomeTransactions.reduce((s, t) => s + t.amount, 0);
+
+  const claimableReferralFees = data.referralBalance?.totalUSD || 0;
   const bankBal = data.bankAccount?.balance || 0;
   const totalDistributions = data.distributions.reduce((s, d) => s + d.amount, 0);
   const totalContributions = (data.contributions || []).reduce((s, c) => s + c.amount, 0);
-  const netPosition = bankBal + totalRevenue;
+  const totalRevenue = totalTransactionIncome;
+  const netPosition = bankBal + claimableReferralFees;
 
   // Break-even
   const rpu = parseFloat(revenuePerUser) || 0;
@@ -577,6 +560,92 @@ export default function BusinessDashboard() {
           </TouchableOpacity>
         )}
 
+      {/* ── Setup Checklist (shown when business is mostly empty) ── */}
+      {(!data.businessName || !data.info?.ein || !data.bankAccount || (data.transactions || []).length === 0) && (
+        <View style={st.section}>
+          <Text style={st.sectionTitle}>Getting Started</Text>
+          <View style={st.card}>
+            <Text style={[st.guideText, { marginBottom: 12 }]}>
+              Set up your business dashboard step by step. Complete these to unlock your full P&L tracking.
+            </Text>
+            <TouchableOpacity style={st.checklistItem} onPress={() => setShowSetupModal(true)}>
+              <Text style={st.checklistIcon}>{data.businessName ? '✅' : '⬜'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistLabel}>Name your business</Text>
+                <Text style={st.checklistSub}>Set your business name, entity type, and description</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.checklistItem} onPress={() => setShowInfoModal(true)}>
+              <Text style={st.checklistIcon}>{data.info?.ein ? '✅' : '⬜'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistLabel}>Add business details</Text>
+                <Text style={st.checklistSub}>EIN, state of formation, registered agent</Text>
+                {!data.info?.ein && (
+                  <TouchableOpacity onPress={() => setShowEINTip(!showEINTip)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={st.tipToggle}>{showEINTip ? 'Hide tips' : "Don't have an EIN yet?"}</Text>
+                  </TouchableOpacity>
+                )}
+                {showEINTip && (
+                  <View style={st.tipBox}>
+                    <Text style={st.tipText}>An EIN (Employer Identification Number) is like a social security number for your business. You need one to open a business bank account and file taxes.</Text>
+                    <Text style={st.tipStep}>1. Go to irs.gov/ein and click "Apply Online Now"</Text>
+                    <Text style={st.tipStep}>2. Select your entity type (LLC, sole prop, etc.)</Text>
+                    <Text style={st.tipStep}>3. Answer a few questions about your business</Text>
+                    <Text style={st.tipStep}>4. You'll get your EIN immediately at the end — save the confirmation letter</Text>
+                    <Text style={st.tipNote}>It's free and takes about 5 minutes. You'll need to have already formed your business entity with your state (usually through the Secretary of State website, $50-$200 depending on state).</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.checklistItem} onPress={() => setShowBankModal(true)}>
+              <Text style={st.checklistIcon}>{data.bankAccount ? '✅' : '⬜'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistLabel}>Connect business bank account</Text>
+                <Text style={st.checklistSub}>Add your business checking or savings account</Text>
+                {!data.bankAccount && (
+                  <TouchableOpacity onPress={() => setShowBankTip(!showBankTip)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={st.tipToggle}>{showBankTip ? 'Hide tips' : "Need to open one?"}</Text>
+                  </TouchableOpacity>
+                )}
+                {showBankTip && (
+                  <View style={st.tipBox}>
+                    <Text style={st.tipText}>A dedicated business bank account keeps your personal and business finances separate — which is important for taxes, liability protection, and clean bookkeeping.</Text>
+                    <Text style={st.tipStep}>1. Get your EIN first (see above)</Text>
+                    <Text style={st.tipStep}>2. Gather your formation documents (Articles of Organization, Operating Agreement)</Text>
+                    <Text style={st.tipStep}>3. Apply online or in-person at a bank — Mercury, Relay, and Bluevine are popular for small businesses with no monthly fees</Text>
+                    <Text style={st.tipStep}>4. Most banks will ask for your EIN, formation docs, and a government ID</Text>
+                    <Text style={st.tipNote}>Once open, all business income and expenses should go through this account. Export CSV statements periodically and import them here to track everything.</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.checklistItem} onPress={() => setShowImportModal(true)}>
+              <Text style={st.checklistIcon}>{(data.transactions || []).length > 0 ? '✅' : '⬜'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistLabel}>Import transactions</Text>
+                <Text style={st.checklistSub}>Upload a CSV from your business bank to track income and expenses</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.checklistItem} onPress={() => setShowExpenseModal(true)}>
+              <Text style={st.checklistIcon}>{data.expenses.length > 0 ? '✅' : '⬜'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistLabel}>Add recurring expenses</Text>
+                <Text style={st.checklistSub}>Hosting, tools, domains, subscriptions</Text>
+              </View>
+            </TouchableOpacity>
+            {!data.swapReferralsEnabled && !data.referralWallet && (
+              <TouchableOpacity style={st.checklistItem} onPress={() => save({ ...data, swapReferralsEnabled: true })}>
+                <Text style={st.checklistIcon}>{'⬜'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.checklistLabel}>Enable swap referral fees</Text>
+                  <Text style={st.checklistSub}>Earn on every token swap through Jupiter (optional)</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* ── Business Info ─────────────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
@@ -714,11 +783,13 @@ export default function BusinessDashboard() {
             </View>
           ) : (
             <View style={st.card}>
+              <Text style={st.cardLabel}>Business Wallet</Text>
               <TouchableOpacity onPress={() => setShowWalletModal(true)}>
                 <Text style={st.walletAddr}>{data.referralWallet.slice(0, 6)}...{data.referralWallet.slice(-6)}</Text>
               </TouchableOpacity>
               {data.referralBalance ? (
                 <>
+                  <Text style={[st.cardLabel, { marginTop: 12 }]}>Claimable Referral Fees</Text>
                   <Text style={st.bigValue}>${data.referralBalance.totalUSD.toFixed(2)}</Text>
                   <View style={st.tokenRow}>
                     {data.referralBalance.sol > 0.001 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.sol.toFixed(4)} SOL</Text></View>}
@@ -744,7 +815,7 @@ export default function BusinessDashboard() {
                   )}
                 </>
               ) : (
-                <Text style={st.mutedText}>Tap sync to fetch balances</Text>
+                <Text style={st.mutedText}>Tap sync to check claimable fees</Text>
               )}
             </View>
           )}
@@ -772,6 +843,51 @@ export default function BusinessDashboard() {
             <Text style={st.setupEmoji}>🏦</Text>
             <Text style={st.setupText}>Add business bank account</Text>
           </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Income ──────────────────────────────────────────── */}
+      <View style={st.section}>
+        <Text style={st.sectionTitle}>📈 Income</Text>
+        {incomeTransactions.length === 0 ? (
+          <View style={st.card}>
+            <Text style={st.mutedText}>No income recorded yet. Import bank CSV transactions, claim referral fees, or receive paid add-on purchases to see income here.</Text>
+          </View>
+        ) : (
+          <View style={st.card}>
+            <Text style={st.bigValue}>${totalTransactionIncome.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+            {(() => {
+              const referralIncome = incomeTransactions.filter(t => t.description?.includes('referral claim'));
+              const addOnIncome = incomeTransactions.filter(t => t.category === 'income_other' && t.description?.includes('add-on'));
+              const otherIncome = incomeTransactions.filter(t =>
+                !t.description?.includes('referral claim') &&
+                !(t.category === 'income_other' && t.description?.includes('add-on'))
+              );
+              return (
+                <>
+                  {referralIncome.length > 0 && (
+                    <View style={st.plRow}>
+                      <Text style={st.plLabel}>Swap Referral Fees ({referralIncome.length})</Text>
+                      <Text style={st.plGreen}>${referralIncome.reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                    </View>
+                  )}
+                  {addOnIncome.length > 0 && (
+                    <View style={st.plRow}>
+                      <Text style={st.plLabel}>Paid Add-Ons ({addOnIncome.length})</Text>
+                      <Text style={st.plGreen}>${addOnIncome.reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                    </View>
+                  )}
+                  {otherIncome.length > 0 && (
+                    <View style={st.plRow}>
+                      <Text style={st.plLabel}>Other Income ({otherIncome.length})</Text>
+                      <Text style={st.plGreen}>${otherIncome.reduce((s, t) => s + t.amount, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+            <Text style={[st.lastSync, { marginTop: 8 }]}>{incomeTransactions.length} transaction{incomeTransactions.length !== 1 ? 's' : ''}</Text>
+          </View>
         )}
       </View>
 
@@ -897,13 +1013,19 @@ export default function BusinessDashboard() {
         <Text style={st.sectionTitle}>📊 P&L Overview</Text>
         <View style={st.plCard}>
           <View style={st.plRow}>
-            <Text style={st.plLabel}>Referral Fees (wallet)</Text>
-            <Text style={st.plGreen}>${totalRevenue.toFixed(2)}</Text>
+            <Text style={st.plLabel}>Total Income</Text>
+            <Text style={st.plGreen}>${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
           </View>
           <View style={st.plRow}>
-            <Text style={st.plLabel}>Business Account</Text>
+            <Text style={st.plLabel}>Business Account Balance</Text>
             <Text style={st.plGreen}>${bankBal.toLocaleString()}</Text>
           </View>
+          {claimableReferralFees > 0.01 && (
+            <View style={st.plRow}>
+              <Text style={st.plLabel}>Unclaimed Referral Fees</Text>
+              <Text style={st.plGreen}>${claimableReferralFees.toFixed(2)}</Text>
+            </View>
+          )}
           <View style={st.plDivider} />
           <View style={st.plRow}>
             <Text style={st.plLabel}>Annual Expenses</Text>
@@ -1198,6 +1320,15 @@ const st = StyleSheet.create({
   claimBtnText: { color: '#0a0e1a', fontWeight: '700' as const, fontSize: 14 },
   guideTitle: { fontSize: 16, fontWeight: '700' as const, color: '#fff', marginBottom: 8 },
   guideText: { fontSize: 13, color: '#a0a0a0', lineHeight: 20, marginBottom: 12 },
+  checklistItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#1a1f30' },
+  checklistIcon: { fontSize: 18, marginTop: 1 },
+  checklistLabel: { fontSize: 14, fontWeight: '600' as const, color: '#e8e0d0' },
+  checklistSub: { fontSize: 12, color: '#666', marginTop: 2 },
+  tipToggle: { fontSize: 12, color: '#f4c430', marginTop: 6 },
+  tipBox: { backgroundColor: '#141825', borderRadius: 8, padding: 12, marginTop: 8, borderLeftWidth: 2, borderLeftColor: '#f4c43060' },
+  tipText: { fontSize: 12, color: '#a0a0a0', lineHeight: 18, marginBottom: 8 },
+  tipStep: { fontSize: 12, color: '#c0b890', lineHeight: 20, paddingLeft: 4 },
+  tipNote: { fontSize: 11, color: '#777', lineHeight: 16, marginTop: 8, fontStyle: 'italic' as any },
   guideSteps: { marginBottom: 16 },
   guideStep: { fontSize: 13, color: '#c0b8a8', lineHeight: 22, marginBottom: 6, paddingLeft: 4 },
   revenueStreamCard: {
