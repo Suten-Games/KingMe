@@ -704,60 +704,78 @@ export default function BusinessDashboard() {
         </View>
       </View>
 
-      {/* ── Referral Wallet ──────────────────────────────────── */}
-      <View style={st.section}>
-        <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>🪐 Referral Wallet</Text>
-          {data.referralWallet && (
-            <TouchableOpacity onPress={syncReferralWallet} disabled={syncing}>
-              {syncing ? <ActivityIndicator size="small" color="#f4c430" /> : <Text style={st.syncBtn}>🔄 Sync</Text>}
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {!data.referralWallet ? (
-          <TouchableOpacity style={st.setupCard} onPress={() => setShowWalletModal(true)}>
-            <Text style={st.setupEmoji}>👛</Text>
-            <Text style={st.setupText}>Set referral wallet address</Text>
-            <Text style={st.setupSub}>The wallet that receives swap referral fees</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={st.card}>
-            <TouchableOpacity onPress={() => setShowWalletModal(true)}>
-              <Text style={st.walletAddr}>{data.referralWallet.slice(0, 6)}...{data.referralWallet.slice(-6)}</Text>
-            </TouchableOpacity>
-            {data.referralBalance ? (
-              <>
-                <Text style={st.bigValue}>${data.referralBalance.totalUSD.toFixed(2)}</Text>
-                <View style={st.tokenRow}>
-                  {data.referralBalance.sol > 0.001 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.sol.toFixed(4)} SOL</Text></View>}
-                  {data.referralBalance.usdc > 0.01 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.usdc.toFixed(2)} USDC</Text></View>}
-                  {data.referralBalance.other.map((t, i) => <View key={i} style={st.tokenPill}><Text style={st.tokenPillText}>{t.amount.toFixed(2)} {t.symbol}</Text></View>)}
-                </View>
-                <Text style={st.lastSync}>Last synced: {new Date(data.referralBalance.lastFetched).toLocaleString()}</Text>
-                {data.referralBalance.totalUSD > 0.01 && (
-                  <TouchableOpacity
-                    style={[st.claimBtn, claiming && { opacity: 0.6 }]}
-                    onPress={claimReferralFees}
-                    disabled={claiming}
-                  >
-                    {claiming ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <ActivityIndicator size="small" color="#0a0e1a" />
-                        <Text style={st.claimBtnText}>{claimStatus}</Text>
-                      </View>
-                    ) : (
-                      <Text style={st.claimBtnText}>Claim & Transfer to Business Wallet</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </>
-            ) : (
-              <Text style={st.mutedText}>Tap sync to fetch balances</Text>
+      {/* ── Swap Referral Fees (only if enabled or wallet already set) ── */}
+      {(data.swapReferralsEnabled || data.referralWallet) ? (
+        <View style={st.section}>
+          <View style={st.sectionHeader}>
+            <Text style={st.sectionTitle}>Swap Referral Fees</Text>
+            {data.referralWallet && (
+              <TouchableOpacity onPress={syncReferralWallet} disabled={syncing}>
+                {syncing ? <ActivityIndicator size="small" color="#f4c430" /> : <Text style={st.syncBtn}>Sync</Text>}
+              </TouchableOpacity>
             )}
           </View>
-        )}
-      </View>
+
+          {!data.referralWallet ? (
+            <View style={st.card}>
+              <Text style={st.guideTitle}>Setup Guide</Text>
+              <Text style={st.guideText}>
+                Earn a fee on every token swap that happens through your app. Here's how to set it up:
+              </Text>
+              <View style={st.guideSteps}>
+                <Text style={st.guideStep}>1. Go to referral.jup.ag and create a referral account using your personal Solana wallet</Text>
+                <Text style={st.guideStep}>2. Add token accounts for each token you want to collect fees on (SOL, USDC, JUP, etc.)</Text>
+                <Text style={st.guideStep}>3. Set your referral account public key in your app's server environment as JUPITER_REFERRAL_ACCOUNT</Text>
+                <Text style={st.guideStep}>4. Enter your business wallet address below — claimed fees will be transferred here</Text>
+              </View>
+              <TouchableOpacity style={st.claimBtn} onPress={() => setShowWalletModal(true)}>
+                <Text style={st.claimBtnText}>Set Business Wallet Address</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ marginTop: 12, alignItems: 'center' }}
+                onPress={() => save({ ...data, swapReferralsEnabled: false })}
+              >
+                <Text style={st.mutedText}>Remove this section</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={st.card}>
+              <TouchableOpacity onPress={() => setShowWalletModal(true)}>
+                <Text style={st.walletAddr}>{data.referralWallet.slice(0, 6)}...{data.referralWallet.slice(-6)}</Text>
+              </TouchableOpacity>
+              {data.referralBalance ? (
+                <>
+                  <Text style={st.bigValue}>${data.referralBalance.totalUSD.toFixed(2)}</Text>
+                  <View style={st.tokenRow}>
+                    {data.referralBalance.sol > 0.001 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.sol.toFixed(4)} SOL</Text></View>}
+                    {data.referralBalance.usdc > 0.01 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.usdc.toFixed(2)} USDC</Text></View>}
+                    {data.referralBalance.other.map((t, i) => <View key={i} style={st.tokenPill}><Text style={st.tokenPillText}>{t.amount.toFixed(2)} {t.symbol}</Text></View>)}
+                  </View>
+                  <Text style={st.lastSync}>Last synced: {new Date(data.referralBalance.lastFetched).toLocaleString()}</Text>
+                  {data.referralBalance.totalUSD > 0.01 && (
+                    <TouchableOpacity
+                      style={[st.claimBtn, claiming && { opacity: 0.6 }]}
+                      onPress={claimReferralFees}
+                      disabled={claiming}
+                    >
+                      {claiming ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <ActivityIndicator size="small" color="#0a0e1a" />
+                          <Text style={st.claimBtnText}>{claimStatus}</Text>
+                        </View>
+                      ) : (
+                        <Text style={st.claimBtnText}>Claim & Transfer to Business Wallet</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <Text style={st.mutedText}>Tap sync to fetch balances</Text>
+              )}
+            </View>
+          )}
+        </View>
+      ) : null}
 
       {/* ── Business Bank Account ────────────────────────────── */}
       <View style={st.section}>
@@ -1129,6 +1147,26 @@ export default function BusinessDashboard() {
       <ReassignModal visible={showReassignModal} onClose={() => setShowReassignModal(false)} data={data} onSave={handleModalSave} />
       <AIModal visible={showAIModal} onClose={() => setShowAIModal(false)} data={data} aiType={aiType} onGenerate={async () => {}} onExport={exportPDF} />
 
+      {/* ── Add Revenue Streams (show when swap referrals not enabled) ── */}
+      {!data.swapReferralsEnabled && !data.referralWallet && (
+        <View style={st.section}>
+          <Text style={st.sectionTitle}>Add Revenue Streams</Text>
+          <TouchableOpacity
+            style={st.revenueStreamCard}
+            onPress={() => save({ ...data, swapReferralsEnabled: true })}
+          >
+            <Text style={st.revenueStreamEmoji}>{'⚡'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={st.revenueStreamTitle}>Crypto Swap Referral Fees</Text>
+              <Text style={st.revenueStreamDesc}>
+                If your app or platform lets users swap tokens through Jupiter, you can earn a referral fee on every trade. Fees accumulate on-chain and you claim them directly to your business wallet.
+              </Text>
+            </View>
+            <Text style={st.aiToolArrow}>{'>'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <KingMeFooter />
     </ScrollView>
     </View>
@@ -1184,6 +1222,18 @@ const st = StyleSheet.create({
     alignItems: 'center' as const, marginTop: 12,
   },
   claimBtnText: { color: '#0a0e1a', fontWeight: '700' as const, fontSize: 14 },
+  guideTitle: { fontSize: 16, fontWeight: '700' as const, color: '#fff', marginBottom: 8 },
+  guideText: { fontSize: 13, color: '#a0a0a0', lineHeight: 20, marginBottom: 12 },
+  guideSteps: { marginBottom: 16 },
+  guideStep: { fontSize: 13, color: '#c0b8a8', lineHeight: 22, marginBottom: 6, paddingLeft: 4 },
+  revenueStreamCard: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    backgroundColor: '#141825', borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: '#2a2f3e',
+  },
+  revenueStreamEmoji: { fontSize: 28, marginRight: 12 },
+  revenueStreamTitle: { fontSize: 15, fontWeight: '700' as const, color: '#fff', marginBottom: 4 },
+  revenueStreamDesc: { fontSize: 12, color: '#888', lineHeight: 18 },
 
   setupCard: {
     backgroundColor: '#141825', borderRadius: 14, padding: 20, alignItems: 'center',

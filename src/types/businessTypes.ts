@@ -57,6 +57,7 @@ export interface BusinessData {
   entityType: EntityType;
   info: BusinessInfo;
   logoUri: string;
+  swapReferralsEnabled?: boolean;
   referralWallet: string;
   referralBalance: {
     sol: number;
