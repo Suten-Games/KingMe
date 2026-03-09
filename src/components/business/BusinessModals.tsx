@@ -137,18 +137,150 @@ export function BankModal({ visible, onClose, data, onSave }: {
   const [name, setName] = useState('');
   const [inst, setInst] = useState('');
   const [bal, setBal] = useState('');
+  const [showCSV, setShowCSV] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [importPreview, setImportPreview] = useState<ReturnType<typeof parseCSVTransactions> | null>(null);
+  const [importing, setImporting] = useState(false);
+  const { addBankTransaction } = useStore();
+
   useEffect(() => {
-    if (visible && data.bankAccount) { setName(data.bankAccount.name); setInst(data.bankAccount.institution); setBal(data.bankAccount.balance.toString()); }
+    if (visible && data.bankAccount) {
+      setName(data.bankAccount.name);
+      setInst(data.bankAccount.institution);
+      setBal(data.bankAccount.balance.toString());
+    }
+    if (!visible) {
+      setShowCSV(false);
+      setCsvText('');
+      setImportPreview(null);
+    }
   }, [visible]);
+
+  const bankAccountId = data.bankAccount
+    ? `biz_${data.bankAccount.name.replace(/\s+/g, '_').toLowerCase()}`
+    : 'biz_account';
+
+  const handlePickCSV = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'text/*'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      let text: string;
+      if (Platform.OS === 'web') {
+        const resp = await fetch(file.uri);
+        text = await resp.text();
+      } else {
+        text = await FileSystem.readAsStringAsync(file.uri);
+      }
+      setCsvText(text);
+      if (text.trim()) {
+        const parsed = parseCSVTransactions(text, bankAccountId);
+        setImportPreview(parsed);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to read file');
+    }
+  };
+
+  const handleImport = () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const existing = data.transactions || [];
+      const existingKeys = new Set(existing.map(t => `${t.date}|${t.description}|${t.amount}`));
+      let imported = 0;
+      for (const tx of importPreview.transactions) {
+        const key = `${tx.date}|${tx.description}|${tx.amount}`;
+        if (!existingKeys.has(key)) {
+          addBankTransaction(tx);
+          imported++;
+        }
+      }
+      Alert.alert('Imported', `${imported} transactions imported${imported < importPreview.transactions.length ? ` (${importPreview.transactions.length - imported} duplicates skipped)` : ''}`);
+      setImportPreview(null);
+      setCsvText('');
+      setShowCSV(false);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={ms.overlay}>
         <View style={ms.content}>
           <Text style={ms.title}>Business Bank Account</Text>
+
           <TextInput style={ms.input} placeholder="Account name" placeholderTextColor="#666" value={name} onChangeText={setName} />
           <TextInput style={ms.input} placeholder="Institution (e.g. Mercury, Chase)" placeholderTextColor="#666" value={inst} onChangeText={setInst} />
-          <TextInput style={ms.input} placeholder="Current balance" placeholderTextColor="#666" keyboardType="numeric" value={bal} onChangeText={setBal} />
+          <TextInput style={ms.input} placeholder="Current balance" placeholderTextColor="#666" keyboardType="decimal-pad" value={bal} onChangeText={setBal} />
+
+          {/* CSV Import Section */}
+          <TouchableOpacity onPress={() => setShowCSV(!showCSV)} style={{ marginTop: 8, marginBottom: 4 }}>
+            <Text style={{ color: '#60a5fa', fontSize: 13, fontWeight: '700' }}>
+              {showCSV ? '▾ Hide CSV Import' : '▸ Import Transactions (CSV)'}
+            </Text>
+          </TouchableOpacity>
+
+          {showCSV && (
+            <View style={{ marginBottom: 8 }}>
+              <TouchableOpacity
+                style={{ backgroundColor: '#2a2f3e', borderRadius: 10, padding: 12, alignItems: 'center', marginBottom: 8 }}
+                onPress={handlePickCSV}
+              >
+                <Text style={{ color: '#60a5fa', fontWeight: '700', fontSize: 14 }}>Choose CSV File</Text>
+              </TouchableOpacity>
+
+              <TextInput
+                style={[ms.input, { height: 80, textAlignVertical: 'top' }]}
+                placeholder="Or paste CSV text here..."
+                placeholderTextColor="#555"
+                value={csvText}
+                onChangeText={(text) => {
+                  setCsvText(text);
+                  if (text.trim()) {
+                    const parsed = parseCSVTransactions(text, bankAccountId);
+                    setImportPreview(parsed);
+                  } else {
+                    setImportPreview(null);
+                  }
+                }}
+                multiline
+              />
+
+              {importPreview && (
+                <View style={{ backgroundColor: '#141825', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, marginBottom: 4 }}>
+                    Preview: {importPreview.transactions.length} transactions
+                  </Text>
+                  <Text style={{ color: '#4ade80', fontSize: 12 }}>
+                    Income: ${importPreview.transactions.filter(t => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}
+                  </Text>
+                  <Text style={{ color: '#f87171', fontSize: 12 }}>
+                    Expenses: ${importPreview.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}
+                  </Text>
+                  {importPreview.skippedRows > 0 && (
+                    <Text style={{ color: '#f4c430', fontSize: 11, marginTop: 4 }}>
+                      {importPreview.skippedRows} rows skipped (unparseable)
+                    </Text>
+                  )}
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#4ade8030', borderRadius: 8, padding: 10, marginTop: 8, alignItems: 'center' }}
+                    onPress={handleImport}
+                    disabled={importing}
+                  >
+                    <Text style={{ color: '#4ade80', fontWeight: '800', fontSize: 14 }}>
+                      {importing ? 'Importing...' : `Import ${importPreview.transactions.length} Transactions`}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={ms.btns}>
             <TouchableOpacity style={ms.cancel} onPress={onClose}><Text style={ms.cancelText}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity style={ms.save} onPress={() => {

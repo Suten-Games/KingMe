@@ -8,8 +8,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, ActivityIndicator, Platform, Alert as RNAlert, Image,
+  Modal, TextInput, ActivityIndicator, Platform, Alert as RNAlert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
@@ -33,6 +34,7 @@ import {
   type TokenPriceData, type WatchlistToken,
 } from '../src/services/priceTracker';
 import { log, warn, error as logError } from '@/utils/logger';
+import { lookupToken } from '../src/utils/tokenRegistry';
 
 // ── Cross-platform alert ──────────────────────────────────────────
 function alert(title: string, msg?: string) {
@@ -739,6 +741,16 @@ export default function WatchlistScreen() {
 
                 {/* Main info row */}
                 <View style={st.cardRow}>
+                  {(() => {
+                    const logo = lookupToken(token.symbol)?.logoURI;
+                    return logo ? (
+                      <Image source={{ uri: logo }} style={st.coinLogo} />
+                    ) : (
+                      <View style={st.coinLogoPlaceholder}>
+                        <Text style={st.coinLogoText}>{token.symbol[0]}</Text>
+                      </View>
+                    );
+                  })()}
                   <View style={{ flex: 1 }}>
                     <Text style={st.cardSymbol}>{token.symbol}</Text>
                     <Text style={st.cardPrice}>
@@ -933,19 +945,31 @@ export default function WatchlistScreen() {
 
             <ScrollView style={st.searchResults} showsVerticalScrollIndicator={false}>
               {/* Popular tokens */}
-              {filteredPopular.map((token) => (
+              {filteredPopular.map((token) => {
+                const logo = lookupToken(token.symbol)?.logoURI;
+                return (
                 <TouchableOpacity
                   key={token.mint}
                   style={st.searchItem}
                   onPress={() => handleAddCoin(token.mint, token.symbol, token.name)}
                 >
-                  <View>
-                    <Text style={st.searchSymbol}>{token.symbol}</Text>
-                    <Text style={st.searchName}>{token.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {logo ? (
+                      <Image source={{ uri: logo }} style={st.coinLogo} />
+                    ) : (
+                      <View style={st.coinLogoPlaceholder}>
+                        <Text style={st.coinLogoText}>{token.symbol[0]}</Text>
+                      </View>
+                    )}
+                    <View>
+                      <Text style={st.searchSymbol}>{token.symbol}</Text>
+                      <Text style={st.searchName}>{token.name}</Text>
+                    </View>
                   </View>
                   <Text style={st.searchAdd}>+ Add</Text>
                 </TouchableOpacity>
-              ))}
+                );
+              })}
 
               {filteredPopular.length === 0 && !showManual && (
                 <View style={st.noResults}>
@@ -1211,7 +1235,10 @@ const st = StyleSheet.create({
   heldBadgeText: { fontSize: 11, fontWeight: '600', color: '#4ade80' },
 
   // Card main row
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 10 },
+  coinLogo: { width: 32, height: 32, borderRadius: 16 },
+  coinLogoPlaceholder: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#2a2f3e', justifyContent: 'center', alignItems: 'center' },
+  coinLogoText: { fontSize: 14, fontWeight: 'bold', color: '#60a5fa' },
   cardSymbol: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 2 },
   cardPrice: { fontSize: 16, color: '#b0b0b8', fontWeight: '600' },
   changesCol: { alignItems: 'flex-end', gap: 2 },

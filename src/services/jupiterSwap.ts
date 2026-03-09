@@ -393,7 +393,7 @@ export async function executeSwap(
     // Simulate before handing to wallet so we can catch InvalidAccountData
     // (missing referral token account) and retry without fee — instead of
     // showing the user a scary "simulation failed" popup in their wallet.
-    if (isWeb && !skipFee) {
+    if (isWeb) {
       try {
         const rpcProxy = `${getApiBase()}/api/rpc/send`;
         const simRes = await fetch(rpcProxy, {
@@ -413,14 +413,26 @@ export async function executeSwap(
         if (simErr) {
           const simErrStr = JSON.stringify(simErr);
           log(`[JUPITER] Pre-flight simulation failed: ${simErrStr}`);
-          if (simErrStr.includes('InvalidAccountData')) {
+          if (simErrStr.includes('InvalidAccountData') && !skipFee) {
             warn('[JUPITER] InvalidAccountData in simulation — retrying without fee...');
             continue; // retry for loop with skipFee=true
           }
+          // Slippage exceeded (0x177e = 6014, 0x1788 = 6024)
+          if (simErrStr.includes('0x177e') || simErrStr.includes('0x1788')) {
+            throw new Error('Slippage exceeded — increase slippage tolerance and try again');
+          }
+          // Insufficient balance
+          if (simErrStr.includes('0x1') || simErrStr.includes('InsufficientFunds')) {
+            throw new Error('Insufficient balance for this swap');
+          }
+          // Generic simulation failure — throw with details so the catch block can format it
+          throw new Error(`Transaction simulation failed: ${simErrStr}`);
         } else {
           log('[JUPITER] Pre-flight simulation passed');
         }
       } catch (simNetErr: any) {
+        // Re-throw our own errors (slippage, insufficient, etc.)
+        if (simNetErr.message && !simNetErr.message.includes('network error')) throw simNetErr;
         warn('[JUPITER] Pre-flight simulation network error (proceeding anyway):', simNetErr.message);
       }
     }

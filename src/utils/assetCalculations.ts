@@ -8,6 +8,7 @@ export interface AssetsByCategory {
   commodities: Asset[];
   crypto: Asset[];
   retirement: Asset[];
+  business: Asset[];
 }
 
 // Alias for components that import this name
@@ -51,6 +52,7 @@ export function categorizeAssets(assets: Asset[], bankAccounts: BankAccount[]): 
     commodities: assets.filter(a => isCommodity(a)),
     crypto: assets.filter(a => (a.type === 'crypto' || a.type === 'defi') && !isCommodity(a)),
     retirement: assets.filter(a => a.type === 'retirement'),
+    business: assets.filter(a => a.type === 'business'),
   };
 }
 
@@ -69,7 +71,8 @@ export function calculateTotalValue(categorized: AssetsByCategory): number {
     calculateCategoryTotal(categorized.realEstate) +
     calculateCategoryTotal(categorized.commodities) +
     calculateCategoryTotal(categorized.crypto) +
-    calculateCategoryTotal(categorized.retirement)
+    calculateCategoryTotal(categorized.retirement) +
+    calculateCategoryTotal(categorized.business)
   );
 }
 
@@ -80,7 +83,8 @@ export function calculateTotalIncome(categorized: AssetsByCategory): number {
     calculateCategoryIncome(categorized.realEstate) +
     calculateCategoryIncome(categorized.commodities) +
     calculateCategoryIncome(categorized.crypto) +
-    calculateCategoryIncome(categorized.retirement)
+    calculateCategoryIncome(categorized.retirement) +
+    calculateCategoryIncome(categorized.business)
   );
 }
 
@@ -92,6 +96,7 @@ export function getCategoryIcon(category: keyof AssetsByCategory): string {
     commodities: '🥇',
     crypto: '₿',
     retirement: '🏛️',
+    business: '💼',
   };
   return icons[category];
 }
@@ -104,6 +109,7 @@ export function getCategoryLabel(category: keyof AssetsByCategory): string {
     commodities: 'Commodities',
     crypto: 'Crypto',
     retirement: 'Retirement',
+    business: 'Business',
   };
   return labels[category];
 }

@@ -388,6 +388,16 @@ export default function AssetCategoriesList({
       )}
 
       <AssetSection
+        title={getCategoryLabel('business')}
+        icon={getCategoryIcon('business')}
+        assets={categorized.business}
+        totalValue={calculateCategoryTotal(categorized.business)}
+        totalIncome={calculateCategoryIncome(categorized.business)}
+        onAssetPress={onAssetPress}
+        onAssetDelete={onAssetDelete}
+      />
+
+      <AssetSection
         title={getCategoryLabel('retirement')}
         icon={getCategoryIcon('retirement')}
         assets={categorized.retirement}

@@ -46,7 +46,7 @@ function syncBusinessAsset(data: BusinessData) {
   const walletBal = data.referralBalance?.totalUSD || 0;
   const netValue = bankBal + walletBal;
 
-  if (!data.businessName || netValue <= 0) return;
+  if (!data.businessName) return;
 
   const assetId = `biz_${data.businessName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
   const existing = store.assets.find(a => a.id === assetId);
@@ -123,6 +123,7 @@ export default function BusinessDashboard() {
       if (raw) {
         const parsed = { ...DEFAULT_DATA, ...JSON.parse(raw) };
         setData(parsed);
+        syncBusinessAsset(parsed);
         // Show setup if no business name
         if (!parsed.businessName) setShowSetupModal(true);
       } else {
@@ -499,7 +500,7 @@ export default function BusinessDashboard() {
         <Text style={st.sectionTitle}>AI-Powered Tools</Text>
         <Text style={[st.mutedText, { marginBottom: 10 }]}>Generate insights using your business data</Text>
         <View style={{ gap: 8 }}>
-          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('business_plan'); setAIResult(''); setShowAIModal(true); }}>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('business_plan'); setShowAIModal(true); }}>
             <Text style={st.aiToolEmoji}>{'📝'}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.aiToolTitle}>Business Plan</Text>
@@ -507,7 +508,7 @@ export default function BusinessDashboard() {
             </View>
             <Text style={st.aiToolArrow}>{'>'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('tax_strategy'); setAIResult(''); setShowAIModal(true); }}>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('tax_strategy'); setShowAIModal(true); }}>
             <Text style={st.aiToolEmoji}>{'🏛️'}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.aiToolTitle}>Tax Strategy</Text>
@@ -515,7 +516,7 @@ export default function BusinessDashboard() {
             </View>
             <Text style={st.aiToolArrow}>{'>'}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('expense_optimization'); setAIResult(''); setShowAIModal(true); }}>
+          <TouchableOpacity style={st.aiToolBtn} onPress={() => { setAIType('expense_optimization'); setShowAIModal(true); }}>
             <Text style={st.aiToolEmoji}>{'💡'}</Text>
             <View style={{ flex: 1 }}>
               <Text style={st.aiToolTitle}>Expense Optimization</Text>
@@ -569,21 +570,18 @@ export default function BusinessDashboard() {
       <View style={st.section}>
         <View style={st.sectionHeader}>
           <Text style={st.sectionTitle}>🏦 Business Account</Text>
-          <TouchableOpacity onPress={() => {
-            if (data.bankAccount) { setBankName(data.bankAccount.name); setBankInstitution(data.bankAccount.institution); setBankBalance(data.bankAccount.balance.toString()); }
-            setShowBankModal(true);
-          }}>
+          <TouchableOpacity onPress={() => setShowBankModal(true)}>
             <Text style={st.syncBtn}>{data.bankAccount ? '✏️ Edit' : '+ Add'}</Text>
           </TouchableOpacity>
         </View>
 
         {data.bankAccount ? (
-          <View style={st.card}>
+          <TouchableOpacity style={st.card} onPress={() => setShowBankModal(true)} activeOpacity={0.85}>
             <Text style={st.cardLabel}>{data.bankAccount.name}</Text>
             <Text style={st.cardSub}>{data.bankAccount.institution}</Text>
             <Text style={st.bigValue}>${data.bankAccount.balance.toLocaleString()}</Text>
             <Text style={st.lastSync}>Updated: {new Date(data.bankAccount.lastUpdated).toLocaleDateString()}</Text>
-          </View>
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity style={st.setupCard} onPress={() => setShowBankModal(true)}>
             <Text style={st.setupEmoji}>🏦</Text>
