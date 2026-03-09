@@ -1,8 +1,9 @@
 // KingMe - Type Definitions
 
 import { BankTransaction, BankTransactionCategory, CustomCategoryDef } from "./bankTransactionTypes";
+import type { EarnedBadge } from "./badges";
 
-export type AvatarType = 'male-medium' | 'female-medium';
+export type AvatarType = 'male-medium' | 'female-medium' | 'male-dark';
 
 export type FreedomState = 'drowning' | 'struggling' | 'breaking' | 'rising' | 'enthroned';
 
@@ -33,9 +34,11 @@ export interface BankAccount {
 export interface IncomeSource {
   id: string;
   source: 'salary' | 'freelance' | 'business' | 'trading' | 'other';
+  type?: 'salary' | 'w2' | 'freelance' | 'business' | 'trading' | 'other';
   name: string; // "Acme Corp Salary", "Freelance - Client X"
   amount: number; // Per deposit
   frequency: 'weekly' | 'biweekly' | 'twice_monthly' | 'monthly' | 'quarterly';
+  isActive?: boolean; // Whether this income source is active
   bankAccountId: string; // Where it deposits
   nextDepositDate?: string; // ISO date
   dayOfMonth1?: number; // For twice_monthly (e.g., 1)
@@ -109,6 +112,7 @@ export interface StockAsset {
   dividendYield?: number;
   apy?: number;
   description?: string;
+  mint?: string;
 
   // ✅ NEW: Vesting tracking
   vestedShares?: number;        // How many shares are vested (can sell)
@@ -134,6 +138,7 @@ export interface BusinessAsset {
 export interface OtherAsset {
   type: 'other';
   description: string;
+  accountType?: string;
   apy?: number;  // ✅ ADD: for any yield-bearing "other" assets
   quantity?: number;  // ✅ ADD: for countable items
   balance?: number;   // ✅ ADD: same as quantity
@@ -236,6 +241,9 @@ export interface WhatIfScenario {
     updateAssets?: Array<{ id: string; updates: Partial<Asset> }>;
     addIncomeSources?: Partial<IncomeSource>[];
     reduceObligations?: Array<{ id: string; newAmount: number }>;
+    updateDebts?: Array<{ id: string; updates: Partial<Debt> }>;
+    removeDebts?: string[];
+    addDebts?: Partial<Debt>[];
   };
   impact: {
     freedomBefore: number;
@@ -248,6 +256,16 @@ export interface WhatIfScenario {
     investmentRequired: number;
     totalDeposit?: number;
     roi?: number;
+    monthlySavings?: number;
+    annualTaxSavings?: number;
+    interestSaved?: number;
+  };
+  _driftSwap?: {
+    fromSymbol: string;
+    toSymbol: string;
+    amount: number;
+    totalValue?: number;
+    swaps?: Array<{ fromSymbol: string; amount: number }>;
   };
   reasoning: string;
   risks: string[];
@@ -365,6 +383,8 @@ export interface Debt {
   lastPaidDate?: string;
   payee?: string;
   balance?: number;
+  remainingBalance?: number;
+  type?: string;
   isActive?: boolean;
 }
 
@@ -575,6 +595,11 @@ export interface UserProfile {
   thesisAlerts: ThesisAlert[];
   monthlyDiscretionary: number; // estimated monthly variable spending (groceries, gas, dining, etc.)
   customCategories: Record<string, CustomCategoryDef>; // user-created categories keyed by custom_* slug
+  earnedBadges?: EarnedBadge[];
+  trimCount?: number;
+  importWeeks?: string[];
+  appOpenDays?: string[];
+  windfallAlerts?: any[];
   settings: UserSettings;
   lastSynced?: string; // ISO timestamp
   onboardingComplete: boolean;

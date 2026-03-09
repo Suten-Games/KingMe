@@ -96,7 +96,7 @@ export async function loadUserProfile(walletAddress: string): Promise<UserProfil
  */
 export async function createNewProfile(walletAddress: string): Promise<UserProfile> {
   const newProfile: UserProfile = {
-    ...DEFAULT_USER_PROFILE,
+    ...DEFAULT_USER_PROFILE as any,
     wallets: [walletAddress],
     lastSynced: new Date().toISOString(),
   };

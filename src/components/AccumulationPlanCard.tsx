@@ -63,7 +63,7 @@ export default function AccumulationPlanCard({
   const [entryTokens, setEntryTokens] = useState('');
   const [entryPrice, setEntryPrice] = useState('');
   const [entryNotes, setEntryNotes] = useState('');
-  const [entryMode, setEntryMode] = useState<'per_token' | 'total_spent'>('per_token');
+  const [entryMode, setEntryMode] = useState<'per_token' | 'total_spent' | 'import_tx'>('per_token');
   const [entryTotalUSD, setEntryTotalUSD] = useState('');
   const [entrySpentToken, setEntrySpentToken] = useState('');
   const [entrySpentAmount, setEntrySpentAmount] = useState('');
@@ -582,9 +582,9 @@ export default function AccumulationPlanCard({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[st.toggleBtn, entryMode === 'import_tx' && { backgroundColor: '#4ade8020', borderColor: '#4ade80' }]}
-                onPress={() => { setEntryMode('import_tx' as any); setTxResult(null); setTxError(''); }}
+                onPress={() => { setEntryMode('import_tx'); setTxResult(null); setTxError(''); }}
               >
-                <Text style={[st.toggleText, entryMode === 'import_tx' as any && { color: '#4ade80' }]}>Import tx</Text>
+                <Text style={[st.toggleText, entryMode === 'import_tx' && { color: '#4ade80' }]}>Import tx</Text>
               </TouchableOpacity>
             </View>
 

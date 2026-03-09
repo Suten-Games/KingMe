@@ -156,7 +156,7 @@ export default function PortfolioTrendCard({ onPress }: { onPress?: () => void }
           </Text>
           {activePct !== null && (
             <Text style={[st.changeSummary, { color: accentColor }]}>
-              {isUp ? '▲' : '▼'} {activeDollars !== null ? `$${Math.abs(activeDollars).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} ({isUp ? '+' : ''}{activePct.toFixed(1)}%) {selectedPeriod}
+              {isUp ? '▲' : '▼'} {activeDollars != null ? `$${Math.abs(activeDollars).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : ''} ({isUp ? '+' : ''}{(activePct ?? 0).toFixed(1)}%) {selectedPeriod}
             </Text>
           )}
           {trend.snapshotCount < 3 && (

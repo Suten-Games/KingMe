@@ -8,8 +8,10 @@
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "jsx": "react-native",
+    "module": "esnext",
     "lib": [
-      "ES2020"
+      "ES2020",
+      "DOM"
     ],
     "baseUrl": ".",
     "paths": {

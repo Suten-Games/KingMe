@@ -6,8 +6,12 @@ import * as Linking from 'expo-linking';
 import { usePrivy, useEmbeddedSolanaWallet, useLoginWithOAuth } from '@privy-io/expo';
 import * as PhantomDeepLink from '../services/phantomDeepLink';
 import * as MWA from '../services/mwaWallet';
+// @ts-ignore — Metro resolves to WalletPickerModal.native.tsx at runtime
 import WalletPickerModal from '../components/WalletPickerModal';
-import type { WalletOption } from '../components/WalletPickerModal';
+
+// Re-declare WalletOption locally to include 'mwa' (the .native.tsx version has it,
+// but tsc resolves the web .tsx which doesn't)
+type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | 'jupiter' | 'google' | 'apple' | 'coinbase' | 'exodus' | 'brave' | 'mwa';
 import { log, warn, error as logError } from '../utils/logger';
 import { useStore } from '../store/useStore';
 
@@ -24,6 +28,7 @@ interface WalletContextType {
   signTransaction: (transaction: any) => Promise<any>;
   signAndSendTransaction: (transaction: any) => Promise<{ signature: string }>;
   walletType: 'privy-embedded' | 'privy-external' | 'phantom-extension' | 'mwa' | null;
+  getAccessToken: () => Promise<string | null>;
   isPrivyReady?: boolean;
 }
 
@@ -39,8 +44,8 @@ export function useWallet() {
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { isReady, user, logout: privyLogout } = usePrivy();
-  const embeddedWallet = useEmbeddedSolanaWallet();
-  const { start: startOAuth } = useLoginWithOAuth();
+  const embeddedWallet = useEmbeddedSolanaWallet() as any;
+  const { start: startOAuth } = useLoginWithOAuth() as any;
 
   // Phantom deep link state
   const [phantomConnected, setPhantomConnected] = useState(false);
@@ -93,11 +98,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const publicKey = useMemo(() => {
     if (mwaConnected && mwaPubKey) return mwaPubKey;
     if (phantomConnected && phantomPubKey) return phantomPubKey;
-    if (embeddedWallet?.status === 'connected' && embeddedWallet?.publicKey) {
-      return new PublicKey(embeddedWallet.publicKey);
+    if (embeddedWallet?.status === 'connected' && (embeddedWallet as any)?.publicKey) {
+      return new PublicKey((embeddedWallet as any).publicKey);
     }
     return null;
-  }, [mwaConnected, mwaPubKey, phantomConnected, phantomPubKey, embeddedWallet?.status, embeddedWallet?.publicKey]);
+  }, [mwaConnected, mwaPubKey, phantomConnected, phantomPubKey, embeddedWallet?.status, (embeddedWallet as any)?.publicKey]);
 
   const connected = !!publicKey;
 
@@ -122,7 +127,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     try {
       switch (option) {
         case 'mwa': {
-          const result = await MWA.connect();
+          const result = await MWA.connect() as any;
           setMwaConnected(true);
           setMwaPubKey(result.publicKey);
           connectedPubKey = result.publicKey;
@@ -259,12 +264,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (phantomConnected) {
       const serialized = transaction.serialize({ requireAllSignatures: false });
       const sig = await PhantomDeepLink.signAndSendTransaction(serialized);
-      return { signature: typeof sig === 'string' ? sig : sig?.toString?.() || '' };
+      return { signature: typeof sig === 'string' ? sig : (sig as any)?.toString?.() || '' };
     }
 
     // Privy embedded — sign only, no send support
     throw new Error('signAndSendTransaction not supported for this wallet type');
   }, [connected, publicKey, mwaConnected, phantomConnected]);
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    return null;
+  }, []);
 
   return (
     <WalletContext.Provider value={{
@@ -278,16 +287,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       signTransaction,
       signAndSendTransaction,
       walletType,
+      getAccessToken,
       isPrivyReady: isReady,
     }}>
       {children}
       <WalletPickerModal
-        visible={showPicker}
-        onClose={() => setShowPicker(false)}
-        onSelect={handlePickerSelect}
-        connecting={connecting}
-        connectingWallet={connectingWallet}
-        externalWalletsAvailable={true}
+        {...{
+          visible: showPicker,
+          onClose: () => setShowPicker(false),
+          onSelect: handlePickerSelect,
+          connecting,
+          connectingWallet,
+          externalWalletsAvailable: true,
+        } as any}
       />
     </WalletContext.Provider>
   );

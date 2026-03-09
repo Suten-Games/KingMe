@@ -20,8 +20,8 @@ if (Platform.OS === 'web') {
   }
 
   // Stream polyfill
-  if (typeof global.stream === 'undefined') {
-    global.stream = require('stream-browserify');
+  if (typeof (global as any).stream === 'undefined') {
+    (global as any).stream = require('stream-browserify');
   }
 
   log('[POLYFILLS] Web polyfills loaded successfully');

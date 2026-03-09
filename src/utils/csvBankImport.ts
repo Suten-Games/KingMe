@@ -477,14 +477,14 @@ function detectHeaderless(rows: string[][]): { isHeaderless: boolean; columns: C
 export function parseCSVTransactions(
   csvText: string,
   bankAccountId: string,
-): { transactions: BankTransaction[]; errors: string[]; summary: string; cryptoAccumulations?: CryptoAccumulation[]; savingsAccumulation?: SavingsAccumulation; debtAccumulations?: DebtAccumulation[] } {
+): { transactions: BankTransaction[]; errors: string[]; summary: string; skippedRows: number; cryptoAccumulations?: CryptoAccumulation[]; savingsAccumulation?: SavingsAccumulation; debtAccumulations?: DebtAccumulation[] } {
   const errors: string[] = [];
   const transactions: BankTransaction[] = [];
   const batchId = `csv_${Date.now()}`;
 
   const rows = parseCSVRows(csvText);
   if (rows.length < 1) {
-    return { transactions: [], errors: ['CSV file is empty or has no data rows'], summary: 'No data found' };
+    return { transactions: [], errors: ['CSV file is empty or has no data rows'], summary: 'No data found', skippedRows: 0 };
   }
 
   // ── Detect headerless vs header format ──
@@ -517,9 +517,10 @@ export function parseCSVTransactions(
   const debtMap: Record<string, { totalVolume: number; count: number; lastDate: string }> = {};
 
   // Parse data rows
+  let skippedRows = 0;
   for (let i = dataStartIndex; i < rows.length; i++) {
     const row = rows[i];
-    if (row.length < 2) continue; // skip empty-ish rows
+    if (row.length < 2) { skippedRows++; continue; } // skip empty-ish rows
 
     try {
       const dateStr = row[columns.dateCol] || '';
@@ -699,6 +700,7 @@ export function parseCSVTransactions(
       }
     } catch (err) {
       errors.push(`Row ${i + 1}: Parse error`);
+      skippedRows++;
     }
   }
 
@@ -775,7 +777,7 @@ export function parseCSVTransactions(
   const summary = `${transactions.length} transactions: ${incomeCount} deposits ($${totalIn.toLocaleString()}), ${expenseCount} expenses ($${totalOut.toLocaleString()})`;
 
   return {
-    transactions, errors, summary,
+    transactions, errors, summary, skippedRows,
     cryptoAccumulations: cryptoAccumulations.length > 0 ? cryptoAccumulations : undefined,
     savingsAccumulation,
     debtAccumulations: debtAccumulations.length > 0 ? debtAccumulations : undefined,

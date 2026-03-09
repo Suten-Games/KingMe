@@ -19,6 +19,7 @@ interface UserProfile {
   goals?: Goal[];
   driftRates?: Record<string, { depositApy: number; borrowApy: number }>;
   kaminoRates?: Record<string, { supplyApr: number; borrowApr: number; tvl: number }>;
+  settings?: { driftMinCollateral?: number };
 }
 
 export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
@@ -798,7 +799,7 @@ function generateDataDrivenExpenseScenario(
   const recurring = detectRecurring(recentTransactions);
   const subscriptionRecurring = recurring.filter(r => {
     const cat = TRANSACTION_CATEGORY_META[r.category]?.group;
-    return cat === 'subscription' || cat === 'entertainment';
+    return (cat as string) === 'subscription' || cat === 'entertainment';
   });
 
   // ── Calculate total savings ──
@@ -1003,7 +1004,7 @@ function generateDebtPayoffScenario(
           minimumPayment: highestRateDebt.minimumPayment + extraMonthly,
         }
       }]
-    },
+    } as any,
 
     impact: {
       freedomBefore: currentFreedom,
@@ -1016,7 +1017,7 @@ function generateDebtPayoffScenario(
       investmentRequired: 0,
       monthlySavings: freedUpPayment,
       interestSaved: annualInterestSaved,
-    },
+    } as any,
 
     reasoning: `Your ${highestRateDebt.name} at ${rateDisplay}% APR is costing you $${monthlyInterestSaved.toFixed(0)}/mo in interest alone. By adding $${extraMonthly.toFixed(0)}/mo extra, you pay it off ${monthsSaved} months sooner and free up $${freedUpPayment.toFixed(0)}/mo in cash flow.`,
 
@@ -1093,7 +1094,7 @@ function generateDebtRefinanceScenario(
         minimumPayment: newMonthlyPayment,
         isActive: true,
       }]
-    },
+    } as any,
 
     impact: {
       freedomBefore: currentFreedom,
@@ -1105,7 +1106,7 @@ function generateDebtRefinanceScenario(
       annualIncomeDelta: 0,
       investmentRequired: 0,
       monthlySavings: monthlySavings,
-    },
+    } as any,
 
     reasoning: `You're paying ${(weightedRate * 100).toFixed(1)}% across $${totalBalance.toLocaleString()} in debt. Consolidating at ${(targetRate * 100).toFixed(0)}% saves $${monthlySavings.toFixed(0)}/mo ($${annualSavings.toFixed(0)}/year) and simplifies payments into one bill.`,
 
@@ -1135,7 +1136,7 @@ function generateTaxOptimizationScenario(
 ): WhatIfScenario | null {
   // Estimate annual salary from income sources
   const salarySource = incomeSources.find(s =>
-    s.isActive && (s.type === 'salary' || s.type === 'w2' || s.frequency === 'biweekly')
+    s.isActive && (s.source === 'salary' || (s as any).type === 'w2' || s.frequency === 'biweekly')
   );
 
   if (!salarySource) return null;
@@ -1213,7 +1214,7 @@ function generateTaxOptimizationScenario(
           annualContribution: additionalContribution,
           taxBenefit: annualTaxSavings,
           description: '401(k) / Traditional IRA',
-        }
+        } as any
       }]
     },
 
@@ -1228,7 +1229,7 @@ function generateTaxOptimizationScenario(
       investmentRequired: additionalContribution,
       annualTaxSavings: annualTaxSavings,
       roi: (annualTaxSavings / additionalContribution) * 100,
-    },
+    } as any,
 
     reasoning: `At the ${(marginalRate * 100).toFixed(0)}% tax bracket, every dollar into your 401(k) saves $${marginalRate.toFixed(2)} in taxes immediately. Contributing $${additionalContribution.toLocaleString()}/yr puts $${annualTaxSavings.toLocaleString()} back in your pocket and builds long-term wealth. Your money also grows tax-deferred.`,
 
@@ -1275,7 +1276,7 @@ function generatePerenaYieldScenario(
   // 2. Calculate monthly burn from obligations + debt payments
   const monthlyObligations = obligations.reduce((sum, o) => {
     if (o.frequency === 'monthly') return sum + o.amount;
-    if (o.frequency === 'annual') return sum + o.amount / 12;
+    if ((o.frequency as string) === 'annual') return sum + o.amount / 12;
     if (o.frequency === 'weekly') return sum + o.amount * 4.33;
     return sum + o.amount;
   }, 0);
@@ -1495,7 +1496,7 @@ function generateHYSAScenario(
           accountType: 'savings',
           apy: hysaAPY,
           description: 'High-Yield Savings (FDIC Insured)',
-        }
+        } as any
       }],
       updateAssets: checkingAssets.map(a => ({
         id: a.id,
@@ -1892,7 +1893,7 @@ function generateDriftYieldScenario(
       'Your new position still counts as Drift collateral — no impact on trading',
       ...altLines.map(l => `Alternative: ${l}`),
     ],
-  };
+  } as any;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2261,7 +2262,7 @@ function generateFractionalStockScenario(
         name: primaryPick.name,
         value: yearOneValue,
         annualIncome: yearOneDividends,
-        metadata: { symbol: primaryPick.symbol, dividendYield: primaryPick.yield },
+        metadata: { type: 'stocks' as const, symbol: primaryPick.symbol, dividendYield: primaryPick.yield } as any,
       }],
     },
     impact: {
@@ -2391,7 +2392,7 @@ function generateStartBusinessScenario(
     // Compute monthly P&L from income sources tagged as business
     const bizIncome = incomeSources
       .filter(s => s.source === 'business' || (s.name || '').toLowerCase().includes('business'))
-      .reduce((sum, s) => sum + (s.frequency === 'monthly' ? s.amount : s.frequency === 'annual' ? s.amount / 12 : s.amount), 0);
+      .reduce((sum, s) => sum + (s.frequency === 'monthly' ? s.amount : (s.frequency as string) === 'annual' ? s.amount / 12 : s.amount), 0);
 
     // Pick contextual title and description
     let title: string;
@@ -2570,7 +2571,7 @@ function generateDebtWaterfallScenario(
       investmentRequired: 0,
       monthlySavings: totalMinPayments,
       interestSaved: rollupSavings * 12,
-    },
+    } as any,
     reasoning: `You have ${activeDebts.length} debts totaling $${Math.round(totalDebt).toLocaleString()} with a weighted average rate of ${(weightedRate * 100).toFixed(1)}%. The waterfall method attacks the highest-rate debt first. Once it's paid off, you roll that full payment into the next debt — creating a snowball effect. This frees up $${Math.round(totalMinPayments).toLocaleString()}/mo in cash flow once complete. Your debts in order: ${debtList}.`,
     risks: [
       'Requires discipline — you must redirect freed payments, not spend them',
@@ -2634,7 +2635,7 @@ function generateObligationsAuditScenario(
       annualIncomeDelta: 0,
       investmentRequired: 0,
       monthlySavings: estimatedSavings,
-    },
+    } as any,
     reasoning: `You're spending $${Math.round(monthlyNeeds).toLocaleString()}/mo on ${totalItems} obligations and debts — that's ${Math.round(burnRatio * 100)}% of your income. Most people find 5-15% savings by auditing: canceling forgotten subscriptions, negotiating bills, or switching providers. Even $${estimatedSavings}/mo freed up is $${estimatedSavings * 12}/year you could invest.`,
     risks: [
       'Some obligations are non-negotiable (mortgage, insurance)',

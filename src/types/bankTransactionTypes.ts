@@ -221,8 +221,8 @@ const GROUP_ORDER: BankTransactionGroup[] = [
 export const CATEGORY_OPTIONS: CategoryOptionGroup[] = (() => {
   const grouped: Record<string, { value: BankTransactionCategory; label: string }[]> = {};
   for (const [key, meta] of Object.entries(TRANSACTION_CATEGORY_META)) {
-    if (!grouped[meta.group]) grouped[meta.group] = [];
-    grouped[meta.group].push({ value: key as BankTransactionCategory, label: meta.label });
+    if (!grouped[meta!.group]) grouped[meta!.group] = [];
+    grouped[meta!.group].push({ value: key as BankTransactionCategory, label: meta!.label });
   }
   return GROUP_ORDER.filter(g => grouped[g]).map(g => ({ group: g, categories: grouped[g] }));
 })();

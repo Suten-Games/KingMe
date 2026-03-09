@@ -81,6 +81,7 @@ export const API_ENDPOINTS = {
 // Default values for new user
 export const DEFAULT_USER_PROFILE = {
   wallets: [],
+  bankAccounts: [],
   income: {
     salary: 0,
     otherIncome: 0,
@@ -90,13 +91,27 @@ export const DEFAULT_USER_PROFILE = {
   obligations: [],
   desires: [],
   debts: [],
+  paycheckDeductions: [],
+  preTaxDeductions: [],
+  taxes: [],
+  postTaxDeductions: [],
+  driftTrades: [],
+  dailyExpenses: [],
+  cryptoCardBalance: { currentBalance: 0, lastUpdated: '' },
+  expenseTrackingMode: 'estimate' as const,
   freedomHistory: [],
+  investmentTheses: [],
+  whatIfScenarios: [],
+  thesisAlerts: [],
+  monthlyDiscretionary: 0,
+  customCategories: {},
   settings: {
     avatarType: 'male-medium' as AvatarType,
     animatedAvatar: false,
     notificationsEnabled: true,
     syncFrequency: 'hourly' as const,
     darkMode: true,
+    defaultExpandAssetSections: false,
   },
   onboardingComplete: false,
 } as const;

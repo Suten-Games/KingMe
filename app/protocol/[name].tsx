@@ -240,7 +240,7 @@ export default function ProtocolDetailScreen() {
 
                 {/* Editable fields */}
                 <View style={styles.fieldsContainer}>
-                  {EDITABLE_FIELDS.map(({ key, label, prefix, suffix, isTopLevel }) => {
+                  {EDITABLE_FIELDS.map(({ key, label, prefix, suffix, isTopLevel }: { key: string; label: string; prefix?: string; suffix?: string; isTopLevel?: boolean }) => {
                     const rawValue = isTopLevel ? asset.value : meta[key];
                     if (rawValue == null && !isTopLevel) return null;
 

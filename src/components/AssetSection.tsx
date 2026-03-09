@@ -267,7 +267,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerRight: {
-    alignItems: 'flex-end',
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',

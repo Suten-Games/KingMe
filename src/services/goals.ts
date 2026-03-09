@@ -321,7 +321,7 @@ const AUTO_POPULATED_KEY = 'kingme_goals_auto_populated';
 
 export async function autoPopulateGoals(storeData: {
   debts: Array<{ id: string; name: string; balance?: number; principal: number; interestRate?: number }>;
-  obligations: Array<{ amount: number; frequency?: string }>;
+  obligations: Array<{ amount: number; frequency?: any }>;
   assets: Array<{ id: string; name: string; value: number; metadata?: any }>;
 }): Promise<{ created: number; goalNames: string[] }> {
   // Check if we already ran auto-populate

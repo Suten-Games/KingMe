@@ -102,6 +102,8 @@ export type AccSignalType =
   | 'below_entry_accumulate'   // price < costBasis → buy more
   | 'deep_below_entry'         // price < costBasis by 20%+ → strong buy
   | 'above_entry_trim'         // price > costBasis → consider selling some
+  | 'reentry_zone'             // dropped hard and showing recovery
+  | 'exited_above_entry'       // exited position, price above avg entry
   | 'strong_above_entry'       // price > costBasis by 50%+ → take profit
   | 'target_reached'           // holding >= targetAmount
   | 'near_target'              // holding >= 80% of target

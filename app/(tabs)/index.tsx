@@ -734,7 +734,7 @@ export default function HomeScreen() {
                         <Text style={styles.nextLevelTarget}>{nextLevel.next.emoji} {nextLevel.next.label}</Text>
                       </View>
                       <View style={styles.nextLevelBarBg}>
-                        <View style={[styles.nextLevelBarFill, { width: `${(nextLevel.progressInLevel * 100).toFixed(0)}%` }]} />
+                        <View style={[styles.nextLevelBarFill, { width: `${(nextLevel.progressInLevel * 100).toFixed(0)}%` as any }]} />
                       </View>
                       <Text style={styles.nextLevelSub}>
                         {formatDaysNice(nextLevel.daysToNext)} to go · {(nextLevel.progressInLevel * 100).toFixed(0)}% through {nextLevel.current.label.toLowerCase()}
@@ -1002,7 +1002,7 @@ function getInsight(cf: ReturnType<typeof analyzeAllAccounts>, freedom: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#080c18', height: '100vh' },
+  container: { flex: 1, backgroundColor: '#080c18', height: '100%' as any },
   loadingContainer: { flex: 1, backgroundColor: '#080c18', justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 18, color: '#f4c430', fontFamily: 'Inter_600SemiBold' },
   scrollContainer: { flex: 1 },

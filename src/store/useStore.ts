@@ -162,7 +162,7 @@ interface AppState extends UserProfile {
   checkProStatus: () => Promise<void>;
 }
 
-const initialState: UserProfile = {
+const initialState: UserProfile & { earnedBadges: EarnedBadge[]; trimCount: number; importWeeks: string[]; appOpenDays: string[] } = {
   wallets: [],
   bankAccounts: [],
   income: {
@@ -202,7 +202,6 @@ const initialState: UserProfile = {
   trimCount: 0,
   importWeeks: [],
   appOpenDays: [],
-  windfallAlerts: [],
 };
 
 // Helper: Map API category to app asset type
@@ -222,6 +221,7 @@ function mapCategoryToAssetType(category: string): Asset['type'] {
 
 export const useStore = create<AppState>((set, get) => ({
   ...initialState,
+  windfallAlerts: [],
   _isLoaded: false, // NOT persisted, internal flag only
   isPro: false,
   isLoadingAssets: false,
@@ -236,7 +236,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (!account) return;
 
     // Don't re-alert if there's already an active (undismissed) windfall for this account
-    const existing = (state as any).windfallAlerts?.find(
+    const existing = state.windfallAlerts?.find(
       (a: WindfallAlert) => a.accountId === accountId && !a.dismissedAt
     );
     if (existing) return;
@@ -1820,7 +1820,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       const updatedManualAssets = manualAssets.map(asset => {
-        const meta = asset.metadata || {} as any;
+        const meta = (asset.metadata || {}) as any;
         const mint = meta.mint;
         const balance = meta.balance || 0;
 
@@ -1878,7 +1878,7 @@ export const useStore = create<AppState>((set, get) => ({
       const manualMatchedMints = new Set<string>();
       const manualMatchedSymbols = new Set<string>();
       for (const asset of updatedManualAssets) {
-        const meta = asset.metadata || {} as any;
+        const meta = (asset.metadata || {}) as any;
         if (meta.mint) {
           const matched = syncedByMint.get(meta.mint);
           if (matched) manualMatchedMints.add(matched.mint);

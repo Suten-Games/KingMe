@@ -219,6 +219,14 @@ const styles = StyleSheet.create({
     borderColor: '#4ade80',
     backgroundColor: '#1a2f1e',
   },
+  typeButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  typeButtonTextActive: {
+    color: '#4ade80',
+    fontWeight: 'bold',
+  },
   helperBox: {
     backgroundColor: '#1a2a3a',
     borderRadius: 8,

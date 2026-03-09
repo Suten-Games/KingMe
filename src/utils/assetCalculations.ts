@@ -37,7 +37,7 @@ export function categorizeAssets(assets: Asset[], bankAccounts: BankAccount[]): 
     // Check subtype first (set by wallet sync)
     if ((a as any).subtype === 'commodities') return true;
     // Check symbol in metadata
-    const sym = (a.metadata?.symbol || '').toLowerCase();
+    const sym = ((a.metadata as any)?.symbol || '').toLowerCase();
     if (COMMODITY_SYMBOLS.includes(sym)) return true;
     // Check name as fallback
     const nameLower = a.name.toLowerCase();

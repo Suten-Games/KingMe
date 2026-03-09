@@ -63,7 +63,7 @@ export function getPaymentEventsForMonth(
       dueDate,
       isPaid: obl.isPaidThisMonth || false,
       category: obl.category,
-      accountName: getAccountName(obl.bankAccountId),
+      accountName: getAccountName(obl.bankAccountId || ''),
       isOverdue: !obl.isPaidThisMonth && dueDate < today,
     });
   });
@@ -81,8 +81,8 @@ export function getPaymentEventsForMonth(
       amount: debt.monthlyPayment,
       dueDate,
       isPaid: debt.isPaidThisMonth || false,
-      category: debt.type,
-      accountName: getAccountName(debt.bankAccountId),
+      category: (debt as any).type,
+      accountName: getAccountName(debt.bankAccountId || ''),
       isOverdue: !debt.isPaidThisMonth && dueDate < today,
     });
   });

@@ -270,7 +270,7 @@ export default function ObligationsScreen() {
 
   const handleEditObligation = (obligation: Obligation) => {
     setEditingObligation(obligation);
-    setName(obligation.name); setPayee(obligation.payee);
+    setName(obligation.name); setPayee(obligation.payee || '');
     setAmount(obligation.amount.toString());
     setFrequency(obligation.frequency || 'monthly');
     setAccountId(obligation.bankAccountId || '');

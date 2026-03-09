@@ -424,7 +424,7 @@ export default function BusinessDashboard() {
   // ── Logo ─────────────────────────────────────────────────────
   const pickLogo = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -557,7 +557,7 @@ export default function BusinessDashboard() {
             )}
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <TouchableOpacity onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+            <TouchableOpacity onPress={() => { setShowSetupModal(true); }}>
               <Text style={st.pageTitle}>{data.businessName || 'My Business'}</Text>
             </TouchableOpacity>
             <Text style={st.entityLabel}>{ENTITY_LABELS[data.entityType]}</Text>
@@ -566,13 +566,13 @@ export default function BusinessDashboard() {
 
         {data.businessDescription ? (
           <TouchableOpacity style={st.descriptionBox} activeOpacity={0.7}
-            onPress={() => { setSetupName(data.businessName); setSetupDesc(data.businessDescription || ''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+            onPress={() => { setShowSetupModal(true); }}>
             <Text style={st.descriptionText}>{data.businessDescription}</Text>
             <Text style={st.editHint}>Tap to edit</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={st.descriptionBox} activeOpacity={0.7}
-            onPress={() => { setSetupName(data.businessName); setSetupDesc(''); setSetupEntity(data.entityType); setShowSetupModal(true); }}>
+            onPress={() => { setShowSetupModal(true); }}>
             <Text style={[st.descriptionText, { fontStyle: 'italic' }]}>No description yet. Tap to add one.</Text>
           </TouchableOpacity>
         )}
@@ -581,7 +581,7 @@ export default function BusinessDashboard() {
       <View style={st.section}>
         <View style={st.sectionHeader}>
           <Text style={st.sectionTitle}>Business Info</Text>
-          <TouchableOpacity onPress={() => { setInfoForm(data.info || DEFAULT_INFO); setShowInfoModal(true); }}>
+          <TouchableOpacity onPress={() => { setShowInfoModal(true); }}>
             <Text style={st.syncBtn}>{data.info?.ein ? 'Edit' : '+ Add'}</Text>
           </TouchableOpacity>
         </View>
@@ -638,7 +638,7 @@ export default function BusinessDashboard() {
             ) : null}
           </View>
         ) : (
-          <TouchableOpacity style={st.setupCard} onPress={() => { setInfoForm(DEFAULT_INFO); setShowInfoModal(true); }}>
+          <TouchableOpacity style={st.setupCard} onPress={() => { setShowInfoModal(true); }}>
             <Text style={st.setupEmoji}>{'📋'}</Text>
             <Text style={st.setupText}>Add business details</Text>
             <Text style={st.setupSub}>EIN, state of formation, registered agent, etc.</Text>
@@ -795,7 +795,7 @@ export default function BusinessDashboard() {
             {data.expenses.map(e => {
               const cat = EXPENSE_CATEGORIES[e.category] || EXPENSE_CATEGORIES.other;
               return (
-                <TouchableOpacity key={e.id} style={st.expenseRow} onPress={() => editExpense(e)}>
+                <TouchableOpacity key={e.id} style={st.expenseRow} onPress={() => { setEditingExpenseId(e.id); setShowExpenseModal(true); }}>
                   <Text style={st.expenseEmoji}>{cat.emoji}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={st.expenseName}>{e.name}</Text>

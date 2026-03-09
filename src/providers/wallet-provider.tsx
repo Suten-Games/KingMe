@@ -25,6 +25,7 @@ interface WalletContextType {
   connecting: boolean;
   publicKey: PublicKey | null;
   walletName: string | null;        // which wallet is active
+  walletType?: 'extension' | 'mwa' | null;
   detectedWallets: DetectedWallet[];
   showPicker: boolean;
   setShowPicker: (show: boolean) => void;
@@ -33,6 +34,7 @@ interface WalletContextType {
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   signTransaction: (transaction: any) => Promise<any>;
   signAndSendTransaction: ((transaction: any) => Promise<{ signature: string }>) | undefined;
+  getAccessToken: () => Promise<string | null>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -143,6 +145,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [activeAdapter, setActiveAdapter] = useState<any>(null);
   const [detectedWallets, setDetectedWallets] = useState<DetectedWallet[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [walletType, setWalletType] = useState<'extension' | 'mwa' | null>(null);
 
   // Detect wallets on mount (web only)
   useEffect(() => {
@@ -241,6 +244,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setPublicKey(new PublicKey(pk.toString()));
         setActiveAdapter(wallet.adapter);
         setWalletName(wallet.name);
+        setWalletType('extension');
         setShowPicker(false);
 
         log(`[Wallet] Connected to ${wallet.name}:`, pk.toString());
@@ -313,6 +317,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [connected, publicKey, activeAdapter]);
 
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    return null;
+  }, []);
+
   return (
     <WalletContext.Provider
       value={{
@@ -320,6 +328,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         connecting,
         publicKey,
         walletName,
+        walletType,
         detectedWallets,
         showPicker,
         setShowPicker,
@@ -328,6 +337,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         signMessage,
         signTransaction,
         signAndSendTransaction: activeAdapter?.signAndSendTransaction ? signAndSendTransaction : undefined,
+        getAccessToken,
       }}
     >
       {children}

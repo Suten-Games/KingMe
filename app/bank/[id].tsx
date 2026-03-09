@@ -296,7 +296,7 @@ export default function BankAccountDetailScreen() {
 
   // Import state
   const [csvText, setCsvText] = useState('');
-  const [importPreview, setImportPreview] = useState<{ transactions: BankTransaction[]; summary: string; errors: string[] } | null>(null);
+  const [importPreview, setImportPreview] = useState<ReturnType<typeof parseCSVTransactions> | null>(null);
   const [importCreateSavings, setImportCreateSavings] = useState(true);
   const [importCreateDebts, setImportCreateDebts] = useState<Record<string, boolean>>({});
   const [showCsvHelp, setShowCsvHelp] = useState(false);
