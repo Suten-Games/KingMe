@@ -389,6 +389,42 @@ export async function executeSwap(
     const transactionBuffer = base64ToUint8Array(swapTransaction);
     const transaction = VersionedTransaction.deserialize(transactionBuffer);
 
+    // ── 2b. Pre-flight simulation (web only) ─────────────────
+    // Simulate before handing to wallet so we can catch InvalidAccountData
+    // (missing referral token account) and retry without fee — instead of
+    // showing the user a scary "simulation failed" popup in their wallet.
+    if (isWeb && !skipFee) {
+      try {
+        const rpcProxy = `${getApiBase()}/api/rpc/send`;
+        const simRes = await fetch(rpcProxy, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'simulateTransaction',
+            params: [
+              Buffer.from(transaction.serialize()).toString('base64'),
+              { encoding: 'base64', commitment: 'confirmed' },
+            ],
+          }),
+        });
+        const simData = await simRes.json();
+        const simErr = simData?.result?.value?.err;
+        if (simErr) {
+          const simErrStr = JSON.stringify(simErr);
+          log(`[JUPITER] Pre-flight simulation failed: ${simErrStr}`);
+          if (simErrStr.includes('InvalidAccountData')) {
+            warn('[JUPITER] InvalidAccountData in simulation — retrying without fee...');
+            continue; // retry for loop with skipFee=true
+          }
+        } else {
+          log('[JUPITER] Pre-flight simulation passed');
+        }
+      } catch (simNetErr: any) {
+        warn('[JUPITER] Pre-flight simulation network error (proceeding anyway):', simNetErr.message);
+      }
+    }
+
     log('[JUPITER] Transaction deserialized, requesting signature...');
 
     // ── 3. Sign + submit ─────────────────────────────────────
