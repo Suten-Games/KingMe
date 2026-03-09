@@ -449,7 +449,7 @@ export async function executeSwap(
     // ── 3. Sign + submit ─────────────────────────────────────
     let signature: string;
 
-    if (signAndSendTransaction) {
+    if (signAndSendTransaction && !isWeb) {
       // Wallet handles RPC submission via signAndSendTransaction
       // Works on both web (Phantom) and mobile (MWA/Seed Vault)
       log('[JUPITER] Using signAndSendTransaction...');
