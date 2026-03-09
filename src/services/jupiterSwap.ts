@@ -240,7 +240,8 @@ export async function fetchLiveBalances(
  * Use this to show the user what they'll get before they confirm.
  */
 export async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
-  const { inputMint, outputMint, amount, inputDecimals, userPublicKey, slippageBps = 100, autoSlippage = false } = params;
+  const { inputMint, outputMint, amount, inputDecimals, userPublicKey, slippageBps = 100 } = params;
+  const autoSlippage = true; // Always let Jupiter pick optimal slippage
 
   const apiBase = getApiBase(); // throws if not configured
   const decimals = resolveDecimals(inputMint, inputDecimals);
@@ -315,8 +316,8 @@ export async function executeSwap(
     inputDecimals,
     userPublicKey,
     slippageBps = 100,
-    autoSlippage = false,
   } = params;
+  const autoSlippage = true; // Always let Jupiter pick optimal slippage
 
   let apiBase: string;
   try {
@@ -386,13 +387,12 @@ export async function executeSwap(
     log(`[JUPITER] Quote: ${quote.inAmount} → ${quote.outAmount}`);
 
     // ── 2. Deserialize the versioned transaction ──────────────
-    const transactionBuffer = base64ToUint8Array(swapTransaction);
-    const transaction = VersionedTransaction.deserialize(transactionBuffer);
+    let transactionBuffer = base64ToUint8Array(swapTransaction);
+    let transaction = VersionedTransaction.deserialize(transactionBuffer);
 
     // ── 2b. Pre-flight simulation (web only) ─────────────────
-    // Simulate before handing to wallet so we can catch InvalidAccountData
-    // (missing referral token account) and retry without fee — instead of
-    // showing the user a scary "simulation failed" popup in their wallet.
+    // Simulate before handing to wallet so we can catch errors early
+    // and either retry (fee/slippage) or show a clear message.
     if (isWeb) {
       try {
         const rpcProxy = `${getApiBase()}/api/rpc/send`;
@@ -417,16 +417,23 @@ export async function executeSwap(
             warn('[JUPITER] InvalidAccountData in simulation — retrying without fee...');
             continue; // retry for loop with skipFee=true
           }
-          // Slippage exceeded (0x177e = 6014, 0x1788 = 6024)
-          if (simErrStr.includes('0x177e') || simErrStr.includes('0x1788')) {
+
+          // Parse custom program error code: {"InstructionError":[3,{"Custom":6014}]}
+          const customMatch = simErrStr.match(/"Custom"\s*:\s*(\d+)/);
+          const customCode = customMatch ? parseInt(customMatch[1]) : 0;
+
+          // Slippage exceeded (6014 = 0x177e, 6024 = 0x1788)
+          if (customCode === 6014 || customCode === 6024) {
             throw new Error('Slippage exceeded — increase slippage tolerance and try again');
           }
           // Insufficient balance
-          if (simErrStr.includes('0x1') || simErrStr.includes('InsufficientFunds')) {
+          else if (customCode === 1 || simErrStr.includes('InsufficientFunds')) {
             throw new Error('Insufficient balance for this swap');
           }
-          // Generic simulation failure — throw with details so the catch block can format it
-          throw new Error(`Transaction simulation failed: ${simErrStr}`);
+          // Other errors
+          else {
+            throw new Error(`Transaction simulation failed: ${simErrStr}`);
+          }
         } else {
           log('[JUPITER] Pre-flight simulation passed');
         }
