@@ -3,9 +3,26 @@
 // Vercel edge function that proxies Jupiter's Ultra + Swap APIs.
 // Keeps referral fee config server-side so it can't be stripped client-side.
 
+import { PublicKey } from '@solana/web3.js';
+
 export const config = {
   runtime: 'edge',
 };
+
+const JUPITER_REFERRAL_PROGRAM = new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
+
+/** Derive the fee token account (PDA) for a given referral account + output mint */
+function deriveFeeAccount(referralAccount: string, outputMint: string): string {
+  const [feeAccount] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from('referral_ata'),
+      new PublicKey(referralAccount).toBuffer(),
+      new PublicKey(outputMint).toBuffer(),
+    ],
+    JUPITER_REFERRAL_PROGRAM,
+  );
+  return feeAccount.toBase58();
+}
 
 // ── Config ───────────────────────────────────────────────────
 const JUPITER_REFERRAL_ACCOUNT = process.env.JUPITER_REFERRAL_ACCOUNT || '';
@@ -183,7 +200,10 @@ export default async function handler(request: Request) {
       };
 
       if (withFee && JUPITER_REFERRAL_ACCOUNT) {
-        swapBody.feeAccount = JUPITER_REFERRAL_ACCOUNT;
+        // feeAccount must be the derived token account (PDA), not the referral account itself
+        const outputMintResolved = quoteData.outputMint || resolvedOutput;
+        swapBody.feeAccount = deriveFeeAccount(JUPITER_REFERRAL_ACCOUNT, outputMintResolved);
+        console.log(`[SWAP] Fee account derived for mint ${outputMintResolved}: ${swapBody.feeAccount}`);
       }
 
       const swapController = new AbortController();
