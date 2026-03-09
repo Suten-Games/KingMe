@@ -422,6 +422,11 @@ export async function executeSwap(
           const customMatch = simErrStr.match(/"Custom"\s*:\s*(\d+)/);
           const customCode = customMatch ? parseInt(customMatch[1]) : 0;
 
+          // Missing referral token account (6025 = 0x1789) — retry without fee
+          if (customCode === 6025 && !skipFee) {
+            warn('[JUPITER] Referral token account missing (0x1789) — retrying without fee...');
+            continue; // retry for loop with skipFee=true
+          }
           // Slippage exceeded (6014 = 0x177e, 6024 = 0x1788)
           if (customCode === 6014 || customCode === 6024) {
             throw new Error('Slippage exceeded — increase slippage tolerance and try again');
@@ -579,10 +584,10 @@ export async function executeSwap(
   } catch (error: any) {
     logError('[JUPITER] Swap error:', error);
 
-    // If InvalidAccountData and we haven't retried without fee yet, retry
+    // If referral token account issue and we haven't retried without fee yet, retry
     const msg = error.message || '';
-    if (!skipFee && msg.includes('InvalidAccountData')) {
-      warn('[JUPITER] InvalidAccountData — likely missing referral token account, retrying without fee...');
+    if (!skipFee && (msg.includes('InvalidAccountData') || msg.includes('0x1789') || msg.includes('6025'))) {
+      warn('[JUPITER] Referral token account issue — retrying without fee...');
       continue; // retry the for loop with skipFee=true
     }
 

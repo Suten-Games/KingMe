@@ -115,6 +115,7 @@ export default function BusinessDashboard() {
   // Setup tips (expandable for newbies)
   const [showEINTip, setShowEINTip] = useState(false);
   const [showBankTip, setShowBankTip] = useState(false);
+  const [showInfo, setShowInfo] = useState<Record<string, boolean>>({});
 
   // Break-even calculator
   const [revenuePerUser, setRevenuePerUser] = useState('4.99');
@@ -147,48 +148,106 @@ export default function BusinessDashboard() {
     save({ ...data, ...updates });
   }, [data, save]);
 
-  // ── Sync Claimable Referral Fees (via Jupiter preview) ────
+  // ── Sync Business Wallet Balance + Claimable Referral Fees ──
+  const JUPITER_PRICE_API = 'https://api.jup.ag/price/v2';
+  const SOL_MINT = 'So11111111111111111111111111111111111111112';
+  const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
   const syncReferralWallet = async () => {
-    if (!connected || !publicKey) {
-      Alert.alert('Connect Wallet', 'Connect your personal wallet first — it must be the one registered as the Jupiter referral partner.');
+    if (!data.referralWallet) {
+      Alert.alert('No Wallet', 'Set your business wallet address first.');
       return;
     }
     setSyncing(true);
     try {
-      const KINGME_API = 'https://kingme-api.vercel.app';
-      const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
-      const partnerKey = publicKey.toBase58();
+      const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+      const rpcProxy = `${API_BASE}/api/rpc/send`;
+      const now = new Date().toISOString();
 
-      const res = await fetch(`${KINGME_API}/api/referral/claim`, {
+      // ── 1. Fetch business wallet balance ──────────────────
+      const balResp = await fetch(rpcProxy, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
-        body: JSON.stringify({ userPublicKey: partnerKey, action: 'preview' }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getBalance', params: [data.referralWallet] }),
       });
-      const preview = await res.json();
-      if (preview.error) throw new Error(preview.error);
+      const balData = await balResp.json();
+      const solBalance = (balData.result?.value || 0) / 1e9;
 
-      const claims = preview.claims || [];
-      let solAmount = 0;
-      let usdcAmount = 0;
-      const otherTokens: { symbol: string; amount: number; valueUSD: number }[] = [];
+      const tokResp = await fetch(rpcProxy, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 2,
+          method: 'getTokenAccountsByOwner',
+          params: [data.referralWallet, { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }, { encoding: 'jsonParsed' }],
+        }),
+      });
+      const tokData = await tokResp.json();
+      const tokenAccounts = tokData.result?.value || [];
 
-      for (const c of claims) {
-        if (c.symbol === 'SOL') { solAmount = c.uiAmount; }
-        else if (c.symbol === 'USDC') { usdcAmount = c.uiAmount; }
-        else { otherTokens.push({ symbol: c.symbol, amount: c.uiAmount, valueUSD: c.valueUSD }); }
+      let usdcBalance = 0;
+      const otherTokens: { symbol: string; mint: string; amount: number }[] = [];
+      for (const acct of tokenAccounts) {
+        const info = acct.account?.data?.parsed?.info;
+        if (!info) continue;
+        const amount = info.tokenAmount?.uiAmount || 0;
+        if (amount === 0) continue;
+        if (info.mint === USDC_MINT) { usdcBalance = amount; }
+        else { otherTokens.push({ symbol: info.mint.slice(0, 6), mint: info.mint, amount }); }
+      }
+
+      const mintsToPrice = [SOL_MINT, ...otherTokens.map(t => t.mint)];
+      let prices: Record<string, number> = {};
+      try {
+        const priceResp = await fetch(`${JUPITER_PRICE_API}?ids=${mintsToPrice.join(',')}`);
+        const priceData = await priceResp.json();
+        for (const [mint, info] of Object.entries(priceData.data || {})) {
+          prices[mint] = parseFloat((info as any).price || '0');
+        }
+      } catch {}
+
+      const solPrice = prices[SOL_MINT] || 0;
+      const otherWithValue = otherTokens.map(t => ({
+        symbol: t.symbol, amount: t.amount, valueUSD: t.amount * (prices[t.mint] || 0),
+      })).filter(t => t.valueUSD > 0.01);
+      const walletTotalUSD = (solBalance * solPrice) + usdcBalance + otherWithValue.reduce((s, t) => s + t.valueUSD, 0);
+
+      // ── 2. Fetch claimable referral fees (if wallet connected) ──
+      let claimableFees = data.claimableFees;
+      if (connected && publicKey) {
+        try {
+          const KINGME_API = 'https://kingme-api.vercel.app';
+          const API_KEY = process.env.EXPO_PUBLIC_KINGME_API_KEY || '';
+          const res = await fetch(`${KINGME_API}/api/referral/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+            body: JSON.stringify({ userPublicKey: publicKey.toBase58(), action: 'preview' }),
+          });
+          const preview = await res.json();
+          if (!preview.error) {
+            const claims = preview.claims || [];
+            let claimSol = 0, claimUsdc = 0;
+            const claimOther: { symbol: string; amount: number; valueUSD: number }[] = [];
+            for (const c of claims) {
+              if (c.symbol === 'SOL') claimSol = c.uiAmount;
+              else if (c.symbol === 'USDC') claimUsdc = c.uiAmount;
+              else claimOther.push({ symbol: c.symbol, amount: c.uiAmount, valueUSD: c.valueUSD });
+            }
+            claimableFees = { sol: claimSol, usdc: claimUsdc, other: claimOther, totalUSD: preview.totalValueUSD || 0, lastFetched: now };
+          }
+        } catch (err) {
+          logError('Claimable fees fetch failed:', err);
+        }
       }
 
       await save({
         ...data,
-        referralBalance: {
-          sol: solAmount, usdc: usdcAmount, other: otherTokens,
-          totalUSD: preview.totalValueUSD || 0,
-          lastFetched: new Date().toISOString(),
-        },
+        referralBalance: { sol: solBalance, usdc: usdcBalance, other: otherWithValue, totalUSD: walletTotalUSD, lastFetched: now },
+        claimableFees,
       });
     } catch (err: any) {
       logError('Referral sync error:', err);
-      Alert.alert('Sync Failed', err.message || 'Could not fetch claimable referral fees.');
+      Alert.alert('Sync Failed', 'Could not sync wallet data. Check your connection and try again.');
     } finally {
       setSyncing(false);
     }
@@ -387,12 +446,13 @@ export default function BusinessDashboard() {
   );
   const totalTransactionIncome = incomeTransactions.reduce((s, t) => s + t.amount, 0);
 
-  const claimableReferralFees = data.referralBalance?.totalUSD || 0;
+  const walletBalance = data.referralBalance?.totalUSD || 0;
+  const claimableReferralFees = data.claimableFees?.totalUSD || 0;
   const bankBal = data.bankAccount?.balance || 0;
   const totalDistributions = data.distributions.reduce((s, d) => s + d.amount, 0);
   const totalContributions = (data.contributions || []).reduce((s, c) => s + c.amount, 0);
   const totalRevenue = totalTransactionIncome;
-  const netPosition = bankBal + claimableReferralFees;
+  const netPosition = bankBal + walletBalance + claimableReferralFees;
 
   // Break-even
   const rpu = parseFloat(revenuePerUser) || 0;
@@ -787,17 +847,31 @@ export default function BusinessDashboard() {
               <TouchableOpacity onPress={() => setShowWalletModal(true)}>
                 <Text style={st.walletAddr}>{data.referralWallet.slice(0, 6)}...{data.referralWallet.slice(-6)}</Text>
               </TouchableOpacity>
+
+              {/* Business wallet balance */}
               {data.referralBalance ? (
                 <>
-                  <Text style={[st.cardLabel, { marginTop: 12 }]}>Claimable Referral Fees</Text>
                   <Text style={st.bigValue}>${data.referralBalance.totalUSD.toFixed(2)}</Text>
                   <View style={st.tokenRow}>
                     {data.referralBalance.sol > 0.001 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.sol.toFixed(4)} SOL</Text></View>}
                     {data.referralBalance.usdc > 0.01 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.referralBalance.usdc.toFixed(2)} USDC</Text></View>}
                     {data.referralBalance.other.map((t, i) => <View key={i} style={st.tokenPill}><Text style={st.tokenPillText}>{t.amount.toFixed(2)} {t.symbol}</Text></View>)}
                   </View>
-                  <Text style={st.lastSync}>Last synced: {new Date(data.referralBalance.lastFetched).toLocaleString()}</Text>
-                  {data.referralBalance.totalUSD > 0.01 && (
+                </>
+              ) : null}
+
+              {/* Claimable referral fees */}
+              {data.claimableFees ? (
+                <>
+                  <View style={[st.plDivider, { marginVertical: 12 }]} />
+                  <Text style={st.cardLabel}>Claimable Referral Fees</Text>
+                  <Text style={[st.bigValue, { fontSize: 20 }]}>${data.claimableFees.totalUSD.toFixed(2)}</Text>
+                  <View style={st.tokenRow}>
+                    {data.claimableFees.sol > 0.001 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.claimableFees.sol.toFixed(4)} SOL</Text></View>}
+                    {data.claimableFees.usdc > 0.01 && <View style={st.tokenPill}><Text style={st.tokenPillText}>{data.claimableFees.usdc.toFixed(2)} USDC</Text></View>}
+                    {data.claimableFees.other.map((t, i) => <View key={i} style={st.tokenPill}><Text style={st.tokenPillText}>{t.amount.toFixed(2)} {t.symbol}</Text></View>)}
+                  </View>
+                  {data.claimableFees.totalUSD > 0.01 && (
                     <TouchableOpacity
                       style={[st.claimBtn, claiming && { opacity: 0.6 }]}
                       onPress={claimReferralFees}
@@ -814,8 +888,13 @@ export default function BusinessDashboard() {
                     </TouchableOpacity>
                   )}
                 </>
-              ) : (
-                <Text style={st.mutedText}>Tap sync to check claimable fees</Text>
+              ) : null}
+
+              {!data.referralBalance && !data.claimableFees && (
+                <Text style={st.mutedText}>Tap sync to fetch wallet balance and claimable fees</Text>
+              )}
+              {(data.referralBalance || data.claimableFees) && (
+                <Text style={st.lastSync}>Last synced: {new Date((data.claimableFees || data.referralBalance)!.lastFetched).toLocaleString()}</Text>
               )}
             </View>
           )}
@@ -825,11 +904,22 @@ export default function BusinessDashboard() {
       {/* ── Business Bank Account ────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>🏦 Business Account</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>🏦 Business Account</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, bank: !s.bank }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowBankModal(true)}>
             <Text style={st.syncBtn}>{data.bankAccount ? '✏️ Edit' : '+ Add'}</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.bank && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>This is your business checking or savings account — where all business money flows in and out. Keep it separate from personal accounts so your bookkeeping stays clean.</Text>
+            <Text style={st.tipText}>Update the balance periodically (or after importing transactions) to keep your P&L and runway calculations accurate.</Text>
+          </View>
+        )}
 
         {data.bankAccount ? (
           <TouchableOpacity style={st.card} onPress={() => setShowBankModal(true)} activeOpacity={0.85}>
@@ -848,7 +938,21 @@ export default function BusinessDashboard() {
 
       {/* ── Income ──────────────────────────────────────────── */}
       <View style={st.section}>
-        <Text style={st.sectionTitle}>📈 Income</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={st.sectionTitle}>📈 Income</Text>
+          <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, income: !s.income }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={st.infoBtn}>ⓘ</Text>
+          </TouchableOpacity>
+        </View>
+        {showInfo.income && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Income is all money coming into your business. This gets populated automatically from three sources:</Text>
+            <Text style={st.tipStep}>1. Bank CSV imports — any deposits or incoming transfers in your business bank statements</Text>
+            <Text style={st.tipStep}>2. Referral fee claims — when you claim Jupiter swap referral fees</Text>
+            <Text style={st.tipStep}>3. Paid add-on purchases — revenue from in-app purchases</Text>
+            <Text style={st.tipText}>Capital contributions (money you put into the business yourself) are tracked separately and don't count as income.</Text>
+          </View>
+        )}
         {incomeTransactions.length === 0 ? (
           <View style={st.card}>
             <Text style={st.mutedText}>No income recorded yet. Import bank CSV transactions, claim referral fees, or receive paid add-on purchases to see income here.</Text>
@@ -894,11 +998,23 @@ export default function BusinessDashboard() {
       {/* ── Expenses ─────────────────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>💸 Expenses</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>💸 Expenses</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, expenses: !s.expenses }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowExpenseModal(true)}>
             <Text style={st.syncBtn}>+ Add</Text>
           </TouchableOpacity>
         </View>
+
+        {showInfo.expenses && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Expenses are your recurring business costs — things like hosting, domains, developer accounts, API fees, and subscriptions. Add them here to see your monthly burn rate, calculate break-even, and project annual costs.</Text>
+            <Text style={st.tipText}>These are separate from imported bank transactions. Think of expenses as your budget (what you expect to pay). Transactions are the actuals (what your bank shows). If a charge shows up in both places, that's fine — expenses power forecasts, transactions are your historical record.</Text>
+          </View>
+        )}
 
         {data.expenses.length === 0 ? (
           <TouchableOpacity style={st.setupCard} onPress={() => setShowExpenseModal(true)}>
@@ -935,11 +1051,22 @@ export default function BusinessDashboard() {
       {/* ── Capital Contributions ─────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>📥 Capital Contributions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>📥 Capital Contributions</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, contributions: !s.contributions }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowContribModal(true)}>
             <Text style={st.syncBtn}>+ Record</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.contributions && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Capital contributions are money you put into the business from your own pocket. This is not income — it's your personal investment in the company.</Text>
+            <Text style={st.tipText}>Record these when you transfer money from a personal account to your business account, or when you pay for a business expense out of pocket. This keeps your P&L accurate and tracks how much you've invested.</Text>
+          </View>
+        )}
 
         {(data.contributions || []).length === 0 ? (
           <View style={st.card}>
@@ -973,11 +1100,22 @@ export default function BusinessDashboard() {
       {/* ── Distributions ────────────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>💰 Distributions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>💰 Distributions</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, distributions: !s.distributions }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowDistModal(true)}>
             <Text style={st.syncBtn}>+ Record</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.distributions && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Distributions are money you take out of the business for yourself — your "paycheck" as an owner. For an LLC, these are called owner draws or member distributions.</Text>
+            <Text style={st.tipText}>Record these when you transfer money from your business account to your personal account. This isn't a business expense — it's profit you're taking home. You'll owe taxes on distributions, so track them carefully.</Text>
+          </View>
+        )}
 
         {data.distributions.length === 0 ? (
           <View style={st.card}>
@@ -1010,7 +1148,18 @@ export default function BusinessDashboard() {
 
       {/* ── P&L Summary ──────────────────────────────────────── */}
       <View style={st.section}>
-        <Text style={st.sectionTitle}>📊 P&L Overview</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={st.sectionTitle}>📊 P&L Overview</Text>
+          <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, pnl: !s.pnl }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={st.infoBtn}>ⓘ</Text>
+          </TouchableOpacity>
+        </View>
+        {showInfo.pnl && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>P&L (Profit & Loss) is a snapshot of your business finances. Income minus expenses tells you if you're profitable. The net position combines your bank balance, crypto wallet, and any unclaimed fees.</Text>
+            <Text style={st.tipText}>Runway shows how many months your business can operate at the current burn rate before running out of money. Take monthly snapshots to track progress over time.</Text>
+          </View>
+        )}
         <View style={st.plCard}>
           <View style={st.plRow}>
             <Text style={st.plLabel}>Total Income</Text>
@@ -1020,6 +1169,12 @@ export default function BusinessDashboard() {
             <Text style={st.plLabel}>Business Account Balance</Text>
             <Text style={st.plGreen}>${bankBal.toLocaleString()}</Text>
           </View>
+          {walletBalance > 0.01 && (
+            <View style={st.plRow}>
+              <Text style={st.plLabel}>Business Wallet Balance</Text>
+              <Text style={st.plGreen}>${walletBalance.toFixed(2)}</Text>
+            </View>
+          )}
           {claimableReferralFees > 0.01 && (
             <View style={st.plRow}>
               <Text style={st.plLabel}>Unclaimed Referral Fees</Text>
@@ -1062,11 +1217,22 @@ export default function BusinessDashboard() {
       {/* ── P&L Snapshots ─────────────────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>Monthly Snapshots</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>Monthly Snapshots</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, snapshots: !s.snapshots }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={takeSnapshot}>
             <Text style={st.syncBtn}>Save This Month</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.snapshots && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Save a snapshot at the end of each month to track how your business finances change over time. Each snapshot captures your current revenue, expenses, balances, and net position.</Text>
+            <Text style={st.tipText}>This builds a history you can look back on to see growth trends, seasonal patterns, and whether your business is getting healthier.</Text>
+          </View>
+        )}
 
         {(data.plSnapshots || []).length === 0 ? (
           <TouchableOpacity style={st.setupCard} onPress={takeSnapshot}>
@@ -1113,7 +1279,18 @@ export default function BusinessDashboard() {
 
       {/* ── Break-Even Calculator ──────────────────────────── */}
       <View style={st.section}>
-        <Text style={st.sectionTitle}>Break-Even Calculator</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={st.sectionTitle}>Break-Even Calculator</Text>
+          <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, breakeven: !s.breakeven }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={st.infoBtn}>ⓘ</Text>
+          </TouchableOpacity>
+        </View>
+        {showInfo.breakeven && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Break-even tells you how many paying users you need to cover your costs. Enter your average revenue per user (e.g. $4.99 for an add-on purchase) and it calculates how many users you need monthly and annually.</Text>
+            <Text style={st.tipText}>This is one of the most important numbers for a new business — it tells you your minimum viable customer count.</Text>
+          </View>
+        )}
         <View style={st.plCard}>
           <View style={st.plRow}>
             <Text style={st.plLabel}>Monthly Expenses</Text>
@@ -1170,11 +1347,22 @@ export default function BusinessDashboard() {
       {/* ── Business Transactions ───────────────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>Transactions</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>Transactions</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, transactions: !s.transactions }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowImportModal(true)}>
             <Text style={st.syncBtn}>Import CSV</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.transactions && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Transactions are your actual bank records — every deposit and withdrawal from your business bank account. Import them by downloading a CSV from your bank's website and uploading it here.</Text>
+            <Text style={st.tipText}>Duplicates are automatically skipped on re-import, so you can safely import overlapping date ranges. Income transactions feed into your Income section above. Import regularly to keep your records current.</Text>
+          </View>
+        )}
 
         {(data.transactions || []).length === 0 ? (
           <TouchableOpacity style={st.setupCard} onPress={() => setShowImportModal(true)}>
@@ -1219,11 +1407,22 @@ export default function BusinessDashboard() {
       {/* ── Reassign Personal Transactions ─────────────────── */}
       <View style={st.section}>
         <View style={st.sectionHeader}>
-          <Text style={st.sectionTitle}>Personal {'\u2192'} Business</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={st.sectionTitle}>Personal {'\u2192'} Business</Text>
+            <TouchableOpacity onPress={() => setShowInfo(s => ({ ...s, reassign: !s.reassign }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={st.infoBtn}>ⓘ</Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => setShowReassignModal(true)}>
             <Text style={st.syncBtn}>Find & Move</Text>
           </TouchableOpacity>
         </View>
+        {showInfo.reassign && (
+          <View style={st.tipBox}>
+            <Text style={st.tipText}>Before you had a business bank account, you probably paid for business stuff from your personal account. This tool searches your personal bank transactions for business expenses so you can move them here.</Text>
+            <Text style={st.tipText}>It also calculates how much you should reimburse yourself — transfer that amount from your business account to your personal account, and record it as a capital contribution.</Text>
+          </View>
+        )}
         <View style={st.card}>
           <Text style={st.descriptionText}>
             If you've been paying business expenses from personal accounts, you can find those transactions by category or keyword and reassign them here. The app will calculate how much you should transfer to your business account.
@@ -1324,6 +1523,7 @@ const st = StyleSheet.create({
   checklistIcon: { fontSize: 18, marginTop: 1 },
   checklistLabel: { fontSize: 14, fontWeight: '600' as const, color: '#e8e0d0' },
   checklistSub: { fontSize: 12, color: '#666', marginTop: 2 },
+  infoBtn: { fontSize: 14, color: '#666' },
   tipToggle: { fontSize: 12, color: '#f4c430', marginTop: 6 },
   tipBox: { backgroundColor: '#141825', borderRadius: 8, padding: 12, marginTop: 8, borderLeftWidth: 2, borderLeftColor: '#f4c43060' },
   tipText: { fontSize: 12, color: '#a0a0a0', lineHeight: 18, marginBottom: 8 },

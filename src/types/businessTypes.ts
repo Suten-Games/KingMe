@@ -66,6 +66,13 @@ export interface BusinessData {
     totalUSD: number;
     lastFetched: string;
   } | null;
+  claimableFees: {
+    sol: number;
+    usdc: number;
+    other: { symbol: string; amount: number; valueUSD: number }[];
+    totalUSD: number;
+    lastFetched: string;
+  } | null;
   bankAccount: {
     name: string;
     institution: string;
@@ -102,6 +109,7 @@ export const DEFAULT_DATA: BusinessData = {
   logoUri: '',
   referralWallet: '',
   referralBalance: null,
+  claimableFees: null,
   bankAccount: null,
   expenses: [],
   distributions: [],
