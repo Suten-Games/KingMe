@@ -1,28 +1,91 @@
 // api/swap/quote.ts - Jupiter Swap Quote & Transaction Builder
 // ==============================================================
-// Vercel serverless function that proxies Jupiter's Swap APIs.
+// Vercel edge function that proxies Jupiter's Swap APIs.
 // Keeps referral fee config server-side so it can't be stripped client-side.
-// Uses Node.js runtime (not edge) for @solana/web3.js compatibility.
+// Uses edge runtime for fast cold starts (~50ms vs ~2s for Node.js).
+// PDA derivation uses @noble/curves + @noble/hashes (edge-compatible).
 
-import { PublicKey } from '@solana/web3.js';
+import { ed25519 } from '@noble/curves/ed25519';
+import { sha256 } from '@noble/hashes/sha256';
 
 export const config = {
-  runtime: 'nodejs',
+  runtime: 'edge',
 };
 
-const JUPITER_REFERRAL_PROGRAM = new PublicKey('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
+// ── Base58 codec ─────────────────────────────────────────────
+const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function decodeBase58(str: string): Uint8Array {
+  let num = BigInt(0);
+  for (const char of str) {
+    const idx = B58_ALPHABET.indexOf(char);
+    if (idx === -1) throw new Error('Invalid base58 char: ' + char);
+    num = num * 58n + BigInt(idx);
+  }
+  const bytes: number[] = [];
+  while (num > 0n) {
+    bytes.unshift(Number(num & 0xffn));
+    num >>= 8n;
+  }
+  for (const char of str) {
+    if (char === '1') bytes.unshift(0);
+    else break;
+  }
+  while (bytes.length < 32) bytes.unshift(0);
+  return new Uint8Array(bytes);
+}
+
+function encodeBase58(bytes: Uint8Array): string {
+  let num = BigInt(0);
+  for (const byte of bytes) num = num * 256n + BigInt(byte);
+  let str = '';
+  while (num > 0n) {
+    str = B58_ALPHABET[Number(num % 58n)] + str;
+    num /= 58n;
+  }
+  for (const byte of bytes) {
+    if (byte === 0) str = '1' + str;
+    else break;
+  }
+  return str;
+}
+
+// ── Solana PDA derivation (edge-compatible) ──────────────────
+const REFERRAL_PROGRAM_ID = decodeBase58('REFER4ZgmyYx9c6He5XfaTMiGfdLwRnkV4RPp9t9iF3');
+
+function isOnCurve(point: Uint8Array): boolean {
+  try {
+    ed25519.ExtendedPoint.fromHex(point);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findProgramAddress(seeds: Uint8Array[], programId: Uint8Array): [Uint8Array, number] {
+  const pda = new TextEncoder().encode('ProgramDerivedAddress');
+  for (let bump = 255; bump >= 0; bump--) {
+    const parts: Uint8Array[] = [...seeds, new Uint8Array([bump]), programId, pda];
+    let totalLen = 0;
+    for (const p of parts) totalLen += p.length;
+    const buf = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const p of parts) { buf.set(p, offset); offset += p.length; }
+    const hash = sha256(buf);
+    if (!isOnCurve(hash)) return [hash, bump];
+  }
+  throw new Error('Could not find PDA');
+}
 
 /** Derive the fee token account (PDA) for a given referral account + output mint */
 function deriveFeeAccount(referralAccount: string, outputMint: string): string {
-  const [feeAccount] = PublicKey.findProgramAddressSync(
-    [
-      Buffer.from('referral_ata'),
-      new PublicKey(referralAccount).toBuffer(),
-      new PublicKey(outputMint).toBuffer(),
-    ],
-    JUPITER_REFERRAL_PROGRAM,
-  );
-  return feeAccount.toBase58();
+  const seeds = [
+    new TextEncoder().encode('referral_ata'),
+    decodeBase58(referralAccount),
+    decodeBase58(outputMint),
+  ];
+  const [pda] = findProgramAddress(seeds, REFERRAL_PROGRAM_ID);
+  return encodeBase58(pda);
 }
 
 // ── Config ───────────────────────────────────────────────────
