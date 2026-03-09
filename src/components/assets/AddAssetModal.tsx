@@ -1,5 +1,6 @@
 // src/components/assets/AddAssetModal.tsx
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal } from 'react-native';
+import { Image } from 'expo-image';
 import { useState, useEffect, useCallback } from 'react';
 import { lookupToken, searchTokens, type TokenInfo } from '../../utils/tokenRegistry';
 import StockVestingFields from './StockVestingFields';
@@ -666,7 +667,7 @@ export default function AddAssetModal({
                           <TouchableOpacity key={token.symbol} style={styles.searchResultItem}
                             onPress={() => handleSelectToken(token)}>
                             {token.logoURI ? (
-                              <Image source={{ uri: token.logoURI }} style={styles.searchResultIcon} resizeMode="contain" />
+                              <Image source={{ uri: token.logoURI }} style={styles.searchResultIcon} contentFit="contain" />
                             ) : (
                               <View style={[styles.searchResultIcon, styles.searchResultIconPlaceholder]} />
                             )}
@@ -681,7 +682,7 @@ export default function AddAssetModal({
 
                     {logoUri ? (
                       <View style={styles.iconPreview}>
-                        <Image source={{ uri: logoUri }} style={styles.iconImage} resizeMode="contain"
+                        <Image source={{ uri: logoUri }} style={styles.iconImage} contentFit="contain"
                           onError={() => setLogoUri('')} />
                         <Text style={styles.iconPreviewLabel}>{selectedToken?.name || symbol.toUpperCase()}</Text>
                       </View>

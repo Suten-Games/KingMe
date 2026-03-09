@@ -319,6 +319,25 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [connected, publicKey, activeAdapter]);
 
+  // ── Sign and Send Transaction (preferred by Phantom on web) ───────────────
+
+  const signAndSendTransaction = useCallback(async (transaction: any, options?: any): Promise<{ signature: string }> => {
+    if (!connected || !publicKey) throw new Error('Wallet not connected');
+    if (!activeAdapter) throw new Error('No active wallet adapter');
+    if (!activeAdapter.signAndSendTransaction) throw new Error('signAndSendTransaction not supported');
+
+    try {
+      const result = await activeAdapter.signAndSendTransaction(transaction, options);
+      return { signature: typeof result === 'string' ? result : result.signature };
+    } catch (error: any) {
+      console.error('[Wallet] signAndSendTransaction failed:', error);
+      throw error;
+    }
+  }, [connected, publicKey, activeAdapter]);
+
+  // Expose null if adapter doesn't support signAndSendTransaction
+  const hasSignAndSend = !!activeAdapter?.signAndSendTransaction;
+
   return (
     <WalletContext.Provider
       value={{

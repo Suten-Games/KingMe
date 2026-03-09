@@ -1,8 +1,9 @@
 // app/asset/[id].tsx
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Linking, useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
@@ -361,7 +362,7 @@ export default function AssetDetailScreen() {
               {/* Logo + Name + Symbol */}
               <View style={styles.heroHeader}>
                 {logoURI ? (
-                  <Image source={{ uri: logoURI }} style={styles.heroLogo} resizeMode="contain" />
+                  <Image source={{ uri: logoURI }} style={styles.heroLogo} contentFit="contain" />
                 ) : (
                   <View style={styles.heroLogoPlaceholder}>
                     <Text style={styles.heroLogoText}>
@@ -869,7 +870,7 @@ export default function AssetDetailScreen() {
             <View style={styles.assetCard}>
               <View style={styles.assetCardHeader}>
                 {logoURI ? (
-                  <Image source={{ uri: logoURI }} style={styles.assetCardIcon} resizeMode="contain" />
+                  <Image source={{ uri: logoURI }} style={styles.assetCardIcon} contentFit="contain" />
                 ) : (
                   <View style={styles.assetCardIconPlaceholder}>
                     <Text style={styles.assetCardIconText}>

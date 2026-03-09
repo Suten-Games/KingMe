@@ -1,6 +1,7 @@
 // components/FreedomScore.tsx
 import React from 'react';
-import { View, Image, Text, StyleSheet, Dimensions, Platform, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { Asset } from 'expo-asset';
 import type { AvatarType, FreedomState } from '../types';
 import { AVATAR_IMAGES, AVATAR_VIDEOS } from '../utils/constants';
@@ -119,7 +120,7 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
         // The parent container (heroContainer / sidebarImagePanel) provides the bounds
         return (
           <>
-            <Image source={avatarImage} style={imageStyle} resizeMode="cover" />
+            <Image source={avatarImage} style={imageStyle} contentFit="cover" />
             <WebVideo source={videoSource} />
           </>
         );
@@ -129,7 +130,7 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
           <NativeVideo
             source={videoSource}
             style={imageStyle}
-            resizeMode="cover"
+            contentFit="cover"
             shouldPlay
             isLooping
             isMuted
@@ -140,7 +141,7 @@ export function FreedomScore({ days, formatted, state, avatarType, isKinged, lay
         );
       }
     }
-    return <Image source={avatarImage} style={imageStyle} resizeMode="cover" />;
+    return <Image source={avatarImage} style={imageStyle} contentFit="cover" />;
   };
 
   // ── HERO layout (mobile) ────────────────────────────────────────────────

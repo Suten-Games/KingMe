@@ -1,6 +1,7 @@
 // app/(tabs)/_layout.tsx
 import { Tabs, useRouter } from 'expo-router';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useFonts, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
@@ -37,7 +38,7 @@ function TabBarHeader() {
           <Image
             source={require('../../src/assets/images/kingmelogo.jpg')}
             style={styles.headerLogo}
-            resizeMode="cover"
+            contentFit="cover"
           />
 
           <MaskedView

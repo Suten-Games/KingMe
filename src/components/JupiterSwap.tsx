@@ -5,8 +5,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ActivityIndicator, Platform, Alert as RNAlert, Image,
+  ActivityIndicator, Platform, Alert as RNAlert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useWallet } from '../providers/wallet-provider';
 import {
   getSwapQuote, executeSwap, isSwapConfigured, getSwapDiagnostics,

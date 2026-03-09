@@ -1,5 +1,6 @@
 // app/components/AssetSection.tsx - WITH TOKEN LOGOS
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useState, useEffect } from 'react';
 import { useStore } from '../../src/store/useStore';
 import type { Asset, RealEstateAsset } from '../../src/types';

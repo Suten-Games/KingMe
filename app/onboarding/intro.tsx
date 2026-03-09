@@ -7,8 +7,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Dimensions, Platform, Image, ActivityIndicator, Alert,
+  Dimensions, Platform, ActivityIndicator, Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { isSeeker } from '../../src/utils/device';
@@ -181,7 +182,7 @@ export default function OnboardingIntro() {
         {/* ── Page 1: Hook ─────────────────────────────────── */}
         <View style={[st.page, { width: PAGE_WIDTH }]}>
           <View style={st.pageInner}>
-            <Image source={require('../../src/assets/images/kingmelogo.jpg')} style={st.heroLogo} resizeMode="contain" />
+            <Image source={require('../../src/assets/images/kingmelogo.jpg')} style={st.heroLogo} contentFit="contain" />
             <Text style={st.heroTitle}>What if you never{'\n'}had to work again?</Text>
             <Text style={st.heroSub}>
               Not someday. Not when you're old.{'\n'}What if you knew exactly how close you are{'\n'}to real financial freedom — right now?

@@ -5,7 +5,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, Alert, Platform,
+  Modal, TextInput, Alert, Platform, Linking,
 } from 'react-native';
 import { useState, useMemo, useCallback } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,6 +24,59 @@ import * as FileSystem from 'expo-file-system';
 
 // If you have a theme file:
 // import { T } from '../../src/theme';
+
+// ─── Bank website lookup ────────────────────────────────────────────────────
+const BANK_URLS: Record<string, string> = {
+  chase: 'https://www.chase.com',
+  'bank of america': 'https://www.bankofamerica.com',
+  wells: 'https://www.wellsfargo.com',
+  'wells fargo': 'https://www.wellsfargo.com',
+  ally: 'https://www.ally.com',
+  citi: 'https://www.citi.com',
+  citibank: 'https://www.citi.com',
+  capital: 'https://www.capitalone.com',
+  'capital one': 'https://www.capitalone.com',
+  fidelity: 'https://www.fidelity.com',
+  schwab: 'https://www.schwab.com',
+  'charles schwab': 'https://www.schwab.com',
+  vanguard: 'https://www.vanguard.com',
+  usaa: 'https://www.usaa.com',
+  pnc: 'https://www.pnc.com',
+  td: 'https://www.td.com',
+  'td bank': 'https://www.td.com',
+  discover: 'https://www.discover.com',
+  sofi: 'https://www.sofi.com',
+  marcus: 'https://www.marcus.com',
+  amex: 'https://www.americanexpress.com',
+  'american express': 'https://www.americanexpress.com',
+  navy: 'https://www.navyfederal.org',
+  'navy federal': 'https://www.navyfederal.org',
+  betterment: 'https://www.betterment.com',
+  wealthfront: 'https://www.wealthfront.com',
+  'us bank': 'https://www.usbank.com',
+  regions: 'https://www.regions.com',
+  truist: 'https://www.truist.com',
+  suntrust: 'https://www.truist.com',
+  bb: 'https://www.bbandt.com',
+  huntington: 'https://www.huntington.com',
+  m: 'https://www.morganstanley.com',
+  'morgan stanley': 'https://www.morganstanley.com',
+  etrade: 'https://www.etrade.com',
+  'e*trade': 'https://www.etrade.com',
+  robinhood: 'https://www.robinhood.com',
+  coinbase: 'https://www.coinbase.com',
+};
+
+function getBankUrl(institution: string): string | null {
+  const lower = institution.toLowerCase().trim();
+  // Exact match first
+  if (BANK_URLS[lower]) return BANK_URLS[lower];
+  // Partial match — check if institution starts with a known key
+  for (const [key, url] of Object.entries(BANK_URLS)) {
+    if (lower.startsWith(key) || lower.includes(key)) return url;
+  }
+  return null;
+}
 
 // ─── View modes ────────────────────────────────────────────────────────────────
 type ViewMode = 'transactions' | 'budget' | 'recurring';
@@ -1020,7 +1073,15 @@ export default function BankAccountDetailScreen() {
               )}
               <View>
                 <Text style={s.accountName}>{account.name}</Text>
-                <Text style={s.accountInstitution}>{account.institution} · {account.type}</Text>
+                {getBankUrl(account.institution) ? (
+                  <TouchableOpacity onPress={() => Linking.openURL(getBankUrl(account.institution)!)}>
+                    <Text style={s.accountInstitution}>
+                      <Text style={s.accountInstitutionLink}>{account.institution} ↗</Text> · {account.type}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={s.accountInstitution}>{account.institution} · {account.type}</Text>
+                )}
               </View>
             </View>
             <TouchableOpacity style={s.balanceBox} onPress={() => {
@@ -1851,7 +1912,7 @@ export default function BankAccountDetailScreen() {
               <TouchableOpacity
                 style={s.saveBtn}
                 onPress={() => {
-                  const val = parseFloat(balanceInput);
+                  const val = parseFloat(balanceInput.replace(/,/g, ''));
                   if (!isNaN(val)) {
                     updateBankAccount(id!, { currentBalance: val });
                     setShowBalanceEdit(false);
@@ -1884,6 +1945,7 @@ const s = StyleSheet.create({
   accountHeaderTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   accountName: { fontSize: 22, color: '#fff', fontFamily: 'Inter_800ExtraBold', marginBottom: 4 },
   accountInstitution: { fontSize: 14, color: '#888', fontFamily: 'Inter_400Regular' },
+  accountInstitutionLink: { color: '#60a5fa', textDecorationLine: 'underline' },
   balanceBox: { alignItems: 'flex-end' },
   balanceLabel: { fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: 1, fontFamily: 'Inter_600SemiBold', marginBottom: 4 },
   balanceValue: { fontSize: 24, color: '#4ade80', fontFamily: 'Inter_800ExtraBold' },

@@ -1,5 +1,6 @@
 // app/onboarding/assets.tsx
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useStore } from '../../src/store/useStore';
@@ -77,7 +78,7 @@ export default function AssetsScreen() {
                   <View style={st.assetHeader}>
                     <View style={st.assetHeaderLeft}>
                       {info.logoURI ? (
-                        <Image source={{ uri: info.logoURI }} style={st.assetIcon} resizeMode="contain" />
+                        <Image source={{ uri: info.logoURI }} style={st.assetIcon} contentFit="contain" />
                       ) : (
                         <View style={st.assetIconPlaceholder}>
                           <Text style={st.assetIconText}>

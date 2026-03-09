@@ -1,7 +1,8 @@
 // app/_layout.tsx
 import '../src/polyfills';
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, Image, Platform } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import { WalletProvider } from '@/providers/wallet-provider';
 import {
@@ -63,7 +64,7 @@ export default function RootLayout() {
         <Image
           source={require('../src/assets/images/kingmelogo.jpg')}
           style={splash.logo}
-          resizeMode="contain"
+          contentFit="contain"
         />
       </View>
     );

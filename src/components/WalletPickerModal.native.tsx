@@ -5,7 +5,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import Svg, { Path } from 'react-native-svg';
 import { isSeeker } from '../utils/device';
 
@@ -42,7 +43,7 @@ interface Props {
 function WalletIcon({ icon, size = 26 }: { icon: string | React.ReactNode; size?: number }) {
   if (React.isValidElement(icon)) return <>{icon}</>;
   if (typeof icon === 'string' && (icon.startsWith('data:') || icon.startsWith('http'))) {
-    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} resizeMode="contain" />;
+    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} contentFit="contain" />;
   }
   return <Text style={{ fontSize: size }}>{icon as string}</Text>;
 }

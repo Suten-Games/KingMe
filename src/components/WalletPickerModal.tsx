@@ -5,7 +5,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, Linking } from 'react-native';
+import { Image } from 'expo-image';
 import { useWallet, DetectedWallet } from '../providers/wallet-provider';
 import { log, warn, error } from '../utils/logger';
 
@@ -14,7 +15,7 @@ export type WalletOption = 'phantom' | 'solflare' | 'backpack' | 'magiceden' | '
 
 function WalletIcon({ icon, size = 26 }: { icon: string; size?: number }) {
   if (icon.startsWith('data:') || icon.startsWith('http')) {
-    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} resizeMode="contain" />;
+    return <Image source={{ uri: icon }} style={{ width: size, height: size, borderRadius: 6 }} contentFit="contain" />;
   }
   return <Text style={{ fontSize: size }}>{icon}</Text>;
 }

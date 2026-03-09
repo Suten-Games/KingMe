@@ -1,5 +1,6 @@
 // src/components/assets/AssetCategoriesList.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import { useState, useMemo } from 'react';
 import AssetSection from '../AssetSection';
 import { getCategoryIcon, getCategoryLabel, calculateCategoryTotal, calculateCategoryIncome } from '../../utils/assetCalculations';

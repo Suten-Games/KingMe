@@ -1,5 +1,6 @@
 // app/onboarding/welcome.tsx
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,7 +28,7 @@ export default function WelcomeScreen() {
         <Image
           source={require('../../src/assets/images/kingmelogo.jpg')}
           style={st.logo}
-          resizeMode="contain"
+          contentFit="contain"
         />
         <Text style={st.title}>Choose Your Avatar</Text>
         <Text style={st.subtitle}>
@@ -51,7 +52,7 @@ export default function WelcomeScreen() {
             <Image
               source={AVATAR_IMAGES['male-medium'].enthroned}
               style={st.avatarImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
             {selectedAvatar === 'male-medium' && (
               <View style={st.selectedBadge}>
@@ -79,7 +80,7 @@ export default function WelcomeScreen() {
             <Image
               source={AVATAR_IMAGES['female-medium'].enthroned}
               style={st.avatarImage}
-              resizeMode="cover"
+              contentFit="cover"
             />
             {selectedAvatar === 'female-medium' && (
               <View style={st.selectedBadge}>
