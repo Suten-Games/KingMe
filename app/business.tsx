@@ -893,6 +893,11 @@ export default function BusinessDashboard() {
               {!data.referralBalance && !data.claimableFees && (
                 <Text style={st.mutedText}>Tap sync to fetch wallet balance and claimable fees</Text>
               )}
+              {data.referralBalance && !data.claimableFees && (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={st.mutedText}>{connected ? 'Tap sync to check claimable referral fees' : 'Connect your wallet to check claimable referral fees'}</Text>
+                </View>
+              )}
               {(data.referralBalance || data.claimableFees) && (
                 <Text style={st.lastSync}>Last synced: {new Date((data.claimableFees || data.referralBalance)!.lastFetched).toLocaleString()}</Text>
               )}
