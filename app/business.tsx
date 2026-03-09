@@ -20,8 +20,11 @@ import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as ImagePicker from 'expo-image-picker';
+import { VersionedTransaction } from '@solana/web3.js';
+import { decode as b64decode } from 'base-64';
 import WalletHeaderButton from '../src/components/WalletHeaderButton';
 import KingMeFooter from '../src/components/KingMeFooter';
+import { useWallet } from '../src/providers/wallet-provider';
 import { useStore } from '../src/store/useStore';
 import {
   type BusinessData, type PLSnapshot,
@@ -92,11 +95,14 @@ function syncBusinessAsset(data: BusinessData) {
 
 export default function BusinessDashboard() {
   const router = useRouter();
+  const { publicKey, signTransaction, connected } = useWallet();
   const [fontsLoaded] = useFonts({ Cinzel_700Bold });
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<BusinessData>(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [claimStatus, setClaimStatus] = useState('');
   // Modal visibility
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -216,6 +222,174 @@ export default function BusinessDashboard() {
       Alert.alert('Sync Failed', 'Could not sync referral data. Please check your connection and try again.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // ── Claim Referral Fees ───────────────────────────────────
+  const claimReferralFees = async () => {
+    if (!connected || !publicKey) {
+      Alert.alert('Connect Wallet', 'Connect your personal wallet first — it must be the one registered as the Jupiter referral partner.');
+      return;
+    }
+    if (!data.referralWallet) {
+      Alert.alert('No Referral Wallet', 'Set your referral wallet address first.');
+      return;
+    }
+
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://kingme.money';
+    const partnerKey = publicKey.toBase58();
+    const businessWallet = data.referralWallet;
+
+    setClaiming(true);
+    setClaimStatus('Checking claimable fees...');
+
+    try {
+      // 1. Preview — see what's claimable
+      const previewRes = await fetch(`${API_BASE}/api/referral/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userPublicKey: partnerKey, action: 'preview' }),
+      });
+      const preview = await previewRes.json();
+      if (preview.error) throw new Error(preview.error);
+      if (!preview.claims || preview.claims.length === 0) {
+        Alert.alert('Nothing to Claim', 'No referral fees available to claim right now.');
+        return;
+      }
+
+      // 2. Confirm with user
+      const claimSummary = preview.claims
+        .map((c: any) => `${c.uiAmount.toFixed(4)} ${c.symbol} ($${c.valueUSD.toFixed(2)})`)
+        .join('\n');
+
+      const confirmed = await new Promise<boolean>(resolve => {
+        Alert.alert(
+          `Claim $${preview.totalValueUSD.toFixed(2)} in Referral Fees`,
+          `${claimSummary}\n\nFees will be claimed and transferred to your business wallet.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Claim & Transfer', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!confirmed) return;
+
+      // 3. Build transactions
+      setClaimStatus('Building transactions...');
+      const buildRes = await fetch(`${API_BASE}/api/referral/claim`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPublicKey: partnerKey,
+          businessWallet,
+          action: 'claim',
+        }),
+      });
+      const buildData = await buildRes.json();
+      if (buildData.error) throw new Error(buildData.error);
+
+      const { claimTransactions, transferTransactions, claims } = buildData;
+      const rpcProxy = `${API_BASE}/api/rpc/send`;
+
+      // Helper: deserialize, sign, send, confirm
+      const signAndSend = async (b64Tx: string, label: string) => {
+        const bytes = Uint8Array.from(b64decode(b64Tx), (c: string) => c.charCodeAt(0));
+        const tx = VersionedTransaction.deserialize(bytes);
+        const signed = await signTransaction(tx);
+        const raw = Buffer.from(signed.serialize()).toString('base64');
+        const res = await fetch(rpcProxy, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'sendTransaction',
+            params: [raw, { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed' }],
+          }),
+        });
+        const result = await res.json();
+        if (result.error) throw new Error(`${label}: ${result.error.message || JSON.stringify(result.error)}`);
+        log(`[REFERRAL] ${label} sent: ${result.result}`);
+
+        // Wait for confirmation
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 1500));
+          const statusRes = await fetch(rpcProxy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1,
+              method: 'getSignatureStatuses',
+              params: [[result.result], { searchTransactionHistory: false }],
+            }),
+          });
+          const statusData = await statusRes.json();
+          const status = statusData.result?.value?.[0];
+          if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+            if (status.err) throw new Error(`${label} failed on-chain: ${JSON.stringify(status.err)}`);
+            return result.result;
+          }
+        }
+        return result.result; // timed out waiting but tx was sent
+      };
+
+      // 4. Sign + send claim transactions
+      for (let i = 0; i < claimTransactions.length; i++) {
+        setClaimStatus(`Claiming fees (${i + 1}/${claimTransactions.length})...`);
+        await signAndSend(claimTransactions[i], `Claim ${i + 1}`);
+      }
+
+      // 5. Sign + send transfer transactions
+      for (let i = 0; i < transferTransactions.length; i++) {
+        setClaimStatus(`Transferring to business wallet (${i + 1}/${transferTransactions.length})...`);
+        await signAndSend(transferTransactions[i], `Transfer ${i + 1}`);
+      }
+
+      // 6. Log as business income
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const newTransactions = claims.map((c: any) => ({
+        id: `referral_claim_${Date.now()}_${c.mint.slice(0, 8)}`,
+        bankAccountId: 'business',
+        date: dateStr,
+        description: `Jupiter referral claim — ${c.uiAmount.toFixed(4)} ${c.symbol}`,
+        amount: c.valueUSD,
+        category: 'income_other' as const,
+        type: 'income' as const,
+        notes: `Claimed from referral program. Mint: ${c.mint}. Transferred to business wallet ${businessWallet.slice(0, 6)}...${businessWallet.slice(-4)}`,
+        importedFrom: 'manual' as const,
+      }));
+
+      const updatedData = {
+        ...data,
+        transactions: [...(data.transactions || []), ...newTransactions],
+      };
+
+      // Update bank balance if business account exists
+      if (updatedData.bankAccount) {
+        updatedData.bankAccount = {
+          ...updatedData.bankAccount,
+          balance: updatedData.bankAccount.balance + preview.totalValueUSD,
+          lastUpdated: now.toISOString(),
+        };
+      }
+
+      await save(updatedData);
+
+      // 7. Re-sync referral wallet to show zero balance
+      setClaimStatus('Syncing...');
+      await syncReferralWallet();
+
+      Alert.alert(
+        'Fees Claimed!',
+        `$${preview.totalValueUSD.toFixed(2)} in referral fees claimed and transferred to your business wallet.\n\nLogged as business income.`,
+      );
+
+    } catch (err: any) {
+      logError('[REFERRAL] Claim error:', err);
+      Alert.alert('Claim Failed', err.message || 'Something went wrong claiming referral fees.');
+    } finally {
+      setClaiming(false);
+      setClaimStatus('');
     }
   };
 
@@ -546,7 +720,7 @@ export default function BusinessDashboard() {
           </TouchableOpacity>
         ) : (
           <View style={st.card}>
-            <TouchableOpacity onPress={() => { setWalletInput(data.referralWallet); setShowWalletModal(true); }}>
+            <TouchableOpacity onPress={() => setShowWalletModal(true)}>
               <Text style={st.walletAddr}>{data.referralWallet.slice(0, 6)}...{data.referralWallet.slice(-6)}</Text>
             </TouchableOpacity>
             {data.referralBalance ? (
@@ -558,6 +732,22 @@ export default function BusinessDashboard() {
                   {data.referralBalance.other.map((t, i) => <View key={i} style={st.tokenPill}><Text style={st.tokenPillText}>{t.amount.toFixed(2)} {t.symbol}</Text></View>)}
                 </View>
                 <Text style={st.lastSync}>Last synced: {new Date(data.referralBalance.lastFetched).toLocaleString()}</Text>
+                {data.referralBalance.totalUSD > 0.01 && (
+                  <TouchableOpacity
+                    style={[st.claimBtn, claiming && { opacity: 0.6 }]}
+                    onPress={claimReferralFees}
+                    disabled={claiming}
+                  >
+                    {claiming ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <ActivityIndicator size="small" color="#0a0e1a" />
+                        <Text style={st.claimBtnText}>{claimStatus}</Text>
+                      </View>
+                    ) : (
+                      <Text style={st.claimBtnText}>Claim & Transfer to Business Wallet</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </>
             ) : (
               <Text style={st.mutedText}>Tap sync to fetch balances</Text>
@@ -986,6 +1176,11 @@ const st = StyleSheet.create({
   tokenRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   tokenPill: { backgroundColor: '#141825', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#2a2f3e' },
   tokenPillText: { fontSize: 12, color: '#e8e0d0', fontWeight: '600' },
+  claimBtn: {
+    backgroundColor: '#f4c430', borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center' as const, marginTop: 12,
+  },
+  claimBtnText: { color: '#0a0e1a', fontWeight: '700' as const, fontSize: 14 },
 
   setupCard: {
     backgroundColor: '#141825', borderRadius: 14, padding: 20, alignItems: 'center',
