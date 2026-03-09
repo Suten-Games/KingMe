@@ -431,20 +431,39 @@ export async function executeSwap(
         }
       }
     } else {
-      // Mobile (MWA): sign locally, then submit to RPC ourselves
-      log('[JUPITER] Using signTransaction + manual submit (mobile)...');
+      // Wallet doesn't support signAndSendTransaction — sign locally, then submit
+      log('[JUPITER] Using signTransaction + manual submit...');
       const signedTransaction = await signTransaction(transaction);
 
-      const connection = new Connection(RPC_URL, 'confirmed');
       const rawTransaction = signedTransaction.serialize
         ? signedTransaction.serialize()
         : signedTransaction;
 
-      signature = await connection.sendRawTransaction(rawTransaction, {
-        skipPreflight: false,
-        maxRetries: 3,
-        preflightCommitment: 'confirmed',
-      });
+      if (isWeb) {
+        // Web: use RPC proxy (public Solana RPC 403s sendRawTransaction from browsers)
+        const rpcProxy = `${getApiBase()}/api/rpc/send`;
+        const raw = Buffer.from(rawTransaction).toString('base64');
+        const res = await fetch(rpcProxy, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1,
+            method: 'sendTransaction',
+            params: [raw, { encoding: 'base64', skipPreflight: false, maxRetries: 3, preflightCommitment: 'confirmed' }],
+          }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+        signature = data.result;
+      } else {
+        // Mobile: use direct RPC connection
+        const connection = new Connection(RPC_URL, 'confirmed');
+        signature = await connection.sendRawTransaction(rawTransaction, {
+          skipPreflight: false,
+          maxRetries: 3,
+          preflightCommitment: 'confirmed',
+        });
+      }
 
       log(`[JUPITER] Submitted: ${signature}`);
 
