@@ -103,7 +103,7 @@ export default function WhatIfCard({ scenario, onPress, onDismiss }: WhatIfCardP
         onPress={onPress}
       >
         <Text style={[styles.actionText, onChain && styles.actionTextOnChain]}>
-          {onChain ? '⚡ Execute On-Chain →' : 'View Details →'}
+          {onChain ? '⚡ Execute On-Chain →' : scenario.link ? 'Open →' : 'View Details →'}
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>

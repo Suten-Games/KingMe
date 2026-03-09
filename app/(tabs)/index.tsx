@@ -275,6 +275,7 @@ export default function HomeScreen() {
 
   //const handleViewScenario = (s: WhatIfScenario) => { setSelectedScenario(s); setShowModal(true); };
   const handleViewScenario = (s: WhatIfScenario) => {
+    if (s.link) { router.push(s.link as any); return; }
     setSelectedScenario(s);
     setShowModal(true);
     previewScenario(s);  // Fetches Jupiter quote in background for on-chain scenarios

@@ -252,6 +252,7 @@ export interface WhatIfScenario {
   reasoning: string;
   risks: string[];
   steps: string[];
+  link?: string;
 }
 
 export interface ThesisInvalidator {

@@ -188,8 +188,9 @@ export function generateSmartScenarios(profile: UserProfile): WhatIfScenario[] {
   );
   if (sideHustleScenario) scenarios.push(sideHustleScenario);
 
-  // 17. START A BUSINESS — suggest launching a small venture
+  // 17. START A BUSINESS — or check on existing business
   const businessScenario = generateStartBusinessScenario(
+    assets,
     incomeSources,
     profile.bankAccounts || [],
     currentMonthlyIncome,
@@ -2365,12 +2366,76 @@ function generateSideHustleScenario(
 // ═══════════════════════════════════════════════════════════════
 
 function generateStartBusinessScenario(
+  assets: Asset[],
   incomeSources: IncomeSource[],
   bankAccounts: Array<{ id: string; name: string; type: string; currentBalance: number; institution: string }>,
   currentMonthlyIncome: number,
   currentFreedom: number,
   monthlyNeeds: number
 ): WhatIfScenario | null {
+  // If user already has a business asset, show a contextual check-in reminder
+  const businessAsset = assets.find(a => a.type === 'business');
+  if (businessAsset) {
+    const bizName = businessAsset.name || 'your business';
+    const meta = (businessAsset.metadata || {}) as any;
+    const bankBal = meta.bankBalance || 0;
+    const walletBal = meta.walletBalance || 0;
+
+    // Check how stale the data is
+    const lastSynced = meta.lastSynced ? new Date(meta.lastSynced) : null;
+    const daysSinceSync = lastSynced
+      ? Math.floor((Date.now() - lastSynced.getTime()) / (1000 * 60 * 60 * 24))
+      : 999;
+    const isStale = daysSinceSync >= 7;
+
+    // Compute monthly P&L from income sources tagged as business
+    const bizIncome = incomeSources
+      .filter(s => s.source === 'business' || (s.name || '').toLowerCase().includes('business'))
+      .reduce((sum, s) => sum + (s.frequency === 'monthly' ? s.amount : s.frequency === 'annual' ? s.amount / 12 : s.amount), 0);
+
+    // Pick contextual title and description
+    let title: string;
+    let description: string;
+
+    if (isStale) {
+      title = `Update your ${bizName} numbers`;
+      description = `It's been ${daysSinceSync} days since your last update. Keep your bank balance and expenses current so your freedom score stays accurate.`;
+    } else if (bizIncome > 0) {
+      const monthlyNet = bizIncome;
+      const sign = monthlyNet >= 0 ? '+' : '';
+      title = `${bizName} P&L: ${sign}$${Math.abs(monthlyNet).toLocaleString()}/mo`;
+      description = `Bank: $${bankBal.toLocaleString()} · Wallet: $${walletBal.toLocaleString()}. Review expenses and distributions on the Business Dashboard.`;
+    } else {
+      title = `How's ${bizName} doing?`;
+      description = `Worth $${businessAsset.value.toLocaleString()}. Review your P&L, track expenses, and keep your business financials up to date.`;
+    }
+
+    return {
+      id: 'check_business',
+      type: 'start_business',
+      title,
+      description,
+      emoji: '💼',
+      difficulty: 'easy',
+      timeframe: isStale ? 'Overdue' : 'Now',
+      changes: {},
+      impact: {
+        freedomBefore: currentFreedom,
+        freedomAfter: currentFreedom,
+        freedomDelta: 0,
+        monthlyIncomeBefore: currentMonthlyIncome,
+        monthlyIncomeAfter: currentMonthlyIncome,
+        monthlyIncomeDelta: 0,
+        annualIncomeDelta: 0,
+        investmentRequired: 0,
+      },
+      reasoning: `Successful businesses need regular attention. Check your expenses, update your bank balance, review distributions, and make sure your P&L is accurate.`,
+      risks: [],
+      steps: ['Open Business Dashboard', 'Update bank balance', 'Review expenses', 'Check P&L'],
+      link: '/business',
+    };
+  }
+
   // Suggest for users who are employed but could scale income
   if (monthlyNeeds === 0) return null;
   if (currentFreedom > 2.0) return null;
