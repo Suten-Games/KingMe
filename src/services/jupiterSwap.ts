@@ -522,18 +522,49 @@ export async function executeSwap(
 
       log(`[JUPITER] Submitted: ${signature}`);
 
-      // Confirm transaction (mobile only — Phantom confirms internally on web)
-      const latestBlockhash = await connection.getLatestBlockhash('confirmed');
-      const confirmStrategy: TransactionConfirmationStrategy = {
-        signature,
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
-      };
-
-      const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
-      if (confirmation.value.err) {
-        logError('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+      // Confirm transaction
+      if (isWeb) {
+        // Web: poll via RPC proxy
+        const rpcProxy = `${getApiBase()}/api/rpc/send`;
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 1500));
+          try {
+            const statusRes = await fetch(rpcProxy, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0', id: 1,
+                method: 'getSignatureStatuses',
+                params: [[signature], { searchTransactionHistory: false }],
+              }),
+            });
+            const statusData = await statusRes.json();
+            const status = statusData.result?.value?.[0];
+            if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+              if (status.err) {
+                logError('[JUPITER] Transaction failed on-chain:', status.err);
+                throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
+              }
+              break;
+            }
+          } catch (pollErr: any) {
+            if (pollErr.message?.includes('Transaction failed on-chain')) throw pollErr;
+          }
+        }
+      } else {
+        // Mobile: use Connection for confirmation
+        const connection = new Connection(RPC_URL, 'confirmed');
+        const latestBlockhash = await connection.getLatestBlockhash('confirmed');
+        const confirmStrategy: TransactionConfirmationStrategy = {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: lastValidBlockHeight || latestBlockhash.lastValidBlockHeight,
+        };
+        const confirmation = await connection.confirmTransaction(confirmStrategy, 'confirmed');
+        if (confirmation.value.err) {
+          logError('[JUPITER] Transaction failed on-chain:', confirmation.value.err);
+          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        }
       }
     }
 
